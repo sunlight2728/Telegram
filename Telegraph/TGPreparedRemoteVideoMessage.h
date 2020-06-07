@@ -10,6 +10,7 @@
 
 @class TGVideoInfo;
 @class TGImageInfo;
+@class TGVideoMediaAttachment;
 
 @interface TGPreparedRemoteVideoMessage : TGPreparedMessage
 
@@ -21,8 +22,8 @@
 @property (nonatomic, strong) TGVideoInfo *videoInfo;
 @property (nonatomic, strong) TGImageInfo *thumbnailInfo;
 
-@property (nonatomic, strong) NSString *caption;
+- (instancetype)initWithVideoId:(int64_t)videoId accessHash:(int64_t)accessHash videoSize:(CGSize)videoSize size:(int32_t)size duration:(NSTimeInterval)duration videoInfo:(TGVideoInfo *)videoInfo thumbnailInfo:(TGImageInfo *)thumbnailInfo text:(NSString *)text entities:(NSArray *)entities replyMessage:(TGMessage *)replyMessage replyMarkup:(TGReplyMarkupAttachment *)replyMarkup;
 
-- (instancetype)initWithVideoId:(int64_t)videoId accessHash:(int64_t)accessHash videoSize:(CGSize)videoSize size:(int32_t)size duration:(NSTimeInterval)duration videoInfo:(TGVideoInfo *)videoInfo thumbnailInfo:(TGImageInfo *)thumbnailInfo caption:(NSString *)caption replyMessage:(TGMessage *)replyMessage;
+- (TGVideoMediaAttachment *)video;
 
 @end

@@ -1,29 +1,17 @@
-/*
- * This is the source code of Telegram for iOS v. 1.1
- * It is licensed under GNU GPL v. 2 or later.
- * You should have received a copy of the license in this archive (see LICENSE).
- *
- * Copyright Peter Iakovlev, 2013.
- */
-
 #import "TGAudioSliderView.h"
 
-#import <MTProtoKit/MTTime.h>
-#import "TGFont.h"
+#import <LegacyComponents/LegacyComponents.h>
 
 #import "TGAudioSliderButton.h"
 #import "TGAudioSliderArea.h"
 
-#import "TGImageUtils.h"
-
 #import "TGAudioWaveformView.h"
-#import "TGAudioWaveform.h"
 
 #import "TGSharedMediaUtils.h"
 
 #import "TGMusicPlayer.h"
 
-#import <pop/POP.h>
+#import "TGPresentation.h"
 
 @interface TGAudioSliderView () <TGAudioSliderAreaDelegate>
 {
@@ -56,191 +44,37 @@
 
 @implementation TGAudioSliderView
 
-- (UIImage *)trackImageWithColor:(UIColor *)color
+- (UIColor *)durationColor:(TGAudioSliderViewStyle)style presentation:(TGPresentation *)presentation
 {
-    CGFloat radius = 2.0f;
-    UIGraphicsBeginImageContextWithOptions(CGSizeMake(4.0f, 2.0f), false, 0.0f);
-    CGContextRef context = UIGraphicsGetCurrentContext();
-    
-    CGContextSetFillColorWithColor(context, color.CGColor);
-    CGContextFillEllipseInRect(context, CGRectMake(0.0f, 0.0f, radius, radius));
-    CGContextFillRect(context, CGRectMake(1.0f, 0.0f, 2.0f, 2.0f));
-    CGContextFillEllipseInRect(context, CGRectMake(2.0f, 0.0f, radius, radius));
-    
-    UIImage *image = [UIGraphicsGetImageFromCurrentImageContext() stretchableImageWithLeftCapWidth:2 topCapHeight:0];
-    UIGraphicsEndImageContext();
-    
-    return image;
-}
-
-- (UIImage *)trackImage:(TGAudioSliderViewStyle)style
-{
-    static UIImage *incomingImage = nil;
-    static UIImage *outgoingImage = nil;
-    static UIImage *notificationImage = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^
-    {
-        incomingImage = [self trackImageWithColor:UIColorRGB(0xd0d0d0)];
-        outgoingImage = [self trackImageWithColor:UIColorRGB(0x9ce192)];
-        notificationImage = [self trackImageWithColor:UIColorRGB(0x9c9c9c)];
-    });
-    
     switch (style)
     {
         case TGAudioSliderViewStyleIncoming:
-            return incomingImage;
+            return presentation.pallete.chatIncomingSubtextColor;
             
         case TGAudioSliderViewStyleOutgoing:
-            return outgoingImage;
+            return presentation.pallete.chatOutgoingSubtextColor;
             
         case TGAudioSliderViewStyleNotification:
-            return notificationImage;
+            return [UIColor whiteColor];
             
         default:
             return nil;
     }
 }
 
-- (UIImage *)trackForegroundImage:(TGAudioSliderViewStyle)style
+- (UIImage *)listenedStatusImage:(TGAudioSliderViewStyle)style presentation:(TGPresentation *)presentation
 {
     static UIImage *incomingImage = nil;
     static UIImage *outgoingImage = nil;
-    static UIImage *notificationImage = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^
-    {
-        incomingImage = [self trackImageWithColor:TGAccentColor()];
-        outgoingImage = [self trackImageWithColor:UIColorRGB(0x3fc33b)];
-        notificationImage = [self trackImageWithColor:[UIColor whiteColor]];
-    });
-    
-    switch (style)
-    {
-        case TGAudioSliderViewStyleIncoming:
-            return incomingImage;
-            
-        case TGAudioSliderViewStyleOutgoing:
-            return outgoingImage;
-            
-        case TGAudioSliderViewStyleNotification:
-            return notificationImage;
-            
-        default:
-            return nil;
-    }
-}
+    static int32_t cachedPresentation;
 
-- (UIImage *)thumbImageWithColor:(UIColor *)color
-{
-    UIGraphicsBeginImageContextWithOptions(CGSizeMake(5.0f, 14.0f), false, 0.0f);
-    CGContextRef context = UIGraphicsGetCurrentContext();
-    
-    CGContextSetFillColorWithColor(context, color.CGColor);
-    CGContextFillRect(context, CGRectMake(2.0f, 0.0f, 1.5f, 14.0f));
-    
-    UIImage *image = [UIGraphicsGetImageFromCurrentImageContext() stretchableImageWithLeftCapWidth:2 topCapHeight:0];
-    UIGraphicsEndImageContext();
-    
-    return image;
-}
-
-- (UIImage *)thumbImage:(TGAudioSliderViewStyle)style
-{
-    static UIImage *incomingImage = nil;
-    static UIImage *outgoingImage = nil;
-    static UIImage *notificationImage = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^
+    if (cachedPresentation != presentation.currentId)
     {
-        incomingImage = [self thumbImageWithColor:TGAccentColor()];
-        outgoingImage = [self thumbImageWithColor:UIColorRGB(0x3fc33b)];
-        notificationImage = [self thumbImageWithColor:UIColorRGB(0xf6f6f6)];
-    });
+        cachedPresentation = presentation.currentId;
+        incomingImage = TGCircleImage(3.0f, presentation.pallete.chatIncomingAudioDotColor);
+        outgoingImage = TGCircleImage(3.0f, presentation.pallete.chatOutgoingAudioDotColor);
+    };
     
-    switch (style)
-    {
-        case TGAudioSliderViewStyleIncoming:
-            return incomingImage;
-            
-        case TGAudioSliderViewStyleOutgoing:
-            return outgoingImage;
-            
-        case TGAudioSliderViewStyleNotification:
-            return notificationImage;
-            
-        default:
-            return nil;
-    }
-}
-
-- (UIImage *)emptyThumbImage
-{
-    static UIImage *image = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^
-    {
-        image = [self thumbImageWithColor:[UIColor clearColor]];
-    });
-    
-    return image;
-}
-
-- (UIColor *)durationColor:(TGAudioSliderViewStyle)style
-{
-    static UIColor *incomingColor = nil;
-    static UIColor *outgoingColor = nil;
-    static UIColor *notificationColor = nil;
-    
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^
-    {
-        incomingColor = UIColorRGBA(0x525252, 0.6f);
-        outgoingColor = UIColorRGBA(0x008c09, 0.8f);
-        notificationColor = [UIColor whiteColor];
-    });
-    
-    
-    switch (style)
-    {
-        case TGAudioSliderViewStyleIncoming:
-            return incomingColor;
-            
-        case TGAudioSliderViewStyleOutgoing:
-            return outgoingColor;
-            
-        case TGAudioSliderViewStyleNotification:
-            return notificationColor;
-            
-        default:
-            return nil;
-    }
-}
-
-- (UIImage *)circleImageWithColor:(UIColor *)color radius:(CGFloat)radius
-{
-    UIGraphicsBeginImageContextWithOptions(CGSizeMake(radius, radius), false, 0.0f);
-    CGContextRef context = UIGraphicsGetCurrentContext();
-    CGContextSetFillColorWithColor(context, [color CGColor]);
-    CGContextFillEllipseInRect(context, CGRectMake(0.0f, 0.0f, radius, radius));
-    UIImage *result = UIGraphicsGetImageFromCurrentImageContext();
-    UIGraphicsEndImageContext();
-    return result;
-}
-
-- (UIImage *)listenedStatusImage:(TGAudioSliderViewStyle)style
-{
-    static UIImage *incomingImage = nil;
-    static UIImage *outgoingImage = nil;
-
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^
-    {
-        incomingImage = [self circleImageWithColor:UIColorRGB(0x1581e2) radius:3.0f];
-        outgoingImage = [self circleImageWithColor:UIColorRGB(0x19c700) radius:3.0f];
-    });
-    
-
     switch (style)
     {
         case TGAudioSliderViewStyleIncoming:
@@ -289,12 +123,11 @@
         _durationLabel = [[UILabel alloc] init];
         _durationLabel.textAlignment = NSTextAlignmentLeft;
         _durationLabel.backgroundColor = [UIColor clearColor];
-        _durationLabel.textColor = [self durationColor:_style];
         _durationLabel.font = TGSystemFontOfSize(11.0f);
         [self addSubview:_durationLabel];
         _durationLabelSeconds = -1;
         
-        _statusIconView = [[UIImageView alloc] initWithImage:[self listenedStatusImage:_style]];
+        _statusIconView = [[UIImageView alloc] initWithFrame:CGRectMake(0.0f, 0.0f, 3.0f, 3.0f)];
         [self addSubview:_statusIconView];
         
         _waveformDisposable = [[SMetaDisposable alloc] init];
@@ -305,6 +138,30 @@
 - (void)dealloc
 {
     [_waveformDisposable dispose];
+}
+
+- (void)setPresentation:(TGPresentation *)presentation
+{
+    _presentation = presentation;
+    if (_presentation == nil)
+        return;
+    
+    _durationLabel.textColor = [self durationColor:_style presentation:presentation];
+    _statusIconView.image = [self listenedStatusImage:_style presentation:presentation];
+    
+    switch (_style)
+    {
+        case TGAudioSliderViewStyleIncoming:
+            [_waveformView setForegroundColor:presentation.pallete.chatIncomingAudioForegroundColor backgroundColor:presentation.pallete.chatIncomingAudioBackgroundColor];
+            break;
+            
+        case TGAudioSliderViewStyleOutgoing:
+            [_waveformView setForegroundColor:presentation.pallete.chatOutgoingAudioForegroundColor backgroundColor:presentation.pallete.chatOutgoingAudioBackgroundColor];
+            break;
+            
+        default:
+            break;
+    }
 }
 
 - (void)willBecomeRecycled
@@ -326,12 +183,11 @@
         switch (_style)
         {
             case TGAudioSliderViewStyleIncoming:
-                [_waveformView setForegroundColor:TGAccentColor() backgroundColor:UIColorRGB(0xced9e0)];
+                [_waveformView setForegroundColor:_presentation.pallete.chatIncomingAudioForegroundColor backgroundColor:_presentation.pallete.chatIncomingAudioBackgroundColor];
                 break;
                 
             case TGAudioSliderViewStyleOutgoing:
-                [_waveformView setForegroundColor:UIColorRGB(0x3fc33b) backgroundColor:UIColorRGB(0x93d987)];
-                break;
+                [_waveformView setForegroundColor:_presentation.pallete.chatOutgoingAudioForegroundColor backgroundColor:_presentation.pallete.chatOutgoingAudioBackgroundColor];
                 
             case TGAudioSliderViewStyleNotification:
                 [_waveformView setForegroundColor:UIColorRGB(0xf6f6f6) backgroundColor:UIColorRGB(0xf6f6f6)];
@@ -341,14 +197,14 @@
                 break;
         }
         
-        _durationLabel.textColor = [self durationColor:_style];
+        _durationLabel.textColor = [self durationColor:_style presentation:_presentation];
         if (_style == TGAudioSliderViewStyleNotification)
         {
             _durationLabel.font = TGSystemFontOfSize(13.0f);
             _durationLabel.textAlignment = NSTextAlignmentCenter;
         }
         
-        _statusIconView.image = [self listenedStatusImage:_style];
+        _statusIconView.image = [self listenedStatusImage:_style presentation:_presentation];
     }
     
     [self setNeedsLayout];
@@ -447,7 +303,7 @@
     if (_status == nil) {
         [self setDurationLabelFromSeconds:_duration];
     } else {
-        [self setDurationLabelFromSeconds:(int32_t)(_status.offset * _status.duration)];
+        [self setDurationLabelFromSeconds:(int32_t)(_status.duration - _status.offset * _status.duration)];
     }
 }
 

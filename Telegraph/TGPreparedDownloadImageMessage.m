@@ -1,10 +1,10 @@
 #import "TGPreparedDownloadImageMessage.h"
 
-#import "TGMessage.h"
+#import <LegacyComponents/LegacyComponents.h>
 
 @implementation TGPreparedDownloadImageMessage
 
-- (instancetype)initWithImageInfo:(TGImageInfo *)imageInfo caption:(NSString *)caption replyMessage:(TGMessage *)replyMessage
+- (instancetype)initWithImageInfo:(TGImageInfo *)imageInfo text:(NSString *)text entities:(NSArray *)entities replyMessage:(TGMessage *)replyMessage replyMarkup:(TGReplyMarkupAttachment *)replyMarkup
 {
     self = [super init];
     if (self != nil)
@@ -14,8 +14,10 @@
 #endif
         
         _imageInfo = imageInfo;
-        _caption = caption;
+        self.text = text;
+        self.entities = entities;
         self.replyMessage = replyMessage;
+        self.replyMarkup = replyMarkup;
     }
     return self;
 }
@@ -27,12 +29,12 @@
     message.date = self.date;
     message.isBroadcast = self.isBroadcast;
     message.messageLifetime = self.messageLifetime;
+    message.text = self.text;
     
     NSMutableArray *attachments = [[NSMutableArray alloc] init];
     
     TGImageMediaAttachment *imageAttachment = [[TGImageMediaAttachment alloc] init];
     imageAttachment.imageInfo = _imageInfo;
-    imageAttachment.caption = self.caption;
     [attachments addObject:imageAttachment];
     
     if (self.replyMessage != nil)
@@ -43,7 +45,12 @@
         [attachments addObject:replyMedia];
     }
     
+    if (self.replyMarkup != nil) {
+        [attachments addObject:self.replyMarkup];
+    }
+    
     message.mediaAttachments = attachments;
+    message.entities = self.entities;
     
     return message;
 }

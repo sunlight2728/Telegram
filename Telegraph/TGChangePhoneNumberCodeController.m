@@ -1,16 +1,17 @@
 #import "TGChangePhoneNumberCodeController.h"
 
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGHeaderCollectionItem.h"
 #import "TGCommentCollectionItem.h"
 #import "TGPhoneCodeCollectionItem.h"
 
-#import "TGPhoneUtils.h"
-#import "TGTimerTarget.h"
+#import <LegacyComponents/TGTimerTarget.h>
 
-#import "TGProgressWindow.h"
-#import "TGAlertView.h"
+#import <LegacyComponents/TGProgressWindow.h>
+#import "TGCustomAlertView.h"
 
-#import "ActionStage.h"
+#import <LegacyComponents/ActionStage.h>
 #import "TGSignInRequestBuilder.h"
 
 @interface TGChangePhoneNumberCodeController () <ASWatcher>
@@ -181,8 +182,7 @@
                 
                 if (errorText != nil)
                 {
-                    TGAlertView *alertView = [[TGAlertView alloc] initWithTitle:nil message:errorText delegate:nil cancelButtonTitle:TGLocalized(@"Common.OK") otherButtonTitles:nil];
-                    [alertView show];
+                    [TGCustomAlertView presentAlertWithTitle:nil message:errorText cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
                 }
             }
         });

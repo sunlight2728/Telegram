@@ -4,12 +4,15 @@
 
 #import "TGSchema.h"
 
-#import "ActionStage.h"
-#import "SGraphObjectNode.h"
+#import <LegacyComponents/ActionStage.h>
+#import <LegacyComponents/SGraphObjectNode.h>
 
 #import "TGTelegramNetworking.h"
 
 #import "TGTimer.h"
+#import "TGTermsOfService.h"
+
+#import "TLauth_SentCode$auth_sentCode.h"
 
 @interface TGSendCodeRequestBuilder ()
 {
@@ -91,7 +94,7 @@
     }
 }
 
-- (void)sendCodeRequestSuccess:(TLauth_SentCode *)sendCode
+- (void)sendCodeRequestSuccess:(TLauth_SentCode$auth_sentCode *)sendCode
 {
     if (_timer != nil)
     {
@@ -101,24 +104,26 @@
     
     NSMutableDictionary *dict = [[NSMutableDictionary alloc] init];
     
-    if ([sendCode isKindOfClass:[TLauth_SentCode$auth_sentAppCode class]])
-    {
-        TLauth_SentCode$auth_sentAppCode *concreteCode = (TLauth_SentCode$auth_sentAppCode *)sendCode;
-        
-        [dict setObject:concreteCode.phone_code_hash forKey:@"phoneCodeHash"];
-        [dict setObject:[NSNumber numberWithBool:concreteCode.phone_registered] forKey:@"phoneRegistered"];
-        dict[@"callTimeout"] = @(concreteCode.send_call_timeout);
+    if ([sendCode.type isKindOfClass:[TLauth_SentCodeType$auth_sentCodeTypeApp class]]) {
+        [dict setObject:sendCode.phone_code_hash forKey:@"phoneCodeHash"];
+        [dict setObject:[NSNumber numberWithBool:sendCode.phone_registered] forKey:@"phoneRegistered"];
+        dict[@"callTimeout"] = @(sendCode.timeout);
         dict[@"messageSentToTelegram"] = @true;
-    }
-    else
-    {
-        TLauth_SentCode$auth_sentCode *concreteCode = (TLauth_SentCode$auth_sentCode *)sendCode;
-        
-        [dict setObject:concreteCode.phone_code_hash forKey:@"phoneCodeHash"];
-        [dict setObject:[NSNumber numberWithBool:concreteCode.phone_registered] forKey:@"phoneRegistered"];
-        dict[@"callTimeout"] = @(concreteCode.send_call_timeout);
+    } else {
+        [dict setObject:sendCode.phone_code_hash forKey:@"phoneCodeHash"];
+        [dict setObject:[NSNumber numberWithBool:sendCode.phone_registered] forKey:@"phoneRegistered"];
+        dict[@"callTimeout"] = @(sendCode.timeout);
+        if ([sendCode.type isKindOfClass:[TLauth_SentCodeType$auth_sentCodeTypeCall class]]) {
+            dict[@"messageSentViaPhone"] = @true;
+        }
     }
     
+    if (sendCode.terms_of_service != nil)
+    {
+        TGTermsOfService *tos = [[TGTermsOfService alloc] initWithTL:sendCode.terms_of_service];
+        if (tos != nil)
+            dict[@"termsOfService"] = tos;
+    }
     [ActionStageInstance() actionCompleted:self.path result:[[SGraphObjectNode alloc] initWithObject:dict]];
 }
 
@@ -153,7 +158,7 @@
     self.cancelToken = [TGTelegraphInstance doSendConfirmationCode:_phone requestBuilder:self];
 }
 
-- (void)sendSmsRequestSuccess:(bool)success
+- (void)sendSmsRequestSuccess:(TLauth_SentCode$auth_sentCode *)sendCode
 {
     if (_timer != nil)
     {
@@ -163,8 +168,30 @@
     
     NSMutableDictionary *dict = [[NSMutableDictionary alloc] init];
     
-    if (success)
+    if (sendCode != nil) {
+        if ([sendCode.type isKindOfClass:[TLauth_SentCodeType$auth_sentCodeTypeApp class]]) {
+            [dict setObject:sendCode.phone_code_hash forKey:@"phoneCodeHash"];
+            [dict setObject:[NSNumber numberWithBool:sendCode.phone_registered] forKey:@"phoneRegistered"];
+            dict[@"callTimeout"] = @(sendCode.timeout);
+            dict[@"messageSentToTelegram"] = @true;
+        } else {
+            [dict setObject:sendCode.phone_code_hash forKey:@"phoneCodeHash"];
+            [dict setObject:[NSNumber numberWithBool:sendCode.phone_registered] forKey:@"phoneRegistered"];
+            dict[@"callTimeout"] = @(sendCode.timeout);
+            if ([sendCode.type isKindOfClass:[TLauth_SentCodeType$auth_sentCodeTypeCall class]]) {
+                dict[@"messageSentViaPhone"] = @true;
+            }
+        }
+        
+        if (sendCode.terms_of_service != nil)
+        {
+            TGTermsOfService *tos = [[TGTermsOfService alloc] initWithTL:sendCode.terms_of_service];
+            if (tos != nil)
+                dict[@"termsOfService"] = tos;
+        }
+        
         [ActionStageInstance() actionCompleted:self.path result:[[SGraphObjectNode alloc] initWithObject:dict]];
+    }
     else
         [ActionStageInstance() actionFailed:self.path reason:TGSendCodeErrorUnknown];
 }

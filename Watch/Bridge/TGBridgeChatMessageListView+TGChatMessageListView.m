@@ -1,10 +1,13 @@
 #import "TGBridgeChatMessageListView+TGChatMessageListView.h"
+
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGBridgeMessage+TGMessage.h"
 #import "TGChatMessageListView.h"
 
 @implementation TGBridgeChatMessageListView (TGChatMessageListView)
 
-+ (TGBridgeChatMessageListView *)chatMessageListViewWithTGChatMessageListView:(TGChatMessageListView *)messageListView
++ (TGBridgeChatMessageListView *)chatMessageListViewWithTGChatMessageListView:(TGChatMessageListView *)messageListView conversation:(TGConversation *)conversation
 {
     TGBridgeChatMessageListView *bridgeMessageListView = [[TGBridgeChatMessageListView alloc] init];
     
@@ -12,7 +15,7 @@
     NSArray *clippedMessages = messageListView.clippedMessages;
     for (TGMessage *message in clippedMessages)
     {
-        TGBridgeMessage *bridgeMessage = (messageListView.isChannel && !messageListView.isChannelGroup) ? [TGBridgeMessage channelMessageWithTGMessage:message] : [TGBridgeMessage messageWithTGMessage:message];
+        TGBridgeMessage *bridgeMessage = (messageListView.isChannel && !messageListView.isChannelGroup) ? [TGBridgeMessage channelMessageWithTGMessage:message conversation:conversation] : [TGBridgeMessage messageWithTGMessage:message conversation:conversation];
         if (bridgeMessage != nil)
             [bridgeMessages addObject:bridgeMessage];
     }

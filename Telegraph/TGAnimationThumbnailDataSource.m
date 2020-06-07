@@ -1,32 +1,25 @@
-/*
- * This is the source code of Telegram for iOS v. 1.1
- * It is licensed under GNU GPL v. 2 or later.
- * You should have received a copy of the license in this archive (see LICENSE).
- *
- * Copyright Peter Iakovlev, 2013.
- */
-
 #import "TGAnimationThumbnailDataSource.h"
 
-#import "TGStringUtils.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import "TGPhotoThumbnailDataSource.h"
 
 #import "TGWorkerPool.h"
 #import "TGWorkerTask.h"
 #import "TGMediaPreviewTask.h"
 
-#import "TGMemoryImageCache.h"
+#import <LegacyComponents/TGMemoryImageCache.h>
 
-#import "TGImageUtils.h"
-#import "TGStringUtils.h"
-#import "TGRemoteImageView.h"
+#import <LegacyComponents/TGRemoteImageView.h>
 
-#import "TGImageBlur.h"
-#import "UIImage+TG.h"
-#import "NSObject+TGLock.h"
+#import <LegacyComponents/TGImageBlur.h>
+#import <LegacyComponents/UIImage+TG.h>
 
 #import "TGMediaStoreContext.h"
 
 #import <AVFoundation/AVFoundation.h>
+
+#import "TGPresentation.h"
 
 #import "TGAppDelegate.h"
 
@@ -77,6 +70,10 @@ static ASQueue *taskManagementQueue()
 - (id)loadDataAsyncWithUri:(NSString *)uri progress:(void (^)(float))progress partialCompletion:(void (^)(TGDataResource *resource))__unused partialCompletion completion:(void (^)(TGDataResource *))completion
 {
     NSDictionary *args = [TGStringUtils argumentDictionaryInUrlString:[uri substringFromIndex:@"animation-thumbnail://?".length]];
+    bool isFlat = [args[@"flat"] boolValue];
+    int cornerRadius = [args[@"cornerRadius"] intValue];
+    int position = [args[@"position"] intValue];
+    
     TGMediaPreviewTask *previewTask = [[TGMediaPreviewTask alloc] init];
     
     [taskManagementQueue() dispatchOnQueue:^
@@ -92,7 +89,7 @@ static ASQueue *taskManagementQueue()
                 return;
             
             if (completion != nil)
-                completion(result != nil ? result : [TGAnimationThumbnailDataSource resultForUnavailableImage:[args[@"flat"] boolValue]]);
+                completion(result != nil ? result : [TGAnimationThumbnailDataSource resultForUnavailableImage:isFlat cornerRadius:cornerRadius position:position]);
         }];
         
         if ([TGAnimationThumbnailDataSource _isDataLocallyAvailableForUri:uri])
@@ -121,7 +118,23 @@ static ASQueue *taskManagementQueue()
                 
                 NSString *temporaryThumbnailImagePath = [fileDirectory stringByAppendingPathComponent:@"file-thumb.jpg"];
                 
-                [previewTask executeWithTargetFilePath:temporaryThumbnailImagePath uri:args[@"legacy-thumbnail-cache-url"] completion:^(bool success)
+                NSMutableDictionary *options = [[NSMutableDictionary alloc] init];
+                TGMediaOriginInfo *originInfo = nil;
+                if (args[@"origin_info"] != nil)
+                {
+                    originInfo = [TGMediaOriginInfo mediaOriginInfoWithStringRepresentation:args[@"origin_info"]];
+                }
+                else if (args[@"cid"] != nil)
+                {
+                    int64_t cid = [args[@"cid"] longLongValue];
+                    int32_t mid = [args[@"mid"] intValue];
+                    originInfo = [TGMediaOriginInfo mediaOriginInfoWithFileReference:nil fileReferences:nil cid:cid mid:mid];
+                }
+                
+                if (originInfo != nil)
+                    options[@"originInfo"] = originInfo;
+                
+                [previewTask executeWithTargetFilePath:temporaryThumbnailImagePath uri:args[@"legacy-thumbnail-cache-url"] options:options completion:^(bool success)
                 {
                     if (success)
                     {
@@ -133,14 +146,14 @@ static ASQueue *taskManagementQueue()
                     else
                     {
                         if (completion != nil)
-                            completion([TGAnimationThumbnailDataSource resultForUnavailableImage:[args[@"flat"] boolValue]]);
+                            completion([TGAnimationThumbnailDataSource resultForUnavailableImage:isFlat cornerRadius:cornerRadius position:position]);
                     }
                 } workerTask:workerTask];
             }
             else
             {
                 if (completion != nil)
-                    completion([TGAnimationThumbnailDataSource resultForUnavailableImage:[args[@"flat"] boolValue]]);
+                    completion([TGAnimationThumbnailDataSource resultForUnavailableImage:isFlat cornerRadius:cornerRadius position:position]);
             }
         }
     }];
@@ -224,18 +237,9 @@ static ASQueue *taskManagementQueue()
     }];
 }
 
-+ (TGDataResource *)resultForUnavailableImage:(bool)isFlat
++ (TGDataResource *)resultForUnavailableImage:(bool)isFlat cornerRadius:(int)cornerRadius position:(int)position
 {
-    static TGDataResource *normalImageData = nil;
-    static TGDataResource *flatImageData = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^
-    {
-        normalImageData = [[TGDataResource alloc] initWithImage:TGAverageColorAttachmentImage([UIColor whiteColor], true) decoded:true];
-        flatImageData = [[TGDataResource alloc] initWithImage:TGAverageColorAttachmentImage([UIColor whiteColor], true) decoded:true];
-    });
-    
-    return isFlat ? flatImageData : normalImageData;
+    return [TGPhotoThumbnailDataSource resultForUnavailableImage:isFlat cornerRadius:cornerRadius position:position];
 }
 
 - (id)loadAttributeSyncForUri:(NSString *)uri attribute:(NSString *)attribute
@@ -244,8 +248,10 @@ static ASQueue *taskManagementQueue()
     {
         NSDictionary *args = [TGStringUtils argumentDictionaryInUrlString:[uri substringFromIndex:@"animation-thumbnail://?".length]];
         bool isFlat = [args[@"flat"] boolValue];
+        int cornerRadius = [args[@"cornerRadius"] intValue];
+        int position = [args[@"position"] intValue];
         
-        UIImage *reducedImage = [[TGMediaStoreContext instance] mediaReducedImage:uri attributes:nil];
+        UIImage *reducedImage = [[TGMediaStoreContext instance] mediaReducedImage:uri attributes:NULL];
         
         if (reducedImage != nil)
             return reducedImage;
@@ -253,20 +259,68 @@ static ASQueue *taskManagementQueue()
         NSNumber *averageColor = [[TGMediaStoreContext instance] mediaImageAverageColor:uri];
         if (averageColor != nil)
         {
-            UIImage *image = TGAverageColorAttachmentImage(UIColorRGB([averageColor intValue]), !isFlat);
+            UIImage *image = nil;
+            if (isFlat && cornerRadius > 0)
+                image = TGAverageColorAttachmentWithCornerRadiusImage(UIColorRGB([averageColor intValue]), !isFlat, cornerRadius, position);
+            else
+                image = TGAverageColorAttachmentImage(UIColorRGB([averageColor intValue]), !isFlat, position);
             return image;
         }
         
-        static UIImage *normalPlaceholder = nil;
-        static UIImage *flatPlaceholder = nil;
+        static NSMutableDictionary *normalPlaceholders = nil;
+        static NSMutableDictionary *flatPlaceholders = nil;
         static dispatch_once_t onceToken;
         dispatch_once(&onceToken, ^
         {
-            normalPlaceholder = TGAverageColorAttachmentImage([UIColor whiteColor], true);
-            flatPlaceholder = TGAverageColorAttachmentImage([UIColor whiteColor], false);
+            normalPlaceholders = [[NSMutableDictionary alloc] init];
+            flatPlaceholders = [[NSMutableDictionary alloc] init];
         });
         
-        return isFlat ? flatPlaceholder : normalPlaceholder;
+        TGPresentation *presentation = TGPresentation.current;
+        UIColor *color = presentation.pallete.backgroundColor;
+        if (position == 0)
+        {
+            if (isFlat)
+            {
+                NSNumber *key = @(presentation.currentId + cornerRadius);
+                UIImage *flatPlaceholder = flatPlaceholders[key];
+                if (flatPlaceholder == nil)
+                {
+                    if (cornerRadius == 0)
+                        flatPlaceholder = TGAverageColorAttachmentImage(color, false, 0);
+                    else
+                        flatPlaceholder = TGAverageColorAttachmentWithCornerRadiusImage(color, false, cornerRadius, 0);
+                    
+                    flatPlaceholders[key] = flatPlaceholder;
+                }
+                return flatPlaceholder;
+            }
+            else
+            {
+                NSNumber *key = @(presentation.currentId);
+                UIImage *normalPlaceholder = normalPlaceholders[key];
+                if (normalPlaceholder == nil)
+                {
+                    normalPlaceholder = TGAverageColorAttachmentImage(color, true, 0);
+                    normalPlaceholders[key] = normalPlaceholder;
+                }
+                return normalPlaceholder;
+            }
+        }
+        else
+        {
+            if (isFlat)
+            {
+                if (cornerRadius == 0)
+                    return TGAverageColorAttachmentImage(color, false, position);
+                else
+                    return TGAverageColorAttachmentWithCornerRadiusImage(color, false, cornerRadius, position);
+            }
+            else
+            {
+                return TGAverageColorAttachmentImage(color, true, position);
+            }
+        }
     }
     
     return nil;
@@ -417,7 +471,7 @@ static ASQueue *taskManagementQueue()
             if (thumbnailSourceImage != nil && !lowQualityThumbnail)
             {
                 NSData *thumbnailSourceData = UIImageJPEGRepresentation(thumbnailSourceImage, 0.8f);
-                [thumbnailSourceData writeToFile:thumbnailPath atomically:false];
+                [thumbnailSourceData writeToFile:thumbnailPath atomically:true];
             }
         }
     }
@@ -433,6 +487,8 @@ static ASQueue *taskManagementQueue()
     }
     
     bool isFlat = [args[@"flat"] boolValue];
+    int cornerRadius = [args[@"cornerRadius"] intValue];
+    int position = [args[@"position"] intValue];
     
     if (thumbnailSourceImage != nil)
     {
@@ -442,10 +498,18 @@ static ASQueue *taskManagementQueue()
         bool needsAverageColor = averageColor == nil;
         uint32_t averageColorValue = [averageColor intValue];
         
-        if (lowQualityThumbnail)
-            thumbnailImage = TGBlurredAttachmentImage(thumbnailSourceImage, size, needsAverageColor ? &averageColorValue : NULL, !isFlat);
-        else
-            thumbnailImage = TGLoadedAttachmentImage(thumbnailSourceImage, size, needsAverageColor ? &averageColorValue : NULL, !isFlat);
+        if (lowQualityThumbnail) {
+            if (isFlat && cornerRadius != 0)
+                thumbnailImage = TGBlurredAttachmentWithCornerRadiusImage(thumbnailSourceImage, size, needsAverageColor ? &averageColorValue : NULL, !isFlat, cornerRadius, position);
+            else
+                thumbnailImage = TGBlurredAttachmentImage(thumbnailSourceImage, size, needsAverageColor ? &averageColorValue : NULL, !isFlat, position);
+        }
+        else {
+            if (isFlat && cornerRadius != 0)
+                thumbnailImage = TGLoadedAttachmentWithCornerRadiusImage(thumbnailSourceImage, size, needsAverageColor ? &averageColorValue : NULL, !isFlat, cornerRadius, 0, position);
+            else
+                thumbnailImage = TGLoadedAttachmentImage(thumbnailSourceImage, size, needsAverageColor ? &averageColorValue : NULL, !isFlat, position);
+        }
         
         if (thumbnailImage != nil)
         {
@@ -463,7 +527,11 @@ static ASQueue *taskManagementQueue()
                 
                 if (!alreadyCached || (cachedLowQualityThumbnail && !lowQualityThumbnail))
                 {
-                    UIImage *cachedImage = TGReducedAttachmentImage(thumbnailImage, size, !isFlat);
+                    UIImage *cachedImage = nil;
+                    if (isFlat && cornerRadius > 0)
+                        cachedImage = TGReducedAttachmentWithCornerRadiusImage(thumbnailImage, size, !isFlat, cornerRadius, position);
+                    else
+                        cachedImage = TGReducedAttachmentImage(thumbnailImage, size, !isFlat, position);
                     [cachedImage setAttachmentsFromDictionary:imageAttachments];
                     
                     if (cachedImage != nil)

@@ -1,11 +1,11 @@
 #import "TGPeerNotificationSettingsSignals.h"
 
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGDatabase.h"
-#import "ActionStage.h"
+#import <LegacyComponents/ActionStage.h>
 #import "TGTelegramNetworking.h"
 #import "TGTelegraph.h"
-
-#import "TGPeerIdAdapter.h"
 
 @interface TGPeerNotificationSettingsHelper : NSObject <ASWatcher>
 {
@@ -96,13 +96,12 @@
     
     return [[[SSignal alloc] initWithGenerator:^id<SDisposable>(SSubscriber *subscriber)
     {
-        int soundId = 0;
-        int muteUntil = 0;
-        bool previewText = true;
-        bool messagesMuted = false;
-        bool notFound = false;
+        NSNumber *muteUntilVal = nil;
+        int32_t muteUntil = 0;
         
-        [TGDatabaseInstance() loadPeerNotificationSettings:peerId soundId:&soundId muteUntil:&muteUntil previewText:&previewText messagesMuted:&messagesMuted notFound:&notFound];
+        [TGDatabaseInstance() loadPeerNotificationSettings:peerId soundId:NULL muteUntil:&muteUntilVal previewText:NULL messagesMuted:NULL notFound:NULL];
+        muteUntil = muteUntilVal ? muteUntilVal.intValue : 0;
+        
         [subscriber putNext:[[TGPeerNotificationSettings alloc] initWithMuteUntil:muteUntil]];
         [subscriber putCompletion];
         

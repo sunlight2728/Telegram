@@ -1,19 +1,23 @@
 #import "TGPrivacyLastSeenController.h"
 
+#import <LegacyComponents/LegacyComponents.h>
+
+#import "TGDatabase.h"
+#import "TGAppDelegate.h"
 #import "TGNotificationPrivacyAccountSetting.h"
 
 #import "TGCheckCollectionItem.h"
 #import "TGCommentCollectionItem.h"
 #import "TGVariantCollectionItem.h"
-#import "TGHacks.h"
+#import "TGSwitchCollectionItem.h"
 
 #import "TGPrivacyCustomShareListController.h"
 
-#import "TGStringUtils.h"
-
 #import "TGHeaderCollectionItem.h"
 
-@interface TGPrivacyLastSeenController ()
+#import "TGCallKitAdapter.h"
+
+@interface TGPrivacyLastSeenController () <ASWatcher>
 {
     TGPrivacySettingsMode _mode;
     TGNotificationPrivacyAccountSetting *_savedPrivacySettings;
@@ -29,8 +33,19 @@
     
     TGCollectionMenuSection *_customShareSection;
     
+    int _p2pMode;
+    TGCollectionMenuSection *_p2pSection;
+    TGCheckCollectionItem *_p2pAlwaysItem;
+    TGCheckCollectionItem *_p2pContactsItem;
+    TGCheckCollectionItem *_p2pNeverItem;
+    
+    TGCollectionMenuSection *_integrationSection;
+    TGSwitchCollectionItem *_integrationItem;
+    
     id _addInterfaceCoordinator;
 }
+
+@property (nonatomic, strong) ASHandle *actionHandle;
 
 @end
 
@@ -49,6 +64,9 @@
                 break;
             case TGPrivacySettingsModeGroupsAndChannels:
                 self.title = TGLocalized(@"Privacy.GroupsAndChannels");
+                break;
+            case TGPrivacySettingsModeCalls:
+                self.title = TGLocalized(@"Privacy.Calls");
                 break;
         }
         
@@ -71,13 +89,17 @@
                 customHelpText = TGLocalized(@"Privacy.GroupsAndChannels.CustomHelp");
                 headerString = TGLocalized(@"Privacy.GroupsAndChannels.WhoCanAddMe");
                 break;
+            case TGPrivacySettingsModeCalls:
+                customHelpText = TGLocalized(@"Privacy.Calls.CustomHelp");
+                headerString = TGLocalized(@"Privacy.Calls.WhoCanCallMe");
+                break;
         }
         
         NSMutableArray *topSectionItems = [[NSMutableArray alloc] init];
         [topSectionItems addObject:[[TGHeaderCollectionItem alloc] initWithTitle:headerString]];
         [topSectionItems addObject:_everybodyItem];
         [topSectionItems addObject:_contactsItem];
-        if (_mode == TGPrivacySettingsModeLastSeen) {
+        if (_mode == TGPrivacySettingsModeLastSeen || _mode == TGPrivacySettingsModeCalls) {
             [topSectionItems addObject:_nobodyItem];
         }
         [topSectionItems addObject:[[TGCommentCollectionItem alloc] initWithText:customHelpText]];
@@ -102,6 +124,11 @@
                 neverString = TGLocalized(@"Privacy.GroupsAndChannels.NeverAllow");
                 helpText = TGLocalized(@"Privacy.GroupsAndChannels.CustomShareHelp");
                 break;
+            case TGPrivacySettingsModeCalls:
+                alwaysString = TGLocalized(@"Privacy.Calls.AlwaysAllow");
+                neverString = TGLocalized(@"Privacy.Calls.NeverAllow");
+                helpText = TGLocalized(@"Privacy.Calls.CustomShareHelp");
+                break;
         }
         
         _alwaysShareWithItem = [[TGVariantCollectionItem alloc] initWithTitle:alwaysString action:@selector(alwaysShareWithPressed)];
@@ -111,10 +138,108 @@
         ]];
         [self.menuSections addSection:_customShareSection];
         
+        if (_mode == TGPrivacySettingsModeCalls)
+        {
+            _actionHandle = [[ASHandle alloc] initWithDelegate:self releaseOnMainThread:true];
+            
+            _p2pAlwaysItem = [[TGCheckCollectionItem alloc] initWithTitle:TGLocalized(@"Privacy.Calls.P2PAlways") action:@selector(p2pAlwaysPressed)];
+            _p2pAlwaysItem.alignToRight = true;
+            _p2pContactsItem = [[TGCheckCollectionItem alloc] initWithTitle:TGLocalized(@"Privacy.Calls.P2PContacts") action:@selector(p2pContactsPressed)];
+            _p2pContactsItem.alignToRight = true;
+            _p2pNeverItem = [[TGCheckCollectionItem alloc] initWithTitle:TGLocalized(@"Privacy.Calls.P2PNever") action:@selector(p2pNeverPressed)];
+            _p2pNeverItem.alignToRight = true;
+            
+            NSData *phoneCallsP2PContactsData = [TGDatabaseInstance() customProperty:@"phoneCallsP2PContacts"];
+            int32_t phoneCallsP2PContacts = 0;
+            if (phoneCallsP2PContactsData.length == 4) {
+                [phoneCallsP2PContactsData getBytes:&phoneCallsP2PContacts];
+            }
+            
+            int32_t defaultMode = phoneCallsP2PContacts ? 3 : 2;
+            int32_t p2pMode = TGAppDelegateInstance.callsP2PMode;
+            if (p2pMode == 0)
+                p2pMode = defaultMode;
+            
+            [self updateP2PMode:p2pMode update:false];
+            
+            _p2pSection = [[TGCollectionMenuSection alloc] initWithItems:@[
+                [[TGHeaderCollectionItem alloc] initWithTitle:[TGLocalized(@"Privacy.Calls.P2P") uppercaseString]],
+                _p2pAlwaysItem,
+                _p2pContactsItem,
+                _p2pNeverItem,
+                [[TGCommentCollectionItem alloc] initWithText:TGLocalized(@"Privacy.Calls.P2PHelp")]]
+            ];
+            [self.menuSections addSection:_p2pSection];
+            
+            if ([TGCallKitAdapter callKitAvailable])
+            {
+                _integrationItem = [[TGSwitchCollectionItem alloc] initWithTitle:TGLocalized(@"Privacy.Calls.Integration") isOn:!TGAppDelegateInstance.callsDisableCallKit];
+                _integrationItem.interfaceHandle = _actionHandle;
+                _integrationSection = [[TGCollectionMenuSection alloc] initWithItems:@[
+                    _integrationItem,
+                    [[TGCommentCollectionItem alloc] initWithText:TGLocalized(@"Privacy.Calls.IntegrationHelp")]]
+                ];
+                [self.menuSections addSection:_integrationSection];
+            }
+        }
+        
         _savedPrivacySettings = privacySettings;
         [self setPrivacySettings:privacySettings animated:false];
     }
     return self;
+}
+
+- (void)dealloc
+{
+    if (_actionHandle)
+    {
+        [_actionHandle reset];
+        [ActionStageInstance() removeWatcher:self];
+    }
+}
+
+- (void)actionStageActionRequested:(NSString *)action options:(id)options
+{
+    if ([action isEqualToString:@"switchItemChanged"])
+    {
+        TGSwitchCollectionItem *switchItem = options[@"item"];
+        
+        if (switchItem == _integrationItem)
+        {
+            TGAppDelegateInstance.callsDisableCallKit = !switchItem.isOn;
+            [TGAppDelegateInstance saveSettings];
+        }
+    }
+}
+
+- (void)p2pAlwaysPressed
+{
+    [self updateP2PMode:2 update:true];
+}
+
+- (void)p2pContactsPressed
+{
+    [self updateP2PMode:3 update:true];
+}
+
+- (void)p2pNeverPressed
+{
+    [self updateP2PMode:1 update:true];
+}
+
+- (void)updateP2PMode:(int)mode update:(bool)update
+{
+    _p2pMode = mode;
+    
+    _p2pAlwaysItem.isChecked = mode == 2;
+    _p2pContactsItem.isChecked = mode == 3;
+    _p2pNeverItem.isChecked = mode == 1;
+    
+    if (update)
+    {
+        TGAppDelegateInstance.callsP2PMode = mode;
+        [TGAppDelegateInstance saveSettings];
+    }
 }
 
 - (void)setPrivacySettings:(TGNotificationPrivacyAccountSetting *)privacySettings animated:(bool)__unused animated
@@ -293,12 +418,18 @@ static UIView *_findBackArrow(UIView *view)
             titleString = TGLocalized(@"Privacy.GroupsAndChannels.AlwaysAllow.Title");
             placeholderString = TGLocalized(@"Privacy.GroupsAndChannels.AlwaysAllow.Placeholder");
             break;
+        case TGPrivacySettingsModeCalls:
+            titleString = TGLocalized(@"Privacy.Calls.AlwaysAllow.Title");
+            placeholderString = TGLocalized(@"Privacy.Calls.AlwaysAllow.Placeholder");
+            break;
     }
+    
+    bool dialogs = _privacySettings.lastSeenPrimarySetting == TGPrivacySettingsLastSeenPrimarySettingContacts;
     
     __weak TGPrivacyLastSeenController *weakSelf = self;
     if (_privacySettings.alwaysShareWithUserIds.count == 0)
     {
-        _addInterfaceCoordinator = [TGPrivacyCustomShareListController presentAddInterfaceWithTitle:titleString contactSearchPlaceholder:placeholderString onController:self completion:^(NSArray *userIds)
+        _addInterfaceCoordinator = [TGPrivacyCustomShareListController presentAddInterfaceWithTitle:titleString contactSearchPlaceholder:placeholderString onController:self dialogs:dialogs completion:^(NSArray *userIds)
         {
             __strong TGPrivacyLastSeenController *strongSelf = weakSelf;
             if (strongSelf != nil)
@@ -308,7 +439,7 @@ static UIView *_findBackArrow(UIView *view)
                 
                 if (userIds.count != 0)
                 {
-                    [strongSelf.navigationController pushViewController:[[TGPrivacyCustomShareListController alloc] initWithTitle:titleString contactSearchPlaceholder:placeholderString userIds:strongSelf->_privacySettings.alwaysShareWithUserIds userIdsChanged:^(NSArray *userIds)
+                    [strongSelf.navigationController pushViewController:[[TGPrivacyCustomShareListController alloc] initWithTitle:titleString contactSearchPlaceholder:placeholderString userIds:strongSelf->_privacySettings.alwaysShareWithUserIds dialogs:dialogs userIdsChanged:^(NSArray *userIds)
                     {
                         __strong TGPrivacyLastSeenController *strongSelf = weakSelf;
                         if (strongSelf != nil)
@@ -322,7 +453,7 @@ static UIView *_findBackArrow(UIView *view)
     }
     else
     {
-        [self.navigationController pushViewController:[[TGPrivacyCustomShareListController alloc] initWithTitle:titleString contactSearchPlaceholder:placeholderString userIds:_privacySettings.alwaysShareWithUserIds userIdsChanged:^(NSArray *userIds)
+        [self.navigationController pushViewController:[[TGPrivacyCustomShareListController alloc] initWithTitle:titleString contactSearchPlaceholder:placeholderString userIds:_privacySettings.alwaysShareWithUserIds dialogs:dialogs userIdsChanged:^(NSArray *userIds)
         {
             __strong TGPrivacyLastSeenController *strongSelf = weakSelf;
             if (strongSelf != nil)
@@ -344,12 +475,16 @@ static UIView *_findBackArrow(UIView *view)
             titleString = TGLocalized(@"Privacy.GroupsAndChannels.NeverAllow.Title");
             placeholderString = TGLocalized(@"Privacy.GroupsAndChannels.NeverAllow.Placeholder");
             break;
+        case TGPrivacySettingsModeCalls:
+            titleString = TGLocalized(@"Privacy.Calls.NeverAllow.Title");
+            placeholderString = TGLocalized(@"Privacy.Calls.NeverAllow.Placeholder");
+            break;
     }
     
     __weak TGPrivacyLastSeenController *weakSelf = self;
     if (_privacySettings.neverShareWithUserIds.count == 0)
     {
-        _addInterfaceCoordinator = [TGPrivacyCustomShareListController presentAddInterfaceWithTitle:titleString contactSearchPlaceholder:placeholderString onController:self completion:^(NSArray *userIds)
+        _addInterfaceCoordinator = [TGPrivacyCustomShareListController presentAddInterfaceWithTitle:titleString contactSearchPlaceholder:placeholderString onController:self dialogs:false completion:^(NSArray *userIds)
         {
             __strong TGPrivacyLastSeenController *strongSelf = weakSelf;
             if (strongSelf != nil)
@@ -359,7 +494,7 @@ static UIView *_findBackArrow(UIView *view)
                 
                 if (userIds.count != 0)
                 {
-                    [strongSelf.navigationController pushViewController:[[TGPrivacyCustomShareListController alloc] initWithTitle:titleString contactSearchPlaceholder:placeholderString userIds:strongSelf->_privacySettings.neverShareWithUserIds userIdsChanged:^(NSArray *userIds)
+                    [strongSelf.navigationController pushViewController:[[TGPrivacyCustomShareListController alloc] initWithTitle:titleString contactSearchPlaceholder:placeholderString userIds:strongSelf->_privacySettings.neverShareWithUserIds dialogs:false userIdsChanged:^(NSArray *userIds)
                     {
                         __strong TGPrivacyLastSeenController *strongSelf = weakSelf;
                         if (strongSelf != nil)
@@ -373,7 +508,7 @@ static UIView *_findBackArrow(UIView *view)
     }
     else
     {
-        [self.navigationController pushViewController:[[TGPrivacyCustomShareListController alloc] initWithTitle:titleString contactSearchPlaceholder:placeholderString userIds:_privacySettings.neverShareWithUserIds userIdsChanged:^(NSArray *userIds)
+        [self.navigationController pushViewController:[[TGPrivacyCustomShareListController alloc] initWithTitle:titleString contactSearchPlaceholder:placeholderString userIds:_privacySettings.neverShareWithUserIds dialogs:false userIdsChanged:^(NSArray *userIds)
         {
             __strong TGPrivacyLastSeenController *strongSelf = weakSelf;
             if (strongSelf != nil)

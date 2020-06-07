@@ -8,14 +8,19 @@
 
 #import <UIKit/UIKit.h>
 
-#import "ActionStage.h"
-#import "TGUser.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/ActionStage.h>
+
+@class TGPresentation;
 
 @interface TGContactCell : UITableViewCell
 
 @property (nonatomic, strong) NSString *avatarUrl;
 @property (nonatomic) bool hideAvatar;
-@property (nonatomic) TGUser *user;
+@property (nonatomic, strong) TGUser *user;
+
+@property (nonatomic, strong) TGPresentation *presentation;
 
 @property (nonatomic, strong) NSString *titleTextFirst;
 @property (nonatomic, strong) NSString *titleTextSecond;

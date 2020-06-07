@@ -1,18 +1,10 @@
-/*
- * This is the source code of Telegram for iOS v. 1.1
- * It is licensed under GNU GPL v. 2 or later.
- * You should have received a copy of the license in this archive (see LICENSE).
- *
- * Copyright Peter Iakovlev, 2013.
- */
-
 #import <UIKit/UIKit.h>
 
-#import "ActionStage.h"
+#import <LegacyComponents/LegacyComponents.h>
 
-#import "TGViewController.h"
+#import <LegacyComponents/ActionStage.h>
 
-#import "TGUser.h"
+@class TGPresentation;
 
 typedef enum {
     TGContactsModeRegistered = 1,
@@ -32,7 +24,11 @@ typedef enum {
     TGContactsModeCreateGroupLink = (2 << 14),
     TGContactsModeSortByLastSeen = (2 << 15),
     TGContactsModeIgnorePrivateBots = (2 << 16),
-    TGContactsModeSearchGlobal = (2 << 17)
+    TGContactsModeSearchGlobal = (2 << 17),
+    TGContactsModeIgnoreBots = (2 << 18),
+    TGContactsModeCalls = (2 << 19),
+    TGContactsModeSortByImporters = (2 << 20),
+    TGContactsModeShare = (2 << 21),
 } TGContactsMode;
 
 @interface TGContactsController : TGViewController <TGViewControllerNavigationBarAppearance, ASWatcher>
@@ -64,6 +60,8 @@ typedef enum {
 
 @property (nonatomic, assign) bool shouldOpenSearch;
 
+@property (nonatomic, strong) TGPresentation *presentation;
+
 - (id)initWithContactsMode:(int)contactsMode;
 
 - (void)clearData;
@@ -92,5 +90,8 @@ typedef enum {
 - (void)didSelectRowInFirstSection:(NSInteger)row;
 - (bool)shouldDisplaySectionIndices;
 - (void)commitDeleteItemInFirstSection:(NSInteger)row;
+
++ (NSString *)localizedLabel:(NSString *)label;
++ (NSString *)downloadLink;
 
 @end

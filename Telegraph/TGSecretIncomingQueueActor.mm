@@ -1,7 +1,10 @@
 #import "TGSecretIncomingQueueActor.h"
 
-#import "ActionStage.h"
-#import "SGraphObjectNode.h"
+#import "TGCommon.h"
+
+#import <LegacyComponents/ActionStage.h>
+#import <LegacyComponents/SGraphObjectNode.h>
+#import <LegacyComponents/ASActor.h>
 
 #import "TGDatabase.h"
 #import "TGTelegraph.h"
@@ -192,8 +195,9 @@
                         else if ([self isResendAction:action.action])
                             [actionsToProcess addObject:action];
                     }
-                    else
+                    else {
                         [actionsToProcess addObject:action];
+                    }
                 }
             }
             
@@ -287,9 +291,10 @@
                     message.fromUid = _userId;
                     message.toUid = TGTelegraphInstance.clientUserId;
                     message.date = [actionDesc[@"date"] intValue];
-                    message.unread = false;
+                    //message.unread = false;
                     message.outgoing = false;
                     message.cid = _peerId;
+                    message.layer = [actionDesc[@"layer"] intValue];
                     
                     TGActionMediaAttachment *actionAttachment = [[TGActionMediaAttachment alloc] init];
                     actionAttachment.actionType = TGMessageActionEncryptedChatMessageScreenshot;
@@ -437,7 +442,8 @@
                                 encryptedData.currentRekeyIsInitiatedByLocalClient = false;
                                 conversation = [conversation copy];
                                 conversation.encryptedData = encryptedData;
-                                [TGDatabaseInstance() addMessagesToConversation:nil conversationId:_peerId updateConversation:conversation dispatch:true countUnread:false];
+                                
+                                [TGDatabaseInstance() transactionAddMessages:nil updateConversationDatas:@{@(conversation.conversationId): conversation} notifyAdded:true];
                                 
                                 NSData *messageData = [TGModernSendSecretMessageActor decryptedServiceMessageActionWithLayer:peerLayer acceptKey:[actionDesc[@"exchangeId"] longLongValue] g_b:gBBytes keyFingerprint:keyId randomId:randomId];
                                 if (messageData != nil)
@@ -532,7 +538,7 @@
                                         }
                                     }
                                     
-                                    [TGDatabaseInstance() addMessagesToConversation:nil conversationId:_peerId updateConversation:conversation dispatch:true countUnread:false];
+                                    [TGDatabaseInstance() transactionAddMessages:nil updateConversationDatas:@{@(conversation.conversationId): conversation} notifyAdded:true];
                                     
                                     pollAtTheEnd = true;
                                 }
@@ -576,7 +582,7 @@
                                 [TGModernSendSecretMessageActor enqueueOutgoingServiceMessageForPeerId:_peerId layer:peerLayer keyId:0 randomId:randomId messageData:messageData];
                             }
                             
-                            [TGDatabaseInstance() addMessagesToConversation:nil conversationId:_peerId updateConversation:conversation dispatch:true countUnread:false];
+                            [TGDatabaseInstance() transactionAddMessages:nil updateConversationDatas:@{@(conversation.conversationId): conversation} notifyAdded:true];
                             
                             pollAtTheEnd = true;
                         }
@@ -612,8 +618,7 @@
                     }
                 }
                 
-                static int messageActionId = 0;
-                [[[TGConversationAddMessagesActor alloc] initWithPath:[NSString stringWithFormat:@"/tg/addmessage/(%dsecretIncoming)", messageActionId++]] execute:[NSDictionary dictionaryWithObjectsAndKeys:addedMessages, @"messages", nil]];
+                [TGDatabaseInstance() transactionAddMessages:addedMessages updateConversationDatas:nil notifyAdded:true];
             }
             
             if (layerUpdate != 0 && layerUpdate > [TGDatabaseInstance() peerLayer:_peerId])
@@ -638,14 +643,8 @@
             
             if (deleteMessageIds.count != 0)
             {
-                NSMutableDictionary *messagesByConversation = [[NSMutableDictionary alloc] init];
-                [TGDatabaseInstance() deleteMessages:deleteMessageIds populateActionQueue:false fillMessagesByConversationId:messagesByConversation];
-                [messagesByConversation enumerateKeysAndObjectsUsingBlock:^(NSNumber *nConversationId, NSArray *messagesInConversation, __unused BOOL *stop)
-                 {
-                     [ActionStageInstance() dispatchResource:[[NSString alloc] initWithFormat:@"/tg/conversation/(%lld)/messagesDeleted", [nConversationId longLongValue]] resource:[[SGraphObjectNode alloc] initWithObject:messagesInConversation]];
-                 }];
+                [TGDatabaseInstance() transactionRemoveMessages:@{@(_peerId): deleteMessageIds} updateConversationDatas:nil];
             }
-            
             
             if (initiateSelfDestructMessageRandomIds.count != 0)
             {
@@ -717,7 +716,7 @@
         conversation = [conversation copy];
         conversation.encryptedData = encryptedData;
         
-        [TGDatabaseInstance() addMessagesToConversation:nil conversationId:_peerId updateConversation:conversation dispatch:true countUnread:false];
+        [TGDatabaseInstance() transactionAddMessages:nil updateConversationDatas:@{@(conversation.conversationId): conversation} notifyAdded:true];
     }
 }
 
@@ -755,6 +754,20 @@
             decryptedObject = [Secret46__Environment parseObject:action.data];
             if ([decryptedObject isKindOfClass:[Secret46_DecryptedMessageLayer class]])
                 decryptedObject = ((Secret46_DecryptedMessageLayer *)decryptedObject).message;
+            break;
+        }
+        case 66:
+        {
+            decryptedObject = [Secret66__Environment parseObject:action.data];
+            if ([decryptedObject isKindOfClass:[Secret66_DecryptedMessageLayer class]])
+                decryptedObject = ((Secret66_DecryptedMessageLayer *)decryptedObject).message;
+            break;
+        }
+        case 73:
+        {
+            decryptedObject = [Secret73__Environment parseObject:action.data];
+            if ([decryptedObject isKindOfClass:[Secret73_DecryptedMessageLayer class]])
+                decryptedObject = ((Secret73_DecryptedMessageLayer *)decryptedObject).message;
             break;
         }
         default:
@@ -811,6 +824,20 @@
                 decryptedObject = ((Secret46_DecryptedMessageLayer *)decryptedObject).message;
             break;
         }
+        case 66:
+        {
+            decryptedObject = [Secret66__Environment parseObject:action.data];
+            if ([decryptedObject isKindOfClass:[Secret66_DecryptedMessageLayer class]])
+                decryptedObject = ((Secret66_DecryptedMessageLayer *)decryptedObject).message;
+            break;
+        }
+        case 73:
+        {
+            decryptedObject = [Secret73__Environment parseObject:action.data];
+            if ([decryptedObject isKindOfClass:[Secret73_DecryptedMessageLayer class]])
+                decryptedObject = ((Secret73_DecryptedMessageLayer *)decryptedObject).message;
+            break;
+        }
         default:
             break;
     }
@@ -819,6 +846,12 @@
     bool flushHistory = false;
     bool decodeMessageWithoutAction = true;
     NSDictionary *decryptedAction = [TGSecretIncomingQueueActor parseDecryptedAction:decryptedObject conversationId:_peerId decodeMessageWithAction:&decodeMessage flushHistory:&flushHistory decodeMessageWithoutAction:&decodeMessageWithoutAction date:action.date];
+    if (action.layer < 46) {
+        if (![decryptedAction[@"actionType"] isEqualToString:@"updateLayer"]) {
+            decodeMessage = false;
+            decodeMessageWithoutAction = false;
+        }
+    }
     
     if (flushHistory)
         [addedMessages removeAllObjects];
@@ -858,6 +891,14 @@
     else if ([decryptedMessage isKindOfClass:[Secret46_DecryptedMessage class]])
     {
         message = [[TGMessage alloc] initWithDecryptedMessageDesc45:decryptedMessage encryptedFile:fileInfo conversationId:conversationId fromUid:fromUid date:date];
+    }
+    else if ([decryptedMessage isKindOfClass:[Secret66_DecryptedMessage class]])
+    {
+        message = [[TGMessage alloc] initWithDecryptedMessageDesc66:decryptedMessage encryptedFile:fileInfo conversationId:conversationId fromUid:fromUid date:date];
+    }
+    else if ([decryptedMessage isKindOfClass:[Secret73_DecryptedMessage class]])
+    {
+        message = [[TGMessage alloc] initWithDecryptedMessageDesc73:decryptedMessage encryptedFile:fileInfo conversationId:conversationId fromUid:fromUid date:date];
     }
     message.mid = INT_MIN;
     message.seqIn = seqIn;
@@ -965,7 +1006,8 @@
                      @"peerId": @(conversationId),
                      @"actionType": @"screenshotMessages",
                      @"randomIds": concreteAction.randomIds,
-                     @"date": @(date)
+                     @"date": @(date),
+                     @"layer": @(17)
                      };
         }
         else if ([action isKindOfClass:[Secret17_DecryptedMessageAction_decryptedMessageActionTyping class]])
@@ -1035,7 +1077,8 @@
                      @"peerId": @(conversationId),
                      @"actionType": @"screenshotMessages",
                      @"randomIds": concreteAction.randomIds,
-                     @"date": @(date)
+                     @"date": @(date),
+                     @"layer": @(20)
                      };
         }
         else if ([action isKindOfClass:[Secret20_DecryptedMessageAction_decryptedMessageActionTyping class]])
@@ -1093,7 +1136,7 @@
         else if ([action isKindOfClass:[Secret23_DecryptedMessageAction_decryptedMessageActionFlushHistory class]])
         {
             if (flushHistory != NULL)
-            *flushHistory = true;
+                *flushHistory = true;
             
             return @{
                      @"peerId": @(conversationId),
@@ -1125,7 +1168,8 @@
                      @"peerId": @(conversationId),
                      @"actionType": @"screenshotMessages",
                      @"randomIds": concreteAction.randomIds,
-                     @"date": @(date)
+                     @"date": @(date),
+                     @"layer": @(23)
                      };
         }
         else if ([action isKindOfClass:[Secret23_DecryptedMessageAction_decryptedMessageActionTyping class]])
@@ -1135,7 +1179,7 @@
         else if ([action isKindOfClass:[Secret23_DecryptedMessageAction_decryptedMessageActionSetMessageTTL class]])
         {
             if (decodeMessageWithoutAction)
-            *decodeMessageWithoutAction = true;
+                *decodeMessageWithoutAction = true;
         }
         else if ([action isKindOfClass:[Secret23_DecryptedMessageAction_decryptedMessageActionResend class]])
         {
@@ -1215,7 +1259,8 @@
                      @"peerId": @(conversationId),
                      @"actionType": @"screenshotMessages",
                      @"randomIds": concreteAction.randomIds,
-                     @"date": @(date)
+                     @"date": @(date),
+                     @"layer": @(46)
                      };
         }
         else if ([action isKindOfClass:[Secret46_DecryptedMessageAction_decryptedMessageActionTyping class]])
@@ -1250,6 +1295,180 @@
         else if ([action isKindOfClass:[Secret46_DecryptedMessageAction_decryptedMessageActionAbortKey class]])
         {
             Secret46_DecryptedMessageAction_decryptedMessageActionAbortKey *concreteAction = action;
+            return @{@"actionType": @"abortKey", @"exchangeId": concreteAction.exchangeId};
+        }
+    } else if ([decryptedMessage isKindOfClass:[Secret66_DecryptedMessage_decryptedMessageService class]]) {
+        if (decodeMessageWithoutAction)
+            *decodeMessageWithoutAction = false;
+        
+        id action = ((Secret66_DecryptedMessage_decryptedMessageService *)decryptedMessage).action;
+        
+        if ([action isKindOfClass:[Secret66_DecryptedMessageAction_decryptedMessageActionDeleteMessages class]])
+        {
+            Secret1_DecryptedMessageAction_decryptedMessageActionDeleteMessages *concreteAction = action;
+            
+            return @{
+                     @"peerId": @(conversationId),
+                     @"actionType": @"deleteMessages",
+                     @"randomIds": concreteAction.randomIds == nil ? @[] : concreteAction.randomIds
+                     };
+        }
+        else if ([action isKindOfClass:[Secret66_DecryptedMessageAction_decryptedMessageActionFlushHistory class]])
+        {
+            if (flushHistory != NULL)
+                *flushHistory = true;
+            
+            return @{
+                     @"peerId": @(conversationId),
+                     @"actionType": @"flushHistory"
+                     };
+        }
+        else if ([action isKindOfClass:[Secret66_DecryptedMessageAction_decryptedMessageActionNotifyLayer class]])
+        {
+            Secret66_DecryptedMessageAction_decryptedMessageActionNotifyLayer *concreteAction = action;
+            return @{
+                     @"peerId": @(conversationId),
+                     @"actionType": @"updateLayer",
+                     @"layer": @([concreteAction.layer unsignedIntegerValue])
+                     };
+        }
+        else if ([action isKindOfClass:[Secret66_DecryptedMessageAction_decryptedMessageActionReadMessages class]])
+        {
+            Secret66_DecryptedMessageAction_decryptedMessageActionReadMessages *concreteAction = action;
+            return @{
+                     @"peerId": @(conversationId),
+                     @"actionType": @"readMessages",
+                     @"randomIds": concreteAction.randomIds
+                     };
+        }
+        else if ([action isKindOfClass:[Secret66_DecryptedMessageAction_decryptedMessageActionScreenshotMessages class]])
+        {
+            Secret66_DecryptedMessageAction_decryptedMessageActionScreenshotMessages *concreteAction = action;
+            return @{
+                     @"peerId": @(conversationId),
+                     @"actionType": @"screenshotMessages",
+                     @"randomIds": concreteAction.randomIds,
+                     @"date": @(date),
+                     @"layer": @(66)
+                     };
+        }
+        else if ([action isKindOfClass:[Secret66_DecryptedMessageAction_decryptedMessageActionTyping class]])
+        {
+            
+        }
+        else if ([action isKindOfClass:[Secret66_DecryptedMessageAction_decryptedMessageActionSetMessageTTL class]])
+        {
+            if (decodeMessageWithoutAction)
+                *decodeMessageWithoutAction = true;
+        }
+        else if ([action isKindOfClass:[Secret66_DecryptedMessageAction_decryptedMessageActionResend class]])
+        {
+            Secret66_DecryptedMessageAction_decryptedMessageActionResend *concreteAction = action;
+            return @{@"actionType": @"resendActions", @"fromSeq": concreteAction.startSeqNo, @"toSeq": concreteAction.endSeqNo};
+        }
+        else if ([action isKindOfClass:[Secret66_DecryptedMessageAction_decryptedMessageActionRequestKey class]])
+        {
+            Secret66_DecryptedMessageAction_decryptedMessageActionRequestKey *concreteAction = action;
+            return @{@"actionType": @"requestKey", @"exchangeId": concreteAction.exchangeId, @"g_a": concreteAction.gA};
+        }
+        else if ([action isKindOfClass:[Secret66_DecryptedMessageAction_decryptedMessageActionAcceptKey class]])
+        {
+            Secret66_DecryptedMessageAction_decryptedMessageActionAcceptKey *concreteAction = action;
+            return @{@"actionType": @"acceptKey", @"exchangeId": concreteAction.exchangeId, @"g_b": concreteAction.gB, @"key_fingerprint": concreteAction.keyFingerprint};
+        }
+        else if ([action isKindOfClass:[Secret66_DecryptedMessageAction_decryptedMessageActionCommitKey class]])
+        {
+            Secret66_DecryptedMessageAction_decryptedMessageActionCommitKey *concreteAction = action;
+            return @{@"actionType": @"commitKey", @"exchangeId": concreteAction.exchangeId, @"key_fingerprint": concreteAction.keyFingerprint};
+        }
+        else if ([action isKindOfClass:[Secret66_DecryptedMessageAction_decryptedMessageActionAbortKey class]])
+        {
+            Secret66_DecryptedMessageAction_decryptedMessageActionAbortKey *concreteAction = action;
+            return @{@"actionType": @"abortKey", @"exchangeId": concreteAction.exchangeId};
+        }
+    } else if ([decryptedMessage isKindOfClass:[Secret73_DecryptedMessage_decryptedMessageService class]]) {
+        if (decodeMessageWithoutAction)
+            *decodeMessageWithoutAction = false;
+        
+        id action = ((Secret73_DecryptedMessage_decryptedMessageService *)decryptedMessage).action;
+        
+        if ([action isKindOfClass:[Secret73_DecryptedMessageAction_decryptedMessageActionDeleteMessages class]])
+        {
+            Secret1_DecryptedMessageAction_decryptedMessageActionDeleteMessages *concreteAction = action;
+            
+            return @{
+                     @"peerId": @(conversationId),
+                     @"actionType": @"deleteMessages",
+                     @"randomIds": concreteAction.randomIds == nil ? @[] : concreteAction.randomIds
+                     };
+        }
+        else if ([action isKindOfClass:[Secret73_DecryptedMessageAction_decryptedMessageActionFlushHistory class]])
+        {
+            if (flushHistory != NULL)
+                *flushHistory = true;
+            
+            return @{
+                     @"peerId": @(conversationId),
+                     @"actionType": @"flushHistory"
+                     };
+        }
+        else if ([action isKindOfClass:[Secret73_DecryptedMessageAction_decryptedMessageActionNotifyLayer class]])
+        {
+            Secret73_DecryptedMessageAction_decryptedMessageActionNotifyLayer *concreteAction = action;
+            return @{
+                     @"peerId": @(conversationId),
+                     @"actionType": @"updateLayer",
+                     @"layer": @([concreteAction.layer unsignedIntegerValue])
+                     };
+        }
+        else if ([action isKindOfClass:[Secret73_DecryptedMessageAction_decryptedMessageActionReadMessages class]])
+        {
+            Secret73_DecryptedMessageAction_decryptedMessageActionReadMessages *concreteAction = action;
+            return @{
+                     @"peerId": @(conversationId),
+                     @"actionType": @"readMessages",
+                     @"randomIds": concreteAction.randomIds
+                     };
+        }
+        else if ([action isKindOfClass:[Secret73_DecryptedMessageAction_decryptedMessageActionScreenshotMessages class]])
+        {
+            Secret73_DecryptedMessageAction_decryptedMessageActionScreenshotMessages *concreteAction = action;
+            return @{
+                     @"peerId": @(conversationId),
+                     @"actionType": @"screenshotMessages",
+                     @"randomIds": concreteAction.randomIds,
+                     @"date": @(date),
+                     @"layer": @(73)
+                     };
+        }
+        else if ([action isKindOfClass:[Secret73_DecryptedMessageAction_decryptedMessageActionSetMessageTTL class]])
+        {
+            if (decodeMessageWithoutAction)
+                *decodeMessageWithoutAction = true;
+        }
+        else if ([action isKindOfClass:[Secret73_DecryptedMessageAction_decryptedMessageActionResend class]])
+        {
+            Secret73_DecryptedMessageAction_decryptedMessageActionResend *concreteAction = action;
+            return @{@"actionType": @"resendActions", @"fromSeq": concreteAction.startSeqNo, @"toSeq": concreteAction.endSeqNo};
+        }
+        else if ([action isKindOfClass:[Secret73_DecryptedMessageAction_decryptedMessageActionRequestKey class]])
+        {
+            Secret73_DecryptedMessageAction_decryptedMessageActionRequestKey *concreteAction = action;
+            return @{@"actionType": @"requestKey", @"exchangeId": concreteAction.exchangeId, @"g_a": concreteAction.gA};
+        }
+        else if ([action isKindOfClass:[Secret73_DecryptedMessageAction_decryptedMessageActionAcceptKey class]])
+        {
+            Secret73_DecryptedMessageAction_decryptedMessageActionAcceptKey *concreteAction = action;
+            return @{@"actionType": @"acceptKey", @"exchangeId": concreteAction.exchangeId, @"g_b": concreteAction.gB, @"key_fingerprint": concreteAction.keyFingerprint};
+        }
+        else if ([action isKindOfClass:[Secret73_DecryptedMessageAction_decryptedMessageActionCommitKey class]])
+        {
+            Secret73_DecryptedMessageAction_decryptedMessageActionCommitKey *concreteAction = action;
+            return @{@"actionType": @"commitKey", @"exchangeId": concreteAction.exchangeId, @"key_fingerprint": concreteAction.keyFingerprint};
+        }
+        else if ([action isKindOfClass:[Secret73_DecryptedMessageAction_decryptedMessageActionAbortKey class]])
+        {
+            Secret73_DecryptedMessageAction_decryptedMessageActionAbortKey *concreteAction = action;
             return @{@"actionType": @"abortKey", @"exchangeId": concreteAction.exchangeId};
         }
     }

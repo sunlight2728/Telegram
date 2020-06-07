@@ -20,7 +20,7 @@
     return 0;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)__unused metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)__unused metaObject
 {
     TGLog(@"TLbuildFromMetaObject is not implemented for base type");
     return nil;
@@ -47,7 +47,7 @@
     return (int32_t)0x3164b8c;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)metaObject
 {
     TLNotifyPeer$notifyPeer *object = [[TLNotifyPeer$notifyPeer alloc] init];
     object.peer = metaObject->getObject((int32_t)0x9344c37d);
@@ -80,7 +80,7 @@
     return (int32_t)0xd6283d7f;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)__unused metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)__unused metaObject
 {
     TLNotifyPeer$notifyUsers *object = [[TLNotifyPeer$notifyUsers alloc] init];
     return object;
@@ -106,35 +106,9 @@
     return (int32_t)0xfc446803;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)__unused metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)__unused metaObject
 {
     TLNotifyPeer$notifyChats *object = [[TLNotifyPeer$notifyChats alloc] init];
-    return object;
-}
-
-- (void)TLfillFieldsWithValues:(std::map<int32_t, TLConstructedValue> *)__unused values
-{
-}
-
-
-@end
-
-@implementation TLNotifyPeer$notifyAll : TLNotifyPeer
-
-
-- (int32_t)TLconstructorSignature
-{
-    return (int32_t)0x74d07c60;
-}
-
-- (int32_t)TLconstructorName
-{
-    return (int32_t)0x9794324d;
-}
-
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)__unused metaObject
-{
-    TLNotifyPeer$notifyAll *object = [[TLNotifyPeer$notifyAll alloc] init];
     return object;
 }
 

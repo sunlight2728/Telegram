@@ -596,7 +596,7 @@ const NSInteger TGNeoConversationControllerInitialRenderCount = 4;
     
     bool muteForever = [self peerIsAnyGroup];
     int32_t muteFor = muteForever ? INT_MAX : 1;
-    NSString *muteTitle = muteForever ? TGLocalized(@"Watch.UserInfo.Mute") : [NSString stringWithFormat:TGLocalized([TGStringUtils integerValueFormat:@"Watch.UserInfo.Mute_" value:muteFor]), muteFor];
+    NSString *muteTitle = muteForever ? TGLocalized(@"Watch.UserInfo.MuteTitle") : [NSString stringWithFormat:TGLocalized([TGStringUtils integerValueFormat:@"Watch.UserInfo.Mute_" value:muteFor]), muteFor];
     
     TGInterfaceMenuItem *muteItem = [[TGInterfaceMenuItem alloc] initWithItemIcon:muted ? WKMenuItemIconSpeaker : WKMenuItemIconMute title:muted ? TGLocalized(@"Watch.UserInfo.Unmute") : muteTitle actionBlock:^(TGInterfaceController *controller, TGInterfaceMenuItem *sender)
     {
@@ -945,12 +945,15 @@ const NSInteger TGNeoConversationControllerInitialRenderCount = 4;
 
 - (void)table:(WKInterfaceTable *)table updateRowController:(TGTableRowController *)controller forIndexPath:(TGIndexPath *)indexPath
 {
+    if (![controller isKindOfClass:[TGTableRowController class]])
+        return;
+    
     __weak TGNeoConversationController *weakSelf = self;
     
     id model = _rowModels[indexPath.row];
     NSUInteger index = [self numberOfRowsInTable:self.table section:0] - indexPath.row - 1;
     
-    if ([model isKindOfClass:[TGChatTimestamp class]])
+    if ([model isKindOfClass:[TGChatTimestamp class]] && [controller isKindOfClass:[TGNeoConversationTimeRowController class]])
     {
         TGNeoConversationTimeRowController *timeController = (TGNeoConversationTimeRowController *)controller;
         [timeController updateWithTimestamp:model];
@@ -1144,7 +1147,12 @@ const NSInteger TGNeoConversationControllerInitialRenderCount = 4;
         if (strongSelf == nil)
             return;
         
-        if (strongSelf->_context.context.micAccessAllowed)
+        bool override = false;
+#if TARGET_OS_SIMULATOR
+        override = true;
+#endif
+        
+        if (override || strongSelf->_context.context.micAccessAllowed)
         {
             [TGInputController presentAudioControllerForInterfaceController:strongSelf completion:^(int64_t uniqueId, int32_t duration, NSURL *url)
             {

@@ -8,13 +8,13 @@
 
 #import <Foundation/Foundation.h>
 
-#import <MtProtoKit/MTTime.h>
+#import <MTProtoKit/MTTime.h>
 
 @protocol TGModernViewInlineMediaContextDelegate <NSObject>
 
 @optional
 
-- (void)inlineMediaPlaybackStateUpdated:(bool)isPaused playbackPosition:(float)playbackPosition timestamp:(MTAbsoluteTime)timestamp preciseDuration:(NSTimeInterval)preciseDuration;
+- (void)inlineMediaPlaybackStateUpdated:(bool)isPaused playbackPosition:(float)playbackPosition timestamp:(CFAbsoluteTime)timestamp preciseDuration:(NSTimeInterval)preciseDuration;
 
 @end
 
@@ -27,8 +27,8 @@
 
 - (bool)isPlaybackActive;
 - (bool)isPaused;
-- (float)playbackPosition:(MTAbsoluteTime *)timestamp;
-- (float)playbackPosition:(MTAbsoluteTime *)timestamp sync:(bool)sync;
+- (float)playbackPosition:(CFAbsoluteTime *)timestamp;
+- (float)playbackPosition:(CFAbsoluteTime *)timestamp sync:(bool)sync;
 - (NSTimeInterval)preciseDuration;
 
 - (void)play;

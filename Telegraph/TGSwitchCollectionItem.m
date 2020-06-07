@@ -8,7 +8,7 @@
 
 #import "TGSwitchCollectionItem.h"
 
-#import "ASHandle.h"
+#import <LegacyComponents/ASHandle.h>
 
 #import "TGSwitchCollectionItemView.h"
 
@@ -31,13 +31,19 @@
         
         _title = title;
         _isOn = isOn;
+        
+        _isEnabled = true;
     }
     return self;
 }
 
 - (Class)itemViewClass
 {
-    return [TGSwitchCollectionItemView class];
+    if (_isPermission) {
+        return [TGPermissionSwitchCollectionItemView class];
+    } else {
+        return [TGSwitchCollectionItemView class];
+    }
 }
 
 - (CGSize)itemSizeForContainerSize:(CGSize)containerSize
@@ -49,8 +55,10 @@
 {
     [super bindView:view];
     
+    [((TGSwitchCollectionItemView *)view) setFullSeparator:_fullSeparator];
     [((TGSwitchCollectionItemView *)view) setTitle:_title];
     [((TGSwitchCollectionItemView *)view) setIsOn:_isOn animated:false];
+    [((TGSwitchCollectionItemView *)view) setIsEnabled:_isEnabled];
     ((TGSwitchCollectionItemView *)view).delegate = self;
 }
 
@@ -88,6 +96,17 @@
     }
 }
 
+- (void)setIsEnabled:(bool)isEnabled
+{
+    if (_isEnabled != isEnabled)
+    {
+        _isEnabled = isEnabled;
+        
+        if ([self boundView] != nil)
+            [((TGSwitchCollectionItemView *)[self boundView]) setIsEnabled:_isEnabled];
+    }
+}
+
 - (void)switchCollectionItemViewChangedValue:(TGSwitchCollectionItemView *)switchItemView isOn:(bool)isOn
 {
     if (switchItemView == [self boundView])
@@ -95,7 +114,7 @@
         _isOn = isOn;
         
         if (_toggled)
-            _toggled(isOn);
+            _toggled(isOn, self);
         [_interfaceHandle requestAction:@"switchItemChanged" options:@{@"item": self, @"value": @(_isOn)}];
     }
 }

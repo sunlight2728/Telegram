@@ -19,7 +19,7 @@
     return 0;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)__unused metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)__unused metaObject
 {
     TGLog(@"TLbuildFromMetaObject is not implemented for base type");
     return nil;
@@ -38,7 +38,7 @@
 
 - (int32_t)TLconstructorSignature
 {
-    return (int32_t)0x1f486803;
+    return (int32_t)0x5dab1af4;
 }
 
 - (int32_t)TLconstructorName
@@ -46,10 +46,11 @@
     return (int32_t)0xcc4d4449;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)metaObject
 {
     TLExportedMessageLink$exportedMessageLink *object = [[TLExportedMessageLink$exportedMessageLink alloc] init];
     object.link = metaObject->getString((int32_t)0xc58224f9);
+    object.html = metaObject->getString((int32_t)0x914719f6);
     return object;
 }
 
@@ -60,6 +61,12 @@
         value.type = TLConstructedValueTypeString;
         value.nativeObject = self.link;
         values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0xc58224f9, value));
+    }
+    {
+        TLConstructedValue value;
+        value.type = TLConstructedValueTypeString;
+        value.nativeObject = self.html;
+        values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0x914719f6, value));
     }
 }
 

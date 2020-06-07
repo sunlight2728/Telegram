@@ -9,6 +9,8 @@
 #import <Foundation/Foundation.h>
 #import <SSignalKit/SSignalKit.h>
 
+#import "TGAudioPlayer.h"
+
 @class TGModernConversationAudioPlayer;
 @class TGModernViewInlineMediaContext;
 
@@ -25,6 +27,7 @@
 
 @property (nonatomic, weak) id<TGModernConversationAudioPlayerDelegate> delegate;
 @property (nonatomic, strong) SQueue *queue;
+@property (nonatomic, readonly) TGAudioPlayer *audioPlayer;
 
 - (instancetype)initWithFilePath:(NSString *)filePath music:(bool)music controlAudioSession:(bool)controlAudioSession;
 
@@ -35,6 +38,8 @@
 - (void)pause;
 - (void)pause:(void (^)())completion;
 - (void)stop;
+
+- (void)setRate:(CGFloat)rate;
 
 - (float)playbackPosition;
 - (float)playbackPositionSync:(bool)sync;

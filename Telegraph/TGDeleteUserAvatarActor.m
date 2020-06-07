@@ -1,6 +1,8 @@
 #import "TGDeleteUserAvatarActor.h"
 
-#import "ActionStage.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/ActionStage.h>
 
 #import "TGTelegraph.h"
 
@@ -8,8 +10,7 @@
 
 #import "TGUserDataRequestBuilder.h"
 
-#import "TGRemoteImageView.h"
-#import "TGImageUtils.h"
+#import <LegacyComponents/TGRemoteImageView.h>
 
 @interface TGDeleteUserAvatarActor ()
 {
@@ -99,7 +100,8 @@
             }   
         }
         
-        [TGUserDataRequestBuilder executeUserObjectsUpdate:[NSArray arrayWithObject:selfUser]];
+        if (selfUser != nil)
+            [TGUserDataRequestBuilder executeUserObjectsUpdate:[NSArray arrayWithObject:selfUser]];
     }
     else if ([photo isKindOfClass:[TLUserProfilePhoto$userProfilePhotoEmpty class]])
     {
@@ -112,7 +114,8 @@
             selfUser.photoUrlBig = nil;
         }
         
-        [TGUserDataRequestBuilder executeUserObjectsUpdate:[NSArray arrayWithObject:selfUser]];
+        if (selfUser != nil)
+            [TGUserDataRequestBuilder executeUserObjectsUpdate:[NSArray arrayWithObject:selfUser]];
     }
     
     [ActionStageInstance() actionCompleted:self.path result:nil];

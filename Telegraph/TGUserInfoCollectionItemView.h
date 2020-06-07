@@ -8,12 +8,14 @@
 
 #import "TGCollectionItemView.h"
 
-#import "TGUser.h"
-#import "ASWatcher.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/ASWatcher.h>
 
 @interface TGUserInfoCollectionItemView : TGCollectionItemView
 
 @property (nonatomic) bool isVerified;
+@property (nonatomic, strong) NSDictionary *customProperties;
 
 @property (nonatomic, strong) ASHandle *itemHandle;
 
@@ -24,10 +26,23 @@
 - (void)setAvatarUri:(NSString *)avatarUri animated:(bool)animated synchronous:(bool)synchronous;
 - (void)setAvatarImage:(UIImage *)avatarImage animated:(bool)animated;
 - (void)setUpdatingAvatar:(bool)updatingAvatar animated:(bool)animated;
+- (void)setDisableAvatarPlaceholder:(bool)disable;
 - (void)setAvatarOffset:(CGSize)avatarOffset;
 - (void)setNameOffset:(CGSize)nameOffset;
+- (void)setShowCall:(bool)showCall;
+- (void)setShowDisclosureIndicator:(bool)show;
+- (void)setShowCameraIcon:(bool)show;
 
+- (void)setMultilineName:(bool)multilineName;
+
+- (void)setPhoneNumber:(NSString *)phoneNumber;
+- (void)setUsername:(NSString *)username;
+
+- (void)setAvatarHidden:(bool)hidden animated:(bool)animated;
 - (id)avatarView;
 - (void)makeNameFieldFirstResponder;
+
+- (void)copyPhoneNumber:(id)sender;
+- (void)copyUsername:(id)sender;
 
 @end

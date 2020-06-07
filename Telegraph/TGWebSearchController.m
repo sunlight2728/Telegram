@@ -1,24 +1,22 @@
 #import "TGWebSearchController.h"
 
-#import "ActionStage.h"
+#import <LegacyComponents/LegacyComponents.h>
 
-#import "TGSearchBar.h"
-#import "TGModernButton.h"
+#import "TGAppDelegate.h"
+#import <LegacyComponents/ActionStage.h>
 
-#import "TGStringUtils.h"
-#import "TGImageUtils.h"
-#import "TGFont.h"
-#import "UIImage+TG.h"
+#import <LegacyComponents/TGSearchBar.h>
+#import <LegacyComponents/TGModernButton.h>
 
-#import "TGNavigationController.h"
+#import <LegacyComponents/UIImage+TG.h>
 
 #import "TGModernMediaCollectionView.h"
 #import "TGModernMediaListLayout.h"
-#import "TGModernMediaListItem.h"
-#import "TGModernMediaListItemView.h"
-#import "TGModernMediaListItemContentView.h"
+#import <LegacyComponents/TGModernMediaListItem.h>
+#import <LegacyComponents/TGModernMediaListItemView.h>
+#import <LegacyComponents/TGModernMediaListItemContentView.h>
 
-#import "TGImageView.h"
+#import <LegacyComponents/TGImageView.h>
 
 #import "TGGiphySearchResultItem+TGMediaItem.h"
 #import "TGWebSearchGifItem.h"
@@ -44,7 +42,7 @@
 #import "TGWebSearchInternalGifItem.h"
 #import "TGWebSearchInternalGifItemView.h"
 
-#import "TGModernGalleryController.h"
+#import <LegacyComponents/TGModernGalleryController.h>
 #import "TGWebSearchResultsGalleryImageItem.h"
 #import "TGWebSearchResultsGalleryGifItem.h"
 #import "TGWebSearchResultsGalleryInternalImageItem.h"
@@ -53,27 +51,29 @@
 #import "TGInternalGifSearchResultGalleryItem.h"
 #import "TGExternalGifSearchResultGalleryItem.h"
 
-#import "TGMediaPickerGalleryModel.h"
-#import "TGMediaPickerGallerySelectedItemsModel.h"
+#import <LegacyComponents/TGMediaPickerGalleryModel.h>
 
-#import "TGActionSheet.h"
+#import "TGCustomActionSheet.h"
 
-#import "TGMediaAssetsLibrary.h"
+#import <LegacyComponents/TGMediaAssetsLibrary.h>
 
-#import "TGMediaSelectionContext.h"
-#import "TGMediaEditingContext.h"
+#import <LegacyComponents/TGMediaSelectionContext.h>
+#import <LegacyComponents/TGMediaEditingContext.h>
 
-#import "PGPhotoEditorValues.h"
+#import <LegacyComponents/PGPhotoEditorValues.h>
+#import <LegacyComponents/TGPaintingData.h>
 
-#import "TGPhotoEditorController.h"
-
-#import "TGOverlayControllerWindow.h"
+#import <LegacyComponents/TGPhotoEditorController.h>
 
 #import "TGRecentSearchResultsTableView.h"
 
-#import "TGDoubleTapGestureRecognizer.h"
+#import <LegacyComponents/TGDoubleTapGestureRecognizer.h>
 
-#import "TGMediaPickerLayoutMetrics.h"
+#import <LegacyComponents/TGMediaPickerLayoutMetrics.h>
+
+#import "TGLegacyComponentsContext.h"
+
+#import "TGPresentation.h"
 
 @interface TGWebSearchController () <TGSearchBarDelegate, ASWatcher, UICollectionViewDataSource, UICollectionViewDelegate>
 {
@@ -139,6 +139,10 @@
     
     void(^_fetchOriginalImage)(id<TGMediaEditableItem>, void(^)(UIImage *));
     void(^_fetchOriginalThumbnailImage)(id<TGMediaEditableItem>, void(^)(UIImage *));
+    
+    bool _checked3dTouch;
+    
+    id<LegacyComponentsContext> _context;
 }
 
 @property (nonatomic, strong) ASHandle *actionHandle;
@@ -147,16 +151,12 @@
 
 @implementation TGWebSearchController
 
-- (instancetype)init
-{
-    return [self initForAvatarSelection:false embedded:false];
-}
-
-- (instancetype)initForAvatarSelection:(bool)avatarSelection embedded:(bool)embedded
+- (instancetype)initWithContext:(id<LegacyComponentsContext>)context forAvatarSelection:(bool)avatarSelection embedded:(bool)embedded allowGrouping:(bool)__unused allowGrouping
 {
     self = [super init];
     if (self != nil)
     {
+        _context = context;
         _actionHandle = [[ASHandle alloc] initWithDelegate:self releaseOnMainThread:true];
      
         _avatarSelection = avatarSelection;
@@ -298,17 +298,21 @@
     [super loadView];
     
     self.view.clipsToBounds = true;
-    self.view.backgroundColor = [UIColor whiteColor];
+    self.view.backgroundColor = self.presentation.pallete.backgroundColor;
     
     _collectionContainer = [[UIView alloc] initWithFrame:self.view.bounds];
-    _collectionContainer.backgroundColor = [UIColor whiteColor];
+    _collectionContainer.backgroundColor = self.view.backgroundColor;
     _collectionContainer.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [self.view addSubview:_collectionContainer];
     
-    CGSize frameSize = self.view.bounds.size;
+    UIEdgeInsets safeAreaInset = [self calculatedSafeAreaInset];
     
+    CGSize frameSize = self.view.bounds.size;
     _collectionLayout = [[TGModernMediaListLayout alloc] init];
     _collectionView = [[TGModernMediaCollectionView alloc] initWithFrame:CGRectMake(0.0f, 0.0f, frameSize.width, frameSize.height) collectionViewLayout:_collectionLayout];
+    _collectionView.backgroundColor = self.view.backgroundColor;
+    if (iosMajorVersion() >= 11)
+        _collectionView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
     _collectionView.alwaysBounceVertical = true;
     _collectionView.backgroundColor = [UIColor clearColor];
     _collectionView.delaysContentTouches = true;
@@ -319,6 +323,12 @@
     [_collectionContainer addSubview:_collectionView];
     
     _recentSearchResultsTableView = [[TGRecentSearchResultsTableView alloc] initWithFrame:_collectionView.frame style:UITableViewStylePlain];
+    _recentSearchResultsTableView.presentation = self.presentation;
+    _recentSearchResultsTableView.backgroundColor = self.view.backgroundColor;
+    _recentSearchResultsTableView.separatorColor = self.presentation.pallete.separatorColor;
+    _recentSearchResultsTableView.safeAreaInset = safeAreaInset;
+    if (iosMajorVersion() >= 11)
+        _recentSearchResultsTableView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
     _recentSearchResultsTableView.items = [self _recentSearchItems];
     __weak TGWebSearchController *weakSelf = self;
     _recentSearchResultsTableView.itemSelected = ^(NSString *item)
@@ -349,6 +359,8 @@
         _scopeButtonTitles = @[TGLocalized(@"WebSearch.Images"), TGLocalized(@"WebSearch.GIFs"), TGLocalized(@"WebSearch.RecentSectionTitle")];
     
     _searchBar = [[TGSearchBar alloc] initWithFrame:CGRectMake(0.0f, 0.0f, frameSize.width, 0.0f) style:TGSearchBarStyleHeader];
+    [_searchBar setPallete:self.presentation.searchBarPallete];
+    _searchBar.safeAreaInset = safeAreaInset;
     _searchBar.customScopeButtonTitles = _scopeButtonTitles;
     _searchBar.scopeBarCollapsed = _embedded;
     _searchBar.showsScopeBar = true;
@@ -364,16 +376,16 @@
     
     if (!self.avatarSelection)
     {
-        _toolbarView = [[UIView alloc] initWithFrame:CGRectMake(0.0f, self.view.frame.size.height - 44.0f, self.view.frame.size.width, 44.0f)];
+        _toolbarView = [[UIView alloc] initWithFrame:CGRectMake(0.0f, self.view.frame.size.height - 44.0f - safeAreaInset.bottom, self.view.frame.size.width, 44.0f + safeAreaInset.bottom)];
         _toolbarView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleTopMargin;
-        _toolbarView.backgroundColor = UIColorRGBA(0xf7f7f7, 1.0f);
-        UIView *stripeView = [[UIView alloc] initWithFrame:CGRectMake(0.0f, 0.0f, _toolbarView.frame.size.width, TGIsRetina() ? 0.5f : 1.0f)];
-        stripeView.backgroundColor = UIColorRGB(0xb2b2b2);
+        _toolbarView.backgroundColor = self.presentation.pallete.barBackgroundColor;
+        UIView *stripeView = [[UIView alloc] initWithFrame:CGRectMake(0.0f, 0.0f, _toolbarView.frame.size.width, TGScreenPixel)];
+        stripeView.backgroundColor = self.presentation.pallete.barSeparatorColor;
         stripeView.autoresizingMask = UIViewAutoresizingFlexibleWidth;
         [_toolbarView addSubview:stripeView];
         [self.view addSubview:_toolbarView];
         
-        _toolbarLogoView = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"GiphyToolbarLogo.png"]];
+        _toolbarLogoView = [[UIImageView alloc] initWithImage:TGTintedImage(TGImageNamed(@"GiphyToolbarLogo.png"), self.presentation.pallete.secondaryTextColor)];
         _toolbarLogoView.frame = CGRectMake(CGFloor((_toolbarView.frame.size.width - _toolbarLogoView.frame.size.width) / 2.0f), 9.0f, _toolbarLogoView.frame.size.width, _toolbarLogoView.frame.size.height);
         _toolbarLogoView.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin;
         _toolbarLogoView.hidden = _searchBar.selectedScopeButtonIndex != [self gifsScopeIndex];
@@ -384,11 +396,11 @@
         _clearButton.hidden = _searchBar.selectedScopeButtonIndex != [self recentScopeIndex] || _recentSearchResults.count == 0;
         _clearButton.exclusiveTouch = true;
         [_clearButton setTitle:TGLocalized(@"WebSearch.RecentSectionClear") forState:UIControlStateNormal];
-        [_clearButton setTitleColor:TGAccentColor()];
+        [_clearButton setTitleColor:self.presentation.pallete.navigationButtonColor];
         _clearButton.titleLabel.font = TGSystemFontOfSize(17);
         _clearButton.contentEdgeInsets = UIEdgeInsetsMake(0, 10, 0, 0);
         [_clearButton sizeToFit];
-        _clearButton.frame = CGRectMake(0, 0, MAX(60, _clearButton.frame.size.width), 44);
+        _clearButton.frame = CGRectMake(self.controllerSafeAreaInset.left, 0, MAX(60, _clearButton.frame.size.width), 44);
         _clearButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
         [_clearButton addTarget:self action:@selector(clearButtonPressed) forControlEvents:UIControlEventTouchUpInside];
         [_toolbarView addSubview:_clearButton];
@@ -396,34 +408,21 @@
         _doneButton = [[TGModernButton alloc] initWithFrame:CGRectMake(0, 0, 40, 44)];
         _doneButton.exclusiveTouch = true;
         [_doneButton setTitle:TGLocalized(@"MediaPicker.Send") forState:UIControlStateNormal];
-        [_doneButton setTitleColor:TGAccentColor()];
+        [_doneButton setTitleColor:self.presentation.pallete.navigationButtonColor];
         _doneButton.titleLabel.font = TGMediumSystemFontOfSize(17);
         _doneButton.contentEdgeInsets = UIEdgeInsetsMake(0, 27, 0, 10);
         [_doneButton sizeToFit];
         CGFloat doneButtonWidth = MAX(40, _doneButton.frame.size.width);
-        _doneButton.frame = CGRectMake(_toolbarView.frame.size.width - doneButtonWidth, 0, doneButtonWidth, 44);
-        _doneButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentRight;
+        _doneButton.frame = CGRectMake(_toolbarView.frame.size.width - doneButtonWidth - self.controllerSafeAreaInset.right, 0, doneButtonWidth, 44);
         [_doneButton addTarget:self action:@selector(doneButtonPressed) forControlEvents:UIControlEventTouchUpInside];
-        _doneButton.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
         _doneButton.enabled = false;
         [_toolbarView addSubview:_doneButton];
         
-        static UIImage *countBadgeBackground = nil;
-        static dispatch_once_t onceToken;
-        dispatch_once(&onceToken, ^
-        {
-            UIGraphicsBeginImageContextWithOptions(CGSizeMake(22.0f, 22.0f), false, 0.0f);
-            CGContextRef context = UIGraphicsGetCurrentContext();
-            CGContextSetFillColorWithColor(context, TGAccentColor().CGColor);
-            CGContextFillEllipseInRect(context, CGRectMake(0.0f, 0.0f, 22.0f, 22.0f));
-            countBadgeBackground = [UIGraphicsGetImageFromCurrentImageContext() stretchableImageWithLeftCapWidth:11.0f topCapHeight:11.0f];
-            UIGraphicsEndImageContext();
-        });
-        _countBadge = [[UIImageView alloc] initWithImage:countBadgeBackground];
+        _countBadge = [[UIImageView alloc] initWithImage:self.presentation.images.mediaBadgeImage];
         _countBadge.alpha = 0.0f;
         _countLabel = [[UILabel alloc] init];
         _countLabel.backgroundColor = [UIColor clearColor];
-        _countLabel.textColor = [UIColor whiteColor];
+        _countLabel.textColor = self.presentation.pallete.accentContrastColor;
         _countLabel.font = TGLightSystemFontOfSize(14);
         [_countBadge addSubview:_countLabel];
         [_doneButton addSubview:_countBadge];
@@ -589,11 +588,13 @@
     [super viewWillAppear:animated];
     
     CGSize frameSize = self.view.bounds.size;
-    CGRect collectionViewFrame = CGRectMake(0.0f, 0.0f, frameSize.width, frameSize.height);
+    CGRect collectionViewFrame = CGRectMake(self.controllerSafeAreaInset.left, 0.0f, frameSize.width - self.controllerSafeAreaInset.left - self.controllerSafeAreaInset.right, frameSize.height);
     _collectionViewWidth = collectionViewFrame.size.width;
     _collectionView.frame = collectionViewFrame;
     
-    _recentSearchResultsTableView.frame = collectionViewFrame;
+    _recentSearchResultsTableView.frame = CGRectMake(0.0f, _collectionView.frame.origin.y, self.view.frame.size.width, _collectionView.frame.size.height);
+    
+    [self setup3DTouch];
 }
 
 - (void)viewDidAppear:(BOOL)animated
@@ -635,8 +636,15 @@
 - (void)controllerInsetUpdated:(UIEdgeInsets)previousInset
 {
     CGRect navigationBarFrame = _searchBar.frame;
+    navigationBarFrame.size.width = self.view.frame.size.width;
     navigationBarFrame.origin.y = self.controllerCleanInset.top;
+    
+    UIEdgeInsets safeAreaInset = [self calculatedSafeAreaInset];
+    _searchBar.safeAreaInset = safeAreaInset;
     _searchBar.frame = navigationBarFrame;
+    if (_searchBar.frame.size.height < FLT_EPSILON)
+        [_searchBar sizeToFit];
+    _recentSearchResultsTableView.safeAreaInset = safeAreaInset;
         
     [super controllerInsetUpdated:previousInset];
 }
@@ -661,16 +669,21 @@
     CGAffineTransform tableTransform = _collectionView.transform;
     _collectionView.transform = CGAffineTransformIdentity;
     
-    CGRect tableFrame = CGRectMake(0, 0, screenSize.width, screenSize.height);
+    UIEdgeInsets safeAreaInset = [self calculatedSafeAreaInset];
+    CGRect tableFrame = CGRectMake(safeAreaInset.left, 0, screenSize.width - safeAreaInset.left - safeAreaInset.right, screenSize.height);
     _collectionViewWidth = tableFrame.size.width;
     _collectionView.frame = tableFrame;
     
-    _recentSearchResultsTableView.frame = _collectionView.frame;
+    _recentSearchResultsTableView.frame = CGRectMake(0.0f, _collectionView.frame.origin.y, self.view.frame.size.width, _collectionView.frame.size.height);
     
     _collectionView.transform = tableTransform;
     
     [_collectionLayout invalidateLayout];
     [_collectionView layoutSubviews];
+    
+    _toolbarView.frame = CGRectMake(0.0f, self.view.frame.size.height - 44.0f - safeAreaInset.bottom, self.view.frame.size.width, 44.0f + safeAreaInset.bottom);
+    _clearButton.frame = CGRectMake(safeAreaInset.left, 0.0f, _clearButton.frame.size.width, _clearButton.frame.size.height);
+    _doneButton.frame = CGRectMake(_toolbarView.frame.size.width - _doneButton.frame.size.width - safeAreaInset.right, 0.0f, _doneButton.frame.size.width, _doneButton.frame.size.height);
     
     void (^changeBlock)(void) = ^
     {
@@ -1025,10 +1038,11 @@
     return galleryItems;
 }
 
-- (TGModernGalleryController *)createGalleryControllerForItem:(id<TGWebSearchListItem>)item
+- (TGModernGalleryController *)createGalleryControllerForItem:(id<TGWebSearchListItem>)item previewMode:(bool)previewMode
 {
     __weak TGWebSearchController *weakSelf = self;
-    TGModernGalleryController *modernGallery = [[TGModernGalleryController alloc] init];
+    TGModernGalleryController *modernGallery = [[TGModernGalleryController alloc] initWithContext:[TGLegacyComponentsContext shared]];
+    modernGallery.previewMode = previewMode;
     
     __block id<TGModernGalleryItem> focusItem = nil;
     NSArray *galleryItems = [self prepareGalleryItemsWithEnumerationBlock:^(id<TGWebSearchResultsGalleryItem> galleryItem)
@@ -1037,7 +1051,7 @@
             focusItem = galleryItem;
     }];
 
-    TGMediaPickerGalleryModel *model = [[TGMediaPickerGalleryModel alloc] initWithItems:galleryItems focusItem:focusItem selectionContext:item.selectionContext editingContext:_editingContext hasCaptions:self.captionsEnabled hasSelectionPanel:false];
+    TGMediaPickerGalleryModel *model = [[TGMediaPickerGalleryModel alloc] initWithContext:_context items:galleryItems focusItem:focusItem selectionContext:item.selectionContext editingContext:_editingContext hasCaptions:self.captionsEnabled allowCaptionEntities:self.allowCaptionEntities hasTimer:false onlyCrop:false inhibitDocumentCaptions:false hasSelectionPanel:false hasCamera:false recipientName:self.recipientName];
     model.suggestionContext = self.suggestionContext;
     model.controller = modernGallery;
     model.externalSelectionCount = ^NSInteger
@@ -1079,13 +1093,13 @@
         
         [strongSelf->_editingContext setImage:resultImage thumbnailImage:thumbnailImage forItem:editableItem synchronous:true];
     };
-    model.saveItemCaption = ^(id<TGMediaEditableItem> editableItem, NSString *caption)
+    model.saveItemCaption = ^(id<TGMediaEditableItem> editableItem, NSString *caption, NSArray *entities)
     {
         __strong TGWebSearchController *strongSelf = weakSelf;
         if (strongSelf == nil)
             return;
         
-        [strongSelf->_editingContext setCaption:caption forItem:editableItem];
+        [strongSelf->_editingContext setCaption:caption entities:entities forItem:editableItem];
         
         if (item.selectionContext != nil && caption.length > 0 && [editableItem conformsToProtocol:@protocol(TGMediaSelectableItem)])
             [item.selectionContext setItem:(id<TGMediaSelectableItem>)editableItem selected:true];
@@ -1108,11 +1122,16 @@
     _galleryModel = model;
     modernGallery.model = model;
     
+    __weak TGModernGalleryController *weakGallery = modernGallery;
     modernGallery.itemFocused = ^(id<TGWebSearchResultsGalleryItem> item)
     {
         __strong TGWebSearchController *strongSelf = weakSelf;
+        __strong TGModernGalleryController *strongGallery = weakGallery;
         if (strongSelf != nil)
         {
+            if (strongGallery.previewMode)
+                return;
+            
             id<TGWebSearchListItem> listItem = [strongSelf listItemForSearchResult:[item webSearchResult]];
             strongSelf->_hiddenItem = listItem;
             [strongSelf updateHiddenItemAnimated:false];
@@ -1122,8 +1141,12 @@
     modernGallery.beginTransitionIn = ^UIView *(id<TGWebSearchResultsGalleryItem> item, __unused TGModernGalleryItemView *itemView)
     {
         __strong TGWebSearchController *strongSelf = weakSelf;
+        __strong TGModernGalleryController *strongGallery = weakGallery;
         if (strongSelf != nil)
         {
+            if (strongGallery.previewMode)
+                return nil;
+            
             return [strongSelf referenceViewForSearchResult:[item webSearchResult]];
         }
         
@@ -1150,6 +1173,13 @@
             [strongSelf updateHiddenItemAnimated:true];
         }
     };
+    
+    if (!previewMode)
+    {
+        TGOverlayControllerWindow *controllerWindow = [[TGOverlayControllerWindow alloc] initWithManager:[[TGLegacyComponentsContext shared] makeOverlayWindowManager] parentController:self contentController:modernGallery];
+        controllerWindow.hidden = false;
+        modernGallery.view.clipsToBounds = true;
+    }
 
     return modernGallery;
 }
@@ -1182,7 +1212,8 @@
         }
         
         __weak TGWebSearchController *weakSelf = self;
-        TGPhotoEditorController *controller = [[TGPhotoEditorController alloc] initWithItem:(id<TGMediaEditableItem>)item.webSearchResult intent:TGPhotoEditorControllerAvatarIntent | TGPhotoEditorControllerWebIntent adjustments:nil caption:nil screenImage:thumbnailImage availableTabs:[TGPhotoEditorController defaultTabsForAvatarIntent] selectedTab:TGPhotoEditorCropTab];
+        TGPhotoEditorController *controller = [[TGPhotoEditorController alloc] initWithContext:[TGLegacyComponentsContext shared] item:(id<TGMediaEditableItem>)item.webSearchResult intent:TGPhotoEditorControllerAvatarIntent | TGPhotoEditorControllerWebIntent adjustments:nil caption:nil screenImage:thumbnailImage availableTabs:[TGPhotoEditorController defaultTabsForAvatarIntent] selectedTab:TGPhotoEditorCropTab];
+        controller.editingContext = _editingContext;
         controller.didFinishEditing = ^(PGPhotoEditorValues *editorValues, UIImage *resultImage, __unused UIImage *thumbnailImage, bool hasChanges)
         {
             if (!hasChanges)
@@ -1195,20 +1226,20 @@
             if (strongSelf.avatarCompletionBlock != nil)
                 strongSelf.avatarCompletionBlock(resultImage);
             
-            if ([editorValues toolsApplied])
+            if (TGAppDelegateInstance.saveEditedPhotos && [editorValues toolsApplied])
                 [[[TGMediaAssetsLibrary sharedLibrary] saveAssetWithImage:resultImage] startWithNext:nil];
         };
         controller.requestThumbnailImage = ^SSignal *(id<TGMediaEditableItem> editableItem)
         {
             return [editableItem thumbnailImageSignal];
         };
-        controller.requestOriginalScreenSizeImage = ^SSignal *(id<TGMediaEditableItem> editableItem)
+        controller.requestOriginalScreenSizeImage = ^SSignal *(id<TGMediaEditableItem> editableItem, NSTimeInterval position)
         {
-            return [editableItem screenImageSignal];
+            return [editableItem screenImageSignal:position];
         };
-        controller.requestOriginalFullSizeImage = ^SSignal *(id<TGMediaEditableItem> editableItem)
+        controller.requestOriginalFullSizeImage = ^SSignal *(id<TGMediaEditableItem> editableItem, NSTimeInterval position)
         {
-            return [editableItem originalImageSignal];
+            return [editableItem originalImageSignal:position];
         };
         
         UINavigationController *navController = self.parentNavigationController ? : self.navigationController;
@@ -1216,13 +1247,7 @@
     }
     else
     {
-        TGModernGalleryController *controller = [self createGalleryControllerForItem:item];
-        if (controller == nil)
-            return;
-        
-        TGOverlayControllerWindow *controllerWindow = [[TGOverlayControllerWindow alloc] initWithParentController:self contentController:controller];
-        controllerWindow.hidden = false;
-        controller.view.clipsToBounds = true;
+        [self createGalleryControllerForItem:item previewMode:false];
     }
 }
 
@@ -1418,7 +1443,7 @@
     
     TGActionSheetAction *confirmAction = [[TGActionSheetAction alloc] initWithTitle:TGLocalized(@"WebSearch.RecentSectionClear") action:@"confirm" type:TGActionSheetActionTypeDestructive];
     TGActionSheetAction *cancelAction = [[TGActionSheetAction alloc] initWithTitle:TGLocalized(@"Common.Cancel") action:@"cancel" type:TGActionSheetActionTypeCancel];
-    TGActionSheet *actionSheet = [[TGActionSheet alloc] initWithTitle:TGLocalized(@"WebSearch.RecentClearConfirmation") actions:@[ confirmAction, cancelAction ] actionBlock:^(__unused id target, NSString *action)
+    TGCustomActionSheet *actionSheet = [[TGCustomActionSheet alloc] initWithTitle:TGLocalized(@"WebSearch.RecentClearConfirmation") actions:@[ confirmAction, cancelAction ] actionBlock:^(__unused id target, NSString *action)
     {
         if ([action isEqualToString:@"confirm"])
         {
@@ -1467,22 +1492,27 @@
     [self.presentingViewController dismissViewControllerAnimated:true completion:nil];
 }
 
-- (NSArray *)selectedItemSignals:(id (^)(id, NSString *))imageDescriptionGenerator
+- (NSArray *)selectedItemSignals:(id (^)(id, NSString *, NSArray *))imageDescriptionGenerator
 {
     NSMutableArray *resultSignals = [[NSMutableArray alloc] init];
     
     for (id<TGWebSearchResult> item in _selectedItems)
     {
         NSString *caption = nil;
+        NSArray *entites = nil;
+        id<TGMediaEditAdjustments> adjustments = nil;
         if ([item conformsToProtocol:@protocol(TGMediaEditableItem)])
+        {
             caption = [_editingContext captionForItem:(id<TGMediaEditableItem>)item];
-
+            entites = [_editingContext entitiesForItem:(id<TGMediaEditableItem>)item];
+            adjustments = [_editingContext adjustmentsForItem:(id<TGMediaEditableItem>)item];
+        }
         if (caption.length == 0)
             caption = nil;
         
         SSignal *signal = [SSignal single:item];
         
-        if ([item conformsToProtocol:@protocol(TGMediaEditableItem)])
+        if ([item conformsToProtocol:@protocol(TGMediaEditableItem)] && [item respondsToSelector:@selector(screenImageSignal:)])
         {
             signal = [[[[_editingContext imageSignalForItem:(id<TGMediaEditableItem>)item] filter:^bool(id result)
             {
@@ -1509,7 +1539,22 @@
             if (item == nil)
                 return [SSignal complete];
             
-            id generatedItem = imageDescriptionGenerator(item, caption);
+            NSArray *stickers = adjustments.paintingData.stickers;
+            id generatedItem = nil;
+            if ([item isKindOfClass:[UIImage class]] && stickers.count > 0)
+            {
+                NSDictionary *dictItem = @
+                {
+                    @"type": @"webPhoto",
+                    @"image": item,
+                    @"stickers": stickers
+                };
+                generatedItem = imageDescriptionGenerator(dictItem, caption, entites);
+            }
+            else
+            {
+                generatedItem = imageDescriptionGenerator(item, caption, entites);
+            }
             if (generatedItem == nil)
                 return [SSignal complete];
             
@@ -1776,6 +1821,63 @@
         [self endAppearanceTransition];
         [self removeFromParentViewController];
     }];
+}
+
+- (void)setup3DTouch
+{
+    if (_checked3dTouch)
+        return;
+    
+    _checked3dTouch = true;
+    if (iosMajorVersion() >= 9)
+    {
+        if (self.traitCollection.forceTouchCapability == UIForceTouchCapabilityAvailable)
+            [self registerForPreviewingWithDelegate:(id)self sourceView:self.view];
+    }
+}
+
+- (UIViewController *)previewingContext:(id<UIViewControllerPreviewing>)previewingContext viewControllerForLocation:(CGPoint)location
+{
+    CGPoint point = [self.view convertPoint:location toView:_collectionView];
+    NSIndexPath *indexPath = [_collectionView indexPathForItemAtPoint:point];
+    if (indexPath == nil)
+        return nil;
+    
+    CGRect cellFrame = [_collectionView.collectionViewLayout layoutAttributesForItemAtIndexPath:indexPath].frame;
+    previewingContext.sourceRect = [self.view convertRect:cellFrame fromView:_collectionView];
+    
+    id<TGWebSearchListItem> item = [self scopeSearchResults][indexPath.row];
+    CGSize dimensions = CGSizeZero;
+    
+    if ([item.webSearchResult isKindOfClass:[TGWebSearchInternalImageResult class]])
+        [((TGWebSearchInternalImageResult *)item.webSearchResult).imageInfo imageUrlForLargestSize:&dimensions];
+    else if ([item.webSearchResult isKindOfClass:[TGWebSearchInternalGifResult class]])
+        [((TGWebSearchInternalGifResult *)item.webSearchResult).thumbnailInfo imageUrlForLargestSize:&dimensions];
+    else if ([item.webSearchResult isKindOfClass:[TGInternalGifSearchResult class]])
+        [((TGInternalGifSearchResult *)item.webSearchResult).document.thumbnailInfo imageUrlForLargestSize:&dimensions];
+    else if ([item.webSearchResult isKindOfClass:[TGGiphySearchResultItem class]])
+        dimensions = ((TGGiphySearchResultItem *)item.webSearchResult).gifSize;
+    else if ([item.webSearchResult isKindOfClass:[TGExternalGifSearchResult class]])
+        dimensions = ((TGExternalGifSearchResult *)item.webSearchResult).size;
+    else if ([item.webSearchResult isKindOfClass:[TGBingSearchResultItem class]])
+        dimensions = ((TGBingSearchResultItem *)item.webSearchResult).imageSize;
+    
+    UIViewController *controller = [self createGalleryControllerForItem:item previewMode:true];
+    controller.preferredContentSize = TGFitSize(dimensions, self.view.frame.size);
+    return controller;
+}
+
+- (void)previewingContext:(id<UIViewControllerPreviewing>)__unused previewingContext commitViewController:(UIViewController *)viewControllerToCommit
+{
+    if ([viewControllerToCommit isKindOfClass:[TGModernGalleryController class]])
+    {
+        TGModernGalleryController *controller = (TGModernGalleryController *)viewControllerToCommit;
+        controller.previewMode = false;
+        
+        TGOverlayControllerWindow *controllerWindow = [[TGOverlayControllerWindow alloc] initWithManager:[[TGLegacyComponentsContext shared] makeOverlayWindowManager] parentController:self contentController:controller];
+        controllerWindow.hidden = false;
+        controller.view.clipsToBounds = true;
+    }
 }
 
 @end

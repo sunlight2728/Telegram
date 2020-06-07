@@ -8,6 +8,8 @@
 
 #import "TGPreparedMessage.h"
 
+#import "TGMediaPostingContext.h"
+
 @interface TGPreparedLocalImageMessage : TGPreparedMessage
 
 @property (nonatomic) CGSize imageSize;
@@ -17,10 +19,10 @@
 @property (nonatomic, strong) NSString *localImageDataPath;
 @property (nonatomic, strong) NSString *localThumbnailDataPath;
 
-@property (nonatomic, strong) NSString *caption;
+@property (nonatomic, strong) NSArray *stickerDocuments;
 
-+ (instancetype)messageWithImageData:(NSData *)imageData imageSize:(CGSize)imageSize thumbnailData:(NSData *)thumbnailData thumbnailSize:(CGSize)thumbnailSize assetUrl:(NSString *)assetUrl caption:(NSString *)caption replyMessage:(TGMessage *)replyMessage;
-+ (instancetype)messageWithLocalImageDataPath:(NSString *)localImageDataPath imageSize:(CGSize)imageSize localThumbnailDataPath:(NSString *)localThumbnailDataPath thumbnailSize:(CGSize)thumbnailSize assetUrl:(NSString *)assetUrl caption:(NSString *)caption replyMessage:(TGMessage *)replyMessage;
++ (instancetype)messageWithImageData:(NSData *)imageData imageSize:(CGSize)imageSize thumbnailData:(NSData *)thumbnailData thumbnailSize:(CGSize)thumbnailSize assetUrl:(NSString *)assetUrl text:(NSString *)text entities:(NSArray *)entities replyMessage:(TGMessage *)replyMessage replyMarkup:(TGReplyMarkupAttachment *)replyMarkup stickerDocuments:(NSArray *)stickerDocuments messageLifetime:(int32_t)messageLifetime groupedId:(int64_t)groupedId;
++ (instancetype)messageWithLocalImageDataPath:(NSString *)localImageDataPath imageSize:(CGSize)imageSize localThumbnailDataPath:(NSString *)localThumbnailDataPath thumbnailSize:(CGSize)thumbnailSize assetUrl:(NSString *)assetUrl text:(NSString *)text entities:(NSArray *)entities replyMessage:(TGMessage *)replyMessage replyMarkup:(TGReplyMarkupAttachment *)replyMarkup stickerDocuments:(NSArray *)stickerDocuments messageLifetime:(int32_t)messageLifetime groupedId:(int64_t)groupedId;
 + (instancetype)messageByCopyingMessageData:(TGPreparedLocalImageMessage *)source;
 
 @end

@@ -1,11 +1,11 @@
 #import "TGChannelList.h"
 
-#import "TGConversation.h"
+#import <LegacyComponents/LegacyComponents.h>
 
 #import "TGChannelStateSignals.h"
 #import "TGUpdateStateRequestBuilder.h"
 
-#import "ActionStage.h"
+#import <LegacyComponents/ActionStage.h>
 
 @interface TGChannelList () {
     NSMutableArray *_channels;
@@ -93,7 +93,9 @@
     
     [_uncommitedPeerIds removeAllObjects];
 
-    [ActionStageInstance() dispatchResource:@"/tg/conversations" resource:[[SGraphObjectNode alloc] initWithObject:channels]];
+    if (channels.count != 0) {
+        [ActionStageInstance() dispatchResource:@"/tg/conversations" resource:[[SGraphObjectNode alloc] initWithObject:channels]];
+    }
 }
 
 @end

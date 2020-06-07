@@ -1,9 +1,7 @@
 #import "TGLocationServicesStateActor.h"
 
-#import "ActionStage.h"
-#import "SGraphObjectNode.h"
-
-#import "TGLiveNearbyActor.h"
+#import <LegacyComponents/ActionStage.h>
+#import <LegacyComponents/SGraphObjectNode.h>
 
 #import <CoreLocation/CoreLocation.h>
 
@@ -37,10 +35,6 @@
             {
                 [ActionStageInstance() dispatchResource:@"/tg/locationServicesState" resource:[[SGraphObjectNode alloc] initWithObject:[[NSNumber alloc] initWithBool:enabled]]];
             }
-            
-            TGLiveNearbyActor *liveNearby = (TGLiveNearbyActor *)[ActionStageInstance() executingActorWithPath:@"/tg/liveNearby"];
-            if (liveNearby != nil && enabled)
-                [liveNearby checkNearbyIfFailed];
             
             [ActionStageInstance() nodeRetrieved:self.path node:[[SGraphObjectNode alloc] initWithObject:[[NSNumber alloc] initWithBool:enabled]]];
         }];

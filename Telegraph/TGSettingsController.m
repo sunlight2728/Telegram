@@ -7,13 +7,13 @@
 #import "TGActionMenuItemCell.h"
 #import "TGSwitchItemCell.h"
 
-#import "ActionStage.h"
+#import <LegacyComponents/ActionStage.h>
 
 #import "TGTelegraph.h"
 
 #import "TGInterfaceAssets.h"
 
-#import "TGRemoteImageView.h"
+#import <LegacyComponents/TGRemoteImageView.h>
 
 #import <MessageUI/MessageUI.h>
 
@@ -23,7 +23,7 @@
 
 #import "TGAppDelegate.h"
 
-#import "TGAlertView.h"
+#import "TGCustomAlertView.h"
 
 @interface TGSettingsController () <UITableViewDataSource, UITableViewDelegate, MFMailComposeViewControllerDelegate>
 
@@ -134,6 +134,8 @@
     self.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     
     _tableView = [[UITableView alloc] initWithFrame:self.view.bounds style:UITableViewStyleGrouped];
+    if (iosMajorVersion() >= 11)
+        _tableView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
     _tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     _tableView.backgroundColor = [UIColor clearColor];
     _tableView.delegate = self;
@@ -382,14 +384,14 @@
 }
 
 - (void)clearChannelsButtonPressed {
-    [[[TGAlertView alloc] initWithTitle:nil message:@"Application will be force closed" cancelButtonTitle:TGLocalized(@"Common.Cancel") okButtonTitle:TGLocalized(@"Common.OK") completionBlock:^(bool okButtonPressed) {
+    [TGCustomAlertView presentAlertWithTitle:nil message:@"Application will be force closed" cancelButtonTitle:TGLocalized(@"Common.Cancel") okButtonTitle:TGLocalized(@"Common.OK") completionBlock:^(bool okButtonPressed) {
         if (okButtonPressed) {
             [TGDatabaseInstance() _dropChannels];
             TGDispatchAfter(1.0, dispatch_get_main_queue(), ^{
                 exit(0);
             });
         }
-    }] show];
+    }];
 }
 
 - (void)clearCacheButtonPressed

@@ -1,15 +1,15 @@
 #import "TGExternalGifSearchResultGalleryItem.h"
 
-#import "TGExternalGifSearchResult+TGMediaItem.h"
+#import <LegacyComponents/LegacyComponents.h>
 
-#import "TGImageUtils.h"
-#import "TGStringUtils.h"
+#import "TGExternalGifSearchResult+TGMediaItem.h"
 
 #import "TGExternalGifSearchResultGalleryItemView.h"
 
 @implementation TGExternalGifSearchResultGalleryItem
 
 @synthesize selectionContext;
+@synthesize editingContext;
 
 - (instancetype)initWithSearchResultItem:(TGExternalGifSearchResult *)searchResultItem
 {
@@ -34,6 +34,16 @@
 - (id<TGMediaSelectableItem>)selectableMediaItem
 {
     return self.webSearchResult;
+}
+
+- (id<TGMediaEditableItem>)editableMediaItem
+{
+    return self.webSearchResult;
+}
+
+- (TGPhotoEditorTab)toolbarTabs
+{
+    return TGPhotoEditorNoneTab;
 }
 
 - (NSString *)uniqueId

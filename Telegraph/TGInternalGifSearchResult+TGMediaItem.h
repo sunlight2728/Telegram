@@ -1,6 +1,7 @@
 #import "TGInternalGifSearchResult.h"
-#import "TGMediaSelectionContext.h"
+#import <LegacyComponents/TGMediaSelectionContext.h>
+#import <LegacyComponents/TGMediaEditingContext.h>
 
-@interface TGInternalGifSearchResult (TGMediaItem) <TGMediaSelectableItem>
+@interface TGInternalGifSearchResult (TGMediaItem) <TGMediaSelectableItem, TGMediaEditableItem>
 
 @end

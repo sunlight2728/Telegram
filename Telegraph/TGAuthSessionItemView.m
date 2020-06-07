@@ -1,11 +1,10 @@
 #import "TGAuthSessionItemView.h"
 
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGAuthSession.h"
 
-#import "TGDateUtils.h"
-
-#import "TGFont.h"
-#import "TGImageUtils.h"
+#import "TGPresentation.h"
 
 @interface TGAuthSessionItemView ()
 {
@@ -56,6 +55,15 @@
     return self;
 }
 
+- (void)setPresentation:(TGPresentation *)presentation
+{
+    [super setPresentation:presentation];
+    
+    _titleLabel.textColor = presentation.pallete.collectionMenuTextColor;
+    _infoLabel.textColor = presentation.pallete.collectionMenuTextColor;
+    _subtitleLabel.textColor = presentation.pallete.collectionMenuVariantColor;
+}
+
 - (void)setAuthSession:(TGAuthSession *)authSession
 {
     _titleLabel.text = [[NSString alloc] initWithFormat:@"%@ %@", authSession.appName, authSession.appVersion];
@@ -73,18 +81,18 @@
     if (authSession.systemVersion.length != 0)
         _infoLabel.text = [_infoLabel.text stringByAppendingFormat:@" %@", authSession.systemVersion];
     
-    NSString *locationString = [[NSString alloc] initWithFormat:@"%@ — %@", authSession.ip, authSession.country];
+    NSString *locationString = [[NSString alloc] initWithFormat:@"%@ • %@", authSession.ip, authSession.country];
     _subtitleLabel.text = locationString;
     
     if (authSession.sessionHash == 0)
     {
         _statusLabel.text = TGLocalized(@"Presence.online");
-        _statusLabel.textColor = TGAccentColor();
+        _statusLabel.textColor = self.presentation.pallete.collectionMenuAccentColor;
     }
     else
     {
         _statusLabel.text = [TGDateUtils stringForMessageListDate:authSession.dateActive];
-        _statusLabel.textColor = UIColorRGB(0x999999);
+        _statusLabel.textColor = self.presentation.pallete.collectionMenuVariantColor;
     }
     [self setNeedsLayout];
 }
@@ -96,14 +104,14 @@
     CGSize statusSize = [_statusLabel.text sizeWithFont:_statusLabel.font];
     statusSize.width = CGCeil(statusSize.width);
     statusSize.height = CGCeil(statusSize.height);
-    _statusLabel.frame = CGRectMake(self.editingContentView.frame.size.width - statusSize.width - 12.0f, 9.0f, statusSize.width, statusSize.height);
+    _statusLabel.frame = CGRectMake(self.editingContentView.frame.size.width - statusSize.width - 12.0f - self.safeAreaInset.right, 9.0f, statusSize.width, statusSize.height);
     
-    CGFloat leftInset = 16.0f + (self.enableEditing && self.showsDeleteIndicator ? 38.0f : 0.0f);
+    CGFloat leftInset = 16.0f + (self.enableEditing && self.showsDeleteIndicator ? 38.0f : 0.0f) + self.safeAreaInset.left;
     
     CGSize titleSize = [_titleLabel.text sizeWithFont:_titleLabel.font];
     titleSize.width = MIN(CGCeil(titleSize.width), _statusLabel.frame.origin.x - 10.0f - leftInset);
     titleSize.height = CGCeil(titleSize.height);
-    _titleLabel.frame = CGRectMake(leftInset, 8.0f + TGRetinaPixel, titleSize.width, titleSize.height);
+    _titleLabel.frame = CGRectMake(leftInset, 8.0f + TGScreenPixel, titleSize.width, titleSize.height);
     
     CGSize infoSize = [_infoLabel.text sizeWithFont:_subtitleLabel.font];
     infoSize.width = MIN(CGCeil(infoSize.width), self.editingContentView.frame.size.width - leftInset * 2.0f);

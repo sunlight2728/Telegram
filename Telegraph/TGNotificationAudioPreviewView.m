@@ -1,19 +1,16 @@
 #import "TGNotificationAudioPreviewView.h"
+
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGNotificationView.h"
 
 #import "TGAppDelegate.h"
 
-#import "TGFont.h"
-#import "TGPeerIdAdapter.h"
-
-#import "TGModernButton.h"
+#import <LegacyComponents/TGModernButton.h>
 #import "TGAudioSliderView.h"
-
-#import "TGAudioMediaAttachment.h"
 
 #import "TGModernViewInlineMediaContext.h"
 
-#import "TGMessage.h"
 #import "TGAudioWaveformSignal.h"
 
 typedef enum {
@@ -273,7 +270,7 @@ static UIImage *cancelImageWithColor(UIColor *color)
     [self updateAnimated:animated && (_progress < 0.01f ? false : true)];
 }
 
-- (void)inlineMediaPlaybackStateUpdated:(bool)isPaused playbackPosition:(float)playbackPosition timestamp:(MTAbsoluteTime)timestamp preciseDuration:(NSTimeInterval)preciseDuration
+- (void)inlineMediaPlaybackStateUpdated:(bool)isPaused playbackPosition:(float)playbackPosition timestamp:(CFAbsoluteTime)timestamp preciseDuration:(NSTimeInterval)preciseDuration
 {
     _isPaused = isPaused;
     _audioPosition = playbackPosition;
@@ -330,7 +327,7 @@ static UIImage *cancelImageWithColor(UIColor *color)
 {
     _expandProgress = progress;
     
-    bool autoDownload = TGPeerIdIsGroup(_conversationId) || TGPeerIdIsChannel(_conversationId) ? TGAppDelegateInstance.autoDownloadAudioInGroups : TGAppDelegateInstance.autoDownloadAudioInPrivateChats;
+    bool autoDownload = false;
     
     if (!_mediaIsAvailable && self.activeRequestMediaId == nil && autoDownload)
         [self _requestMedia];

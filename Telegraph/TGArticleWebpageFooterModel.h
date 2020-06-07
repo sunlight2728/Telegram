@@ -1,9 +1,15 @@
 #import "TGWebpageFooterModel.h"
 
 @class TGWebPageMediaAttachment;
+@class TGInvoiceMediaAttachment;
 
 @interface TGArticleWebpageFooterModel : TGWebpageFooterModel
 
-- (instancetype)initWithContext:(TGModernViewContext *)context incoming:(bool)incoming webPage:(TGWebPageMediaAttachment *)webPage imageInText:(bool)imageInText hasViews:(bool)hasViews;
+@property (nonatomic, copy) void (^instantPagePressed)(void);
+@property (nonatomic, copy) void (^viewGroupPressed)(void);
+
+- (instancetype)initWithContext:(TGModernViewContext *)context incoming:(bool)incoming webPage:(TGWebPageMediaAttachment *)webPage imageInText:(bool)imageInText invoice:(TGInvoiceMediaAttachment *)invoice;
+
++ (NSDictionary *)buttonForType:(NSString *)buttonType context:(TGModernViewContext *)context;
 
 @end

@@ -24,6 +24,8 @@
 @property (nonatomic, strong) NSString *text;
 @property (nonatomic) CTFontRef font;
 @property (nonatomic, strong) UIColor *textColor;
+@property (nonatomic, strong) UIColor *linkColor;
+@property (nonatomic) bool underlineAllLinks;
 @property (nonatomic) NSUInteger maxNumberOfLines;
 @property (nonatomic, strong) NSArray *textCheckingResults;
 @property (nonatomic) NSTextAlignment alignment;
@@ -39,9 +41,11 @@
 - (instancetype)initWithText:(NSString *)text font:(CTFontRef)font;
 
 - (bool)layoutNeedsUpdatingForContainerSize:(CGSize)containerSize;
-- (bool)layoutNeedsUpdatingForContainerSize:(CGSize)containerSize layoutFlags:(int)layoutFlags;
+- (bool)layoutNeedsUpdatingForContainerSize:(CGSize)containerSize additionalTrailingWidth:(CGFloat)additionalTrailingWidth layoutFlags:(int)layoutFlags;
 - (void)layoutForContainerSize:(CGSize)containerSize;
 - (NSString *)linkAtPoint:(CGPoint)point regionData:(__autoreleasing NSArray **)regionData;
+- (NSString *)linkAtPoint:(CGPoint)point regionData:(__autoreleasing NSArray **)regionData hiddenLink:(bool *)hiddenLink;
+- (NSString *)linkAtPoint:(CGPoint)point regionData:(__autoreleasing NSArray **)regionData hiddenLink:(bool *)hiddenLink linkText:(__autoreleasing NSString **)linkText;
 - (void)enumerateSearchRegionsForString:(NSString *)string withBlock:(void (^)(CGRect))block;
 
 - (NSUInteger)measuredNumberOfLines;

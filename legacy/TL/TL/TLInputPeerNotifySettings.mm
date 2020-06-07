@@ -19,7 +19,7 @@
     return 0;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)__unused metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)__unused metaObject
 {
     TGLog(@"TLbuildFromMetaObject is not implemented for base type");
     return nil;
@@ -33,7 +33,7 @@
 
 @end
 
-@implementation TLInputPeerNotifySettings$inputPeerNotifySettings : TLInputPeerNotifySettings
+@implementation TLInputPeerNotifySettings$inputPeerNotifySettingsMeta : TLInputPeerNotifySettings
 
 
 - (int32_t)TLconstructorSignature
@@ -46,9 +46,9 @@
     return (int32_t)0x2acbe3d5;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)metaObject
 {
-    TLInputPeerNotifySettings$inputPeerNotifySettings *object = [[TLInputPeerNotifySettings$inputPeerNotifySettings alloc] init];
+    TLInputPeerNotifySettings$inputPeerNotifySettingsMeta *object = [[TLInputPeerNotifySettings$inputPeerNotifySettingsMeta alloc] init];
     object.flags = metaObject->getInt32((int32_t)0x81915c23);
     object.mute_until = metaObject->getInt32((int32_t)0xb47c7399);
     object.sound = metaObject->getString((int32_t)0x352fa0b9);

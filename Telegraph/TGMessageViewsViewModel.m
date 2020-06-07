@@ -1,5 +1,7 @@
 #import "TGMessageViewsViewModel.h"
 
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGMessageViewsView.h"
 
 @interface TGMessageViewsViewModel () {
@@ -24,6 +26,7 @@
 - (void)bindViewToContainer:(UIView *)container viewStorage:(TGModernViewStorage *)viewStorage {
     [super bindViewToContainer:container viewStorage:viewStorage];
 
+    [(TGMessageViewsView *)[self boundView] setPresentation:_presentation];
     [(TGMessageViewsView *)[self boundView] setType:_type];
     [(TGMessageViewsView *)[self boundView] setCount:_count];
 }
@@ -36,8 +39,21 @@
 
 - (void)drawInContext:(CGContextRef)context {
     if (!self.hidden) {
-        [TGMessageViewsView drawInContext:context frame:self.bounds type:_type count:_count];
+        [TGMessageViewsView drawInContext:context frame:self.bounds type:_type count:_count presentation:self.presentation];
     }
+}
+
+- (void)sizeToFit {
+    static UIFont *font = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        font = TGItalicSystemFontOfSize(11.0f);
+    });
+    CGSize size = [[TGMessageViewsView stringForCount:_count] sizeWithFont:font];
+    size.width = CGCeil(size.width);
+    size.width += ((int)size.width) % 3;
+    size.height = CGCeil(size.height);
+    self.frame = CGRectMake(self.frame.origin.x, self.frame.origin.y, size.width + 19.0f, size.height);
 }
 
 @end

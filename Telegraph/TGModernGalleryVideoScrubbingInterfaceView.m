@@ -1,17 +1,10 @@
 #import "TGModernGalleryVideoScrubbingInterfaceView.h"
 
-#import "TGFont.h"
-#import "TGImageUtils.h"
+#import <LegacyComponents/LegacyComponents.h>
 
 #import "TGAudioSliderArea.h"
 
-#import <MTProtoKit/MTTime.h>
-
-#import <POP/pop.h>
-
-static CGFloat insetLeft = 4.0f;
-static CGFloat insetRight = 4.0f;
-static CGFloat scrubberPadding = 5.0f;
+static CGFloat scrubberPadding = 13.0f;
 static CGFloat scrubberInternalInset = 4.0f;
 
 @interface TGModernGalleryVideoScrubbingInterfaceView () <TGAudioSliderAreaDelegate>
@@ -31,7 +24,7 @@ static CGFloat scrubberInternalInset = 4.0f;
     CGFloat _sliderButtonStartValue;
     CGFloat _scrubbingPosition;
     bool _isPlaying;
-    MTAbsoluteTime _positionTimestamp;
+    CFAbsoluteTime _positionTimestamp;
     NSTimeInterval _duration;
     
     CGFloat _currentTimeMinWidth;
@@ -58,20 +51,48 @@ static CGFloat scrubberInternalInset = 4.0f;
         _durationLabel.textColor = [UIColor whiteColor];
         [self addSubview:_durationLabel];
         
-        UIImage *scrubberBackgroundImageRaw = [UIImage imageNamed:@"VideoSliderBackground.png"];
-        _scrubberBackground = [[UIImageView alloc] initWithImage:[scrubberBackgroundImageRaw stretchableImageWithLeftCapWidth:(int)(scrubberBackgroundImageRaw.size.width / 2.0f) topCapHeight:0]];
+        static UIImage *backgroundImage = nil;
+        static UIImage *trackImage = nil;
+        static dispatch_once_t onceToken1;
+        dispatch_once(&onceToken1, ^
+        {
+            UIGraphicsBeginImageContextWithOptions(CGSizeMake(5.0f, 5.0f), false, 0.0f);
+            CGContextRef context = UIGraphicsGetCurrentContext();
+            CGContextSetFillColorWithColor(context, UIColorRGBA(0xffffff, 0.25f).CGColor);
+            CGContextFillEllipseInRect(context, CGRectMake(0, 0, 5.0f, 5.0f));
+            backgroundImage = [UIGraphicsGetImageFromCurrentImageContext() resizableImageWithCapInsets:UIEdgeInsetsMake(0, 2, 0, 2)];
+            CGContextClearRect(context, CGRectMake(0.0f, 0.0f, 5.0f, 5.0f));
+            CGContextSetFillColorWithColor(context, UIColorRGBA(0xffffff, 0.65f).CGColor);
+            CGContextFillEllipseInRect(context, CGRectMake(0, 0, 5.0f, 5.0f));
+            trackImage = [UIGraphicsGetImageFromCurrentImageContext() resizableImageWithCapInsets:UIEdgeInsetsMake(0, 2, 0, 2)];
+            UIGraphicsEndImageContext();
+        });
+        
+        static UIImage *knobViewImage = nil;
+        static dispatch_once_t onceToken2;
+        dispatch_once(&onceToken2, ^
+        {
+            UIGraphicsBeginImageContextWithOptions(CGSizeMake(17.0f, 17.0f), false, 0.0f);
+            CGContextRef context = UIGraphicsGetCurrentContext();
+            CGContextSetShadowWithColor(context, CGSizeMake(0, 1.0f), 2.0f, [UIColor colorWithWhite:0.0f alpha:0.15f].CGColor);
+            CGContextSetFillColorWithColor(context, [UIColor whiteColor].CGColor);
+            CGContextFillEllipseInRect(context, CGRectMake(3.0f, 3.0f, 11.0f, 11.0f));
+            knobViewImage = UIGraphicsGetImageFromCurrentImageContext();
+            UIGraphicsEndImageContext();
+        });
+        
+        _scrubberBackground = [[UIImageView alloc] initWithImage:backgroundImage];
         [self addSubview:_scrubberBackground];
         
-        UIImage *scrubberForegroundImageRaw = [UIImage imageNamed:@"VideoSliderForeground.png"];
-        _scrubberForegroundImage = [[UIImageView alloc] initWithImage:[scrubberForegroundImageRaw stretchableImageWithLeftCapWidth:(int)(scrubberForegroundImageRaw.size.width / 2.0f) topCapHeight:0]];
+        _scrubberForegroundImage = [[UIImageView alloc] initWithImage:trackImage];
         
-        _scrubberForegroundContainer = [[UIView alloc] initWithFrame:CGRectMake(0.0f, 0.0f, 0.0f, scrubberForegroundImageRaw.size.height)];
+        _scrubberForegroundContainer = [[UIView alloc] initWithFrame:CGRectMake(0.0f, 0.0f, 0.0f, 5.0f)];
         _scrubberForegroundContainer.clipsToBounds = true;
         [self addSubview:_scrubberForegroundContainer];
         
         [_scrubberForegroundContainer addSubview:_scrubberForegroundImage];
         
-        _scrubberHandle = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"VideoSliderHandle.png"]];
+        _scrubberHandle = [[UIImageView alloc] initWithImage:knobViewImage];
         [self addSubview:_scrubberHandle];
         
         _sliderArea = [[TGAudioSliderArea alloc] init];
@@ -83,7 +104,7 @@ static CGFloat scrubberInternalInset = 4.0f;
         static CGFloat currentTimeMinWidth;
         dispatch_once(&onceToken, ^
         {
-            currentTimeMinWidth = floor([[[NSAttributedString alloc] initWithString:@"0:00" attributes:@{ NSFontAttributeName: _currentTimeLabel.font }] boundingRectWithSize:CGSizeMake(FLT_MAX, FLT_MAX) options:NSStringDrawingUsesLineFragmentOrigin context:nil].size.width) + TGRetinaPixel;
+            currentTimeMinWidth = floor([[[NSAttributedString alloc] initWithString:@"0:00" attributes:@{ NSFontAttributeName: _currentTimeLabel.font }] boundingRectWithSize:CGSizeMake(FLT_MAX, FLT_MAX) options:NSStringDrawingUsesLineFragmentOrigin context:nil].size.width) + TGScreenPixel;
         });
         _currentTimeMinWidth = currentTimeMinWidth;
     }
@@ -92,9 +113,7 @@ static CGFloat scrubberInternalInset = 4.0f;
 
 - (void)setFrame:(CGRect)frame
 {
-    //bool sizeUpdated = CGSizeEqualToSize(self.frame.size, frame.size);
     [super setFrame:frame];
-    
     [self _layout];
 }
 
@@ -131,14 +150,12 @@ static CGFloat scrubberInternalInset = 4.0f;
 
 - (CGRect)sliderForegroundFrameForProgress:(CGFloat)progress
 {
-    CGFloat scrubberOriginX = CGRectGetMaxX(_currentTimeLabel.frame) + scrubberPadding;
-    return (CGRect){{scrubberOriginX, CGFloor((self.frame.size.height - _scrubberForegroundContainer.frame.size.height) / 2.0f)}, {CGFloor((_scrubberBackground.frame.size.width) * progress), _scrubberForegroundContainer.frame.size.height}};
+    return (CGRect){{scrubberPadding, CGFloor((self.frame.size.height - _scrubberForegroundContainer.frame.size.height) / 2.0f) - 7.0f}, {CGFloor((_scrubberBackground.frame.size.width) * progress), _scrubberForegroundContainer.frame.size.height}};
 }
 
 - (CGRect)sliderButtonFrameForProgress:(CGFloat)progress
 {
-    CGFloat scrubberOriginX = CGRectGetMaxX(_currentTimeLabel.frame) + scrubberPadding;
-    return (CGRect){{scrubberOriginX - scrubberInternalInset + CGFloor((_scrubberBackground.frame.size.width - (_scrubberHandle.frame.size.width - scrubberInternalInset * 2.0f))  * progress), CGFloor((self.frame.size.height - _scrubberHandle.frame.size.height) / 2.0f)}, _scrubberHandle.frame.size};
+    return (CGRect){{scrubberPadding - scrubberInternalInset + CGFloor((_scrubberBackground.frame.size.width - (_scrubberHandle.frame.size.width - scrubberInternalInset * 2.0f)) * progress), CGFloor((self.frame.size.height - _scrubberHandle.frame.size.height) / 2.0f) - 7.0f}, _scrubberHandle.frame.size};
 }
 
 - (void)updatePositionAnimations:(bool)immediate
@@ -148,7 +165,7 @@ static CGFloat scrubberInternalInset = 4.0f;
         CGPoint handleStartPosition = CGPointMake(CGRectGetMidX(_scrubberHandle.frame), CGRectGetMidY(_scrubberHandle.frame));
         CGRect foregroundStartFrame = _scrubberForegroundContainer.frame;
         
-        float playedProgress = MAX(0.0f, MIN(1.0f, (float)((MTAbsoluteSystemTime() - _positionTimestamp) / _duration)));
+        float playedProgress = MAX(0.0f, MIN(1.0f, (float)((CACurrentMediaTime() - _positionTimestamp) / _duration)));
         
         CGRect handlePositionFrame = [self sliderButtonFrameForProgress:_position + playedProgress];
         CGRect foregroundFrame = [self sliderForegroundFrameForProgress:_position + playedProgress];
@@ -210,7 +227,7 @@ static CGFloat scrubberInternalInset = 4.0f;
     _sliderArea.userInteractionEnabled = isPlayable;
     
     _duration = duration;
-    _positionTimestamp = MTAbsoluteSystemTime();
+    _positionTimestamp = CACurrentMediaTime();
     
     if (!_isScrubbing)
     {
@@ -239,12 +256,12 @@ static CGFloat scrubberInternalInset = 4.0f;
     
     CGFloat progressValue = _isScrubbing ? _scrubbingPosition : _position;
     
-    _currentTimeLabel.frame = (CGRect){{insetLeft, CGFloor((self.frame.size.height - _currentTimeLabel.frame.size.height) / 2.0f)}, { MAX(_currentTimeMinWidth, _currentTimeLabel.frame.size.width), _currentTimeLabel.frame.size.height }};
+    _currentTimeLabel.frame = (CGRect){{scrubberPadding, CGFloor((self.frame.size.height - _currentTimeLabel.frame.size.height) / 2.0f) + 11.0f}, { MAX(_currentTimeMinWidth, _currentTimeLabel.frame.size.width), _currentTimeLabel.frame.size.height }};
     
-    _durationLabel.frame = (CGRect){{self.frame.size.width - insetRight - _durationLabel.frame.size.width, CGFloor((self.frame.size.height - _durationLabel.frame.size.height) / 2.0f)}, _durationLabel.frame.size};
+    _durationLabel.frame = (CGRect){{self.frame.size.width - scrubberPadding - _durationLabel.frame.size.width, CGFloor((self.frame.size.height - _durationLabel.frame.size.height) / 2.0f) + 11.0f}, _durationLabel.frame.size};
     
-    CGFloat scrubberOriginX = CGRectGetMaxX(_currentTimeLabel.frame) + scrubberPadding;
-    _scrubberBackground.frame = (CGRect){{scrubberOriginX, CGFloor((self.frame.size.height - _scrubberBackground.frame.size.height) / 2.0f)}, {_durationLabel.frame.origin.x - scrubberPadding - scrubberOriginX, _scrubberBackground.frame.size.height}};
+    CGFloat scrubberOriginX = scrubberPadding;
+    _scrubberBackground.frame = (CGRect){{scrubberOriginX, CGFloor((self.frame.size.height - _scrubberBackground.frame.size.height) / 2.0f) - 7.0f}, {self.frame.size.width - scrubberPadding - scrubberOriginX, _scrubberBackground.frame.size.height}};
     
     _sliderArea.frame = CGRectMake(0.0f, 0.0f, self.frame.size.width, self.frame.size.height);
     

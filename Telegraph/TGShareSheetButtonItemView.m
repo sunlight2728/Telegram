@@ -1,13 +1,16 @@
 #import "TGShareSheetButtonItemView.h"
 
-#import "TGModernButton.h"
-#import "TGImageUtils.h"
-#import "TGFont.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/TGModernButton.h>
+
+#import "TGPresentation.h"
 
 @interface TGShareSheetButtonItemView ()
 {
     TGModernButton *_button;
     UIImageView *_imageView;
+    bool _destructive;
 }
 
 @end
@@ -22,7 +25,12 @@
         _button = [[TGModernButton alloc] init];
         _button.exclusiveTouch = true;
         [_button setTitle:title forState:UIControlStateNormal];
-        [_button setTitleColor:TGAccentColor()];
+        [_button setTitleColor:TGAccentColor() forState:UIControlStateNormal];
+        [_button setTitleColor:UIColorRGB(0x8e8e93) forState:UIControlStateDisabled];
+        [_button setContentEdgeInsets:UIEdgeInsetsMake(0.0f, 10.0f, 0.0f, 10.0f)];
+        _button.titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+        _button.modernHighlight = true;
+        
         _button.titleLabel.font = TGSystemFontOfSize(20.0f + TGRetinaPixel);
         [_button addTarget:self action:@selector(_buttonPressed) forControlEvents:UIControlEventTouchUpInside];
         _button.stretchHighlightImage = true;
@@ -56,6 +64,14 @@
     return self;
 }
 
+- (void)setPresentation:(TGPresentation *)presentation
+{
+    [super setPresentation:presentation];
+    
+    [_button setTitleColor:_destructive ? self.presentation.pallete.menuDestructiveColor : self.presentation.pallete.menuAccentColor forState:UIControlStateNormal];
+    [_button setTitleColor:presentation.pallete.menuSecondaryTextColor forState:UIControlStateDisabled];
+}
+
 - (void)setTitle:(NSString *)title
 {
     [_button setTitle:title forState:UIControlStateNormal];
@@ -82,7 +98,12 @@
 
 - (void)setDestructive:(bool)destructive
 {
-    [_button setTitleColor:destructive ? TGDestructiveAccentColor() : TGAccentColor()];
+    _destructive = destructive;
+    [_button setTitleColor:destructive ? self.presentation.pallete.menuDestructiveColor : self.presentation.pallete.menuAccentColor forState:UIControlStateNormal];
+}
+
+- (void)setEnabled:(bool)enabled {
+    _button.enabled = enabled;
 }
 
 - (void)_buttonPressed

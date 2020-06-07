@@ -33,12 +33,16 @@ public:
     CGRect topRegion;
     CGRect middleRegion;
     CGRect bottomRegion;
+    bool hidden;
+    NSString *text;
     
 public:
-    TGLinkData(NSRange range_, NSString *url_)
+    TGLinkData(NSRange range_, NSString *url_, NSString *text_, bool hidden_)
     {
         range = range_;
         url = url_;
+        text = text_;
+        hidden = hidden_;
         
         topRegion = CGRectZero;
         middleRegion = CGRectZero;
@@ -49,6 +53,8 @@ public:
     {
         range = other.range;
         url = other.url;
+        text = other.text;
+        hidden = other.hidden;
         
         topRegion = other.topRegion;
         middleRegion = other.middleRegion;
@@ -61,6 +67,8 @@ public:
         {
             range = other.range;
             url = other.url;
+            text = other.text;
+            hidden = other.hidden;
             
             topRegion = other.topRegion;
             middleRegion = other.middleRegion;
@@ -73,6 +81,7 @@ public:
     ~TGLinkData()
     {
         url = nil;
+        text = nil;
     }
 };
 
@@ -81,18 +90,16 @@ public:
 typedef enum {
     TGReusableLabelLayoutMultiline = 1,
     TGReusableLabelLayoutHighlightLinks = 2,
-    TGReusableLabelLayoutDateSpacing = 4,
-    TGReusableLabelLayoutExtendedDateSpacing = 8,
     TGReusableLabelTruncateInTheMiddle = 16,
     TGReusableLabelLayoutHighlightCommands = 32,
-    TGReusableLabelViewCountSpacing = 64
+    TGReusableLabelLayoutOffsetLastLine = 64
 } TGReusableLabelLayout;
 
 @interface TGReusableLabelLayoutData : NSObject
 
 @property (nonatomic) CGSize size;
 
-- (NSString *)linkAtPoint:(CGPoint)point topRegion:(CGRect *)topRegion middleRegion:(CGRect *)middleRegion bottomRegion:(CGRect *)bottomRegion;
+- (NSString *)linkAtPoint:(CGPoint)point topRegion:(CGRect *)topRegion middleRegion:(CGRect *)middleRegion bottomRegion:(CGRect *)bottomRegion hiddenLink:(bool *)hiddenLink linkText:(__autoreleasing NSString **)linkText;
 - (void)enumerateSearchRegionsForString:(NSString *)string withBlock:(void (^)(CGRect))block;
 
 #ifdef __cplusplus
@@ -116,15 +123,15 @@ typedef enum {
 @property (nonatomic) CGSize shadowOffset;
 @property (nonatomic) bool highlighted;
 @property (nonatomic) int numberOfLines;
-@property (nonatomic) UITextAlignment textAlignment;
+@property (nonatomic) NSTextAlignment textAlignment;
 
 @property (nonatomic) bool richText;
 
 @property (nonatomic, retain) TGReusableLabelLayoutData *precalculatedLayout;
 
 + (void)preloadData;
-+ (TGReusableLabelLayoutData *)calculateLayout:(NSString *)text additionalAttributes:(NSArray *)additionalAttributes textCheckingResults:(NSArray *)textCheckingResults font:(CTFontRef)font textColor:(UIColor *)textColor frame:(CGRect)frame orMaxWidth:(float)maxWidth flags:(int)flags textAlignment:(NSTextAlignment)textAlignment outIsRTL:(bool *)outIsRTL;
-+ (TGReusableLabelLayoutData *)calculateLayout:(NSString *)text additionalAttributes:(NSArray *)additionalAttributes textCheckingResults:(NSArray *)textCheckingResults font:(CTFontRef)font textColor:(UIColor *)textColor frame:(CGRect)frame orMaxWidth:(float)maxWidth flags:(int)flags textAlignment:(NSTextAlignment)textAlignment outIsRTL:(bool *)outIsRTL additionalTrailingWidth:(CGFloat)additionalTrailingWidth maxNumberOfLines:(NSUInteger)maxNumberOfLines numberOfLinesToInset:(NSUInteger)numberOfLinesToInset linesInset:(CGFloat)linesInset containsEmptyNewline:(bool *)containsEmptyNewline additionalLineSpacing:(CGFloat)additionalLineSpacing ellipsisString:(NSString *)ellipsisString;
++ (TGReusableLabelLayoutData *)calculateLayout:(NSString *)text additionalAttributes:(NSArray *)additionalAttributes textCheckingResults:(NSArray *)textCheckingResults font:(CTFontRef)font textColor:(UIColor *)textColor linkColor:(UIColor *)linkColor frame:(CGRect)frame orMaxWidth:(float)maxWidth flags:(int)flags textAlignment:(NSTextAlignment)textAlignment outIsRTL:(bool *)outIsRTL;
++ (TGReusableLabelLayoutData *)calculateLayout:(NSString *)text additionalAttributes:(NSArray *)additionalAttributes textCheckingResults:(NSArray *)textCheckingResults font:(CTFontRef)font textColor:(UIColor *)textColor linkColor:(UIColor *)linkColor frame:(CGRect)frame orMaxWidth:(float)maxWidth flags:(int)flags textAlignment:(NSTextAlignment)textAlignment outIsRTL:(bool *)outIsRTL additionalTrailingWidth:(CGFloat)additionalTrailingWidth maxNumberOfLines:(NSUInteger)maxNumberOfLines numberOfLinesToInset:(NSUInteger)numberOfLinesToInset linesInset:(CGFloat)linesInset containsEmptyNewline:(bool *)containsEmptyNewline additionalLineSpacing:(CGFloat)additionalLineSpacing ellipsisString:(NSString *)ellipsisString underlineAllLinks:(bool)underlineAllLinks;
 
 + (void)drawTextInRect:(CGRect)rect text:(NSString *)text richText:(bool)richText font:(UIFont *)font highlighted:(bool)highlighted textColor:(UIColor *)textColor highlightedColor:(UIColor *)highlightedColor shadowColor:(UIColor *)shadowColor shadowOffset:(CGSize)shadowOffset numberOfLines:(int)numberOfLines;
 + (void)drawRichTextInRect:(CGRect)rect precalculatedLayout:(TGReusableLabelLayoutData *)precalculatedLayout linesRange:(NSRange)linesRange shadowColor:(UIColor *)shadowColor shadowOffset:(CGSize)shadowOffset;

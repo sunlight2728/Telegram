@@ -1,8 +1,6 @@
 #import "TGPreparedDownloadExternalGifMessage.h"
 
-#import "TGMessage.h"
-
-#import "PSKeyValueCoder.h"
+#import <LegacyComponents/LegacyComponents.h>
 
 #import "TGDocumentHttpFileReference.h"
 
@@ -13,7 +11,7 @@
 
 @implementation TGPreparedDownloadExternalGifMessage
 
-- (instancetype)initWithSearchResult:(TGExternalGifSearchResult *)searchResult localDocumentId:(int64_t)localDocumentId mimeType:(NSString *)mimeType thumbnailInfo:(TGImageInfo *)thumbnailInfo attributes:(NSArray *)attributes caption:(NSString *)caption replyMessage:(TGMessage *)replyMessage botContextResult:(TGBotContextResultAttachment *)botContextResult {
+- (instancetype)initWithSearchResult:(TGExternalGifSearchResult *)searchResult localDocumentId:(int64_t)localDocumentId mimeType:(NSString *)mimeType thumbnailInfo:(TGImageInfo *)thumbnailInfo attributes:(NSArray *)attributes text:(NSString *)text entities:(NSArray *)entities replyMessage:(TGMessage *)replyMessage botContextResult:(TGBotContextResultAttachment *)botContextResult replyMarkup:(TGReplyMarkupAttachment *)replyMarkup {
     self = [super init];
     if (self != nil) {
         _searchResult = searchResult;
@@ -21,9 +19,11 @@
         _mimeType = mimeType;
         _thumbnailInfo = thumbnailInfo;
         _attributes = attributes;
-        _caption = caption;
+        self.text = text;
+        self.entities = entities;
         self.replyMessage = replyMessage;
         self.botContextResult = botContextResult;
+        self.replyMarkup = replyMarkup;
         _documentUrl = searchResult.originalUrl;
         
         self.executeOnAdd = ^{
@@ -39,7 +39,7 @@
                 NSString *videoFilePath = [[[TGMediaStoreContext instance] temporaryFilesCache] getValuePathForKey:[searchResult.originalUrl dataUsingEncoding:NSUTF8StringEncoding]];
 
                 if (videoFilePath != nil) {
-                    NSString *documentPath = [TGPreparedLocalDocumentMessage localDocumentDirectoryForLocalDocumentId:localDocumentId];
+                    NSString *documentPath = [TGPreparedLocalDocumentMessage localDocumentDirectoryForLocalDocumentId:localDocumentId version:0];
                     [[NSFileManager defaultManager] createDirectoryAtPath:documentPath withIntermediateDirectories:true attributes:nil error:nil];
                     NSError *error = nil;
                     [[NSFileManager defaultManager] linkItemAtPath:videoFilePath toPath:[documentPath stringByAppendingPathComponent:fileName] error:&error];
@@ -60,6 +60,8 @@
     message.date = self.date;
     message.isBroadcast = self.isBroadcast;
     message.messageLifetime = self.messageLifetime;
+    message.text = self.text;
+    message.entities = self.entities;
     
     NSMutableArray *attachments = [[NSMutableArray alloc] init];
     
@@ -70,7 +72,6 @@
     documentAttachment.thumbnailInfo = _thumbnailInfo;
     documentAttachment.documentUri = _searchResult.originalUrl;
     documentAttachment.attributes = _attributes;
-    documentAttachment.caption = _caption;
     
     [attachments addObject:documentAttachment];
     
@@ -86,6 +87,10 @@
         [attachments addObject:self.botContextResult];
         
         [attachments addObject:[[TGViaUserAttachment alloc] initWithUserId:self.botContextResult.userId username:nil]];
+    }
+    
+    if (self.replyMarkup != nil) {
+        [attachments addObject:self.replyMarkup];
     }
     
     message.mediaAttachments = attachments;

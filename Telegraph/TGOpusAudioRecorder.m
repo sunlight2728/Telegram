@@ -8,10 +8,12 @@
 
 #import "TGOpusAudioRecorder.h"
 
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGAppDelegate.h"
 
-#import "ASQueue.h"
-#import "ActionStage.h"
+#import <LegacyComponents/ASQueue.h>
+#import <LegacyComponents/ActionStage.h>
 
 #import "TGLiveUploadActor.h"
 
@@ -25,7 +27,7 @@
 
 #import "TGAudioSessionManager.h"
 
-#import "TGAudioWaveform.h"
+#import "TGTelegramNetworking.h"
 
 #define kOutputBus 0
 #define kInputBus 1
@@ -114,7 +116,8 @@ static dispatch_semaphore_t playSoundSemaphore = nil;
             
             [ActionStageInstance() requestActor:_liveUploadPath options:@{
                 @"fileItem": _tempFileItem,
-                @"encryptFile": @(fileEncryption)
+                @"encryptFile": @(fileEncryption),
+                @"mediaTypeTag": @(TGNetworkMediaTypeTagAudio)
             } flags:0 watcher:self];
         }];
     }
@@ -141,6 +144,11 @@ static dispatch_semaphore_t playSoundSemaphore = nil;
 }
 
 - (void)cleanup
+{
+    [self cleanup:true];
+}
+
+- (void)cleanup:(bool)endAudioSession
 {
     intptr_t objectId = (intptr_t)self;
     int recorderId = _recorderId;
@@ -197,7 +205,8 @@ static dispatch_semaphore_t playSoundSemaphore = nil;
         }
     }];
     
-    [self _endAudioSession];
+    if (endAudioSession)
+        [self _endAudioSession];
 }
 
 - (void)_beginAudioSession:(bool)speaker
@@ -530,7 +539,7 @@ static OSStatus TGOpusRecordingCallback(void *inRefCon, AudioUnitRenderActionFla
                 if (recorder != nil && recorder.recorderId == (int)(intptr_t)inRefCon && recorder->_recording) {
                     
                     if (recorder->_waitForTone) {
-                        if (CACurrentMediaTime() - recorder->_waitForToneStart > 0.3) {
+                        if (CACurrentMediaTime() - recorder->_waitForToneStart > 0.44) {
                             [recorder _processBuffer:&buffer];
                         }
                     } else {
@@ -693,7 +702,7 @@ static OSStatus TGOpusAudioPlayerCallback(void *inRefCon, __unused AudioUnitRend
             totalBytes = [_oggWriter encodedBytes];
         }
         
-        [self cleanup];
+        [self cleanup:false];
     } synchronous:true];
     
     int16_t scaledSamples[100];
@@ -750,6 +759,11 @@ static OSStatus TGOpusAudioPlayerCallback(void *inRefCon, __unused AudioUnitRend
             *liveData = [actor finishRestOfFile:totalBytes];
         });
     }
+    
+    [[TGOpusAudioRecorder processingQueue] dispatchOnQueue:^
+    {
+        [self _endAudioSession];
+    }];
     
     return dataItemResult;
 }

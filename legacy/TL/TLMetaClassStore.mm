@@ -1,5 +1,7 @@
 #include "TLMetaClassStore.h"
 
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "NSData+GZip.h"
 #import "NSInputStream+TL.h"
 
@@ -26,15 +28,64 @@
 #import "TLChatParticipants$chatParticipantsForbidden.h"
 #import "TLWebPage$webPageExternal.h"
 #import "TLMessages_BotResults$botResults.h"
+#import "TLBotInlineMessage$botInlineMessageMediaAuto.h"
 #import "TLBotInlineMessage$botInlineMessageText.h"
 #import "TLBotInlineResult$botInlineResult.h"
 #import "TLDocumentAttribute$documentAttributeAudio.h"
-#import "TLchannels_MessageEditData$messageEditData.h"
 #import "TLMessageFwdHeader$messageFwdHeader.h"
+#import "TLUserFull$userFull.h"
+#import "TLUpdate$updateChannelTooLong.h"
+#import "TLauth_SentCode$auth_sentCode.h"
+#import "TLmessages_BotCallbackAnswer$botCallbackAnswer.h"
+#import "TLBotInlineResult$botInlineMediaResult.h"
+#import "TLBotInlineMessage$botInlineMessageMediaGeo.h"
+#import "TLBotInlineMessage$botInlineMessageMediaVenue.h"
+#import "TLBotInlineMessage$botInlineMessageMediaContact.h"
+#import "TLDialog$dialog.h"
+#import "TLDialog$dialogFeed.h"
+#import "TLDraftMessage$draftMessage.h"
+#import "TLChatInvite$chatInvite.h"
+#import "TLConfig$config.h"
+#import "TLGame$game.h"
+#import "TLPageBlock$pageBlockEmbed.h"
+#import "TLPhoneCall$phoneCallWaiting.h"
+#import "TLUpdate$updateServiceNotification.h"
+#import "TLPhoneCall$phoneCallDiscarded.h"
+#import "TLUpdate$updatePinnedDialogs.h"
+#import "TLMessageAction$messageActionPhoneCall.h"
+#import "TLInvoice$invoice.h"
+#import "TLMessageMedia$messageMediaInvoice.h"
+#import "TLpayments_PaymentForm$payments_paymentForm.h"
+#import "TLpayments_SavedInfo$payments_savedInfo.h"
+#import "TLPaymentRequestedInfo$paymentRequestedInfo.h"
+#import "TLPayments_PaymentCeceipt$payments_paymentReceipt.h"
+#import "TLpayments_ValidatedRequestedInfo$payments_validatedRequestedInfo.h"
+#import "TLLangPackStringPluralized.h"
+#import "TLChat$channelForbidden.h"
+#import "TLMessageMedia$messageMediaPhoto.h"
+#import "TLMessageMedia$messageMediaDocument.h"
+#import "TLchannelDifferenceTooLong.h"
+#import "TLmessages_FeedMessages$messages_feedMessages.h"
+#import "TLchannels_FeedSources$channels_feedSources.h"
+#import "TLInputSingleMedia$inputSingleMedia.h"
+#import "TLStickerSet$stickerSet.h"
+#import "TLUpdate$updateReadFeed.h"
+#import "TLhelp_ProxyData.h"
+#import "TLhelp_TermsOfService$help_termsOfService.h"
+#import "TLSecureValue$secureValue.h"
+#import "TLInputSecureValue$inputSecureValue.h"
+#import "TLaccount_AuthorizationForm$account_authorizationForm.h"
+#import "TLPeerNotifySettings$peerNotifySettings.h"
+#import "TLhelp_DeepLinkInfo$help_deepLinkInfo.h"
+#import "TLhelp_AppUpdate$help_appUpdate.h"
+#import "TLaccount_Password$account_password.h"
+#import "TLaccount_PasswordSettings$account_passwordSettings.h"
+
+#import "TLDocumentAttributeSticker.h"
 
 #import "TLBool.h"
 
-#import "TGStringUtils.h"
+#import "TLauth_Authorization$auth_authorization.h"
 
 #include <map>
 #include <set>
@@ -46,18 +97,18 @@ struct TLMetaTypeArgumentWithName : public TLMetaTypeArgument
     std::vector<char> name;
 };
 
-static std::tr1::unordered_map<int32_t, NSString *> hashToStringMap;
+static std::unordered_map<int32_t, NSString *> hashToStringMap;
 
-std::tr1::unordered_map<int32_t, std::tr1::shared_ptr<TLMetaConstructor> > TLMetaClassStore::constructorsBySignature;
-std::tr1::unordered_map<int32_t, std::tr1::shared_ptr<TLMetaConstructor> > TLMetaClassStore::constructorsByName;
-std::tr1::unordered_map<int32_t, std::tr1::shared_ptr<TLMetaType> > TLMetaClassStore::typesByName;
-std::tr1::unordered_map<int32_t, TLMetaTypeArgument> TLMetaClassStore::vectorElementTypesByConstructor;
+std::unordered_map<int32_t, std::shared_ptr<TLMetaConstructor> > TLMetaClassStore::constructorsBySignature;
+std::unordered_map<int32_t, std::shared_ptr<TLMetaConstructor> > TLMetaClassStore::constructorsByName;
+std::unordered_map<int32_t, std::shared_ptr<TLMetaType> > TLMetaClassStore::typesByName;
+std::unordered_map<int32_t, TLMetaTypeArgument> TLMetaClassStore::vectorElementTypesByConstructor;
 
-std::tr1::unordered_map<int32_t, id<TLObject> > TLMetaClassStore::objectClassesByConstructorNames;
-std::tr1::unordered_map<int32_t, id<TLVector> > TLMetaClassStore::vectorClassesBySignature;
+std::unordered_map<int32_t, id<TLObject> > TLMetaClassStore::objectClassesByConstructorNames;
+std::unordered_map<int32_t, id<TLVector> > TLMetaClassStore::vectorClassesBySignature;
 
-std::tr1::unordered_map<int32_t, id<TLObject> > TLMetaClassStore::manualObjectParsers;
-std::tr1::unordered_map<int32_t, id<TLObject> > TLMetaClassStore::manualObjectSerializers;
+std::unordered_map<int32_t, id<TLObject> > TLMetaClassStore::manualObjectParsers;
+std::unordered_map<int32_t, id<TLObject> > TLMetaClassStore::manualObjectSerializers;
 
 static void addHashToString(int32_t hash, NSString *string)
 {
@@ -66,7 +117,7 @@ static void addHashToString(int32_t hash, NSString *string)
 
 static NSString *stringForHash(int32_t hash)
 {
-    std::tr1::unordered_map<int32_t, NSString *>::iterator it = hashToStringMap.find(hash);
+    std::unordered_map<int32_t, NSString *>::iterator it = hashToStringMap.find(hash);
     if (it == hashToStringMap.end())
         return [NSString stringWithFormat:@"#%.8x", hash];
     return it->second;
@@ -80,7 +131,7 @@ void TLMetaClassStore::registerObjectClass(id<TLObject> objectClass)
 void TLMetaClassStore::registerVectorClass(id<TLVector> vectorClass)
 {
 #if TARGET_IPHONE_SIMULATOR
-    std::tr1::unordered_map<int32_t, id<TLVector> >::iterator it = vectorClassesBySignature.find([vectorClass TLconstructorSignature]);
+    std::unordered_map<int32_t, id<TLVector> >::iterator it = vectorClassesBySignature.find([vectorClass TLconstructorSignature]);
     if (it != vectorClassesBySignature.end())
         TGLog(@"***** Overriding constructor 0x%x with %@ (was %@)", [vectorClass TLconstructorSignature], [vectorClass class], [it->second class]);
     
@@ -90,7 +141,7 @@ void TLMetaClassStore::registerVectorClass(id<TLVector> vectorClass)
 
 id<TLObject> TLMetaClassStore::getObjectClass(int32_t name)
 {
-    std::tr1::unordered_map<int32_t, id<TLObject> >::iterator it = objectClassesByConstructorNames.find(name);
+    std::unordered_map<int32_t, id<TLObject> >::iterator it = objectClassesByConstructorNames.find(name);
     if (it == objectClassesByConstructorNames.end())
     {
         TGLog(@"%.8x -> %@", name, stringForHash(name));
@@ -356,14 +407,14 @@ TLMetaTypeArgument createTypeArgumentFromString(NSString *desc, std::set<int32_t
         typesToResolve.insert(typeName);
     }
     
-    std::tr1::shared_ptr<TLMetaType> metaType(new TLMetaType(typeName, category, typeArguments));
+    std::shared_ptr<TLMetaType> metaType(new TLMetaType(typeName, category, typeArguments));
     
     type.type = metaType;
     
     return type;
 }
 
-bool resolveUnboxedTypes(TLMetaTypeArgument *type, std::tr1::unordered_map<int32_t, std::tr1::shared_ptr<TLMetaConstructor> > const &constructorsByName, std::tr1::unordered_map<int32_t, TLMetaTypeArgument> const &vectorElementTypes)
+bool resolveUnboxedTypes(TLMetaTypeArgument *type, std::unordered_map<int32_t, std::shared_ptr<TLMetaConstructor> > const &constructorsByName, std::unordered_map<int32_t, TLMetaTypeArgument> const &vectorElementTypes)
 {
     for (std::vector<TLMetaTypeArgument>::iterator it = type->type->getArguments().begin(); it != type->type->getArguments().end(); it++)
     {
@@ -373,7 +424,7 @@ bool resolveUnboxedTypes(TLMetaTypeArgument *type, std::tr1::unordered_map<int32
     
     if (!type->boxed && type->unboxedConstructorSignature == 0)
     {
-        std::tr1::unordered_map<int32_t, std::tr1::shared_ptr<TLMetaConstructor> >::const_iterator foundIt = constructorsByName.find(type->unboxedConstructorName);
+        std::unordered_map<int32_t, std::shared_ptr<TLMetaConstructor> >::const_iterator foundIt = constructorsByName.find(type->unboxedConstructorName);
         if (foundIt != constructorsByName.end())
         {
             type->unboxedConstructorSignature = foundIt->second->getSignature();
@@ -388,7 +439,7 @@ bool resolveUnboxedTypes(TLMetaTypeArgument *type, std::tr1::unordered_map<int32
     return true;
 }
 
-std::tr1::shared_ptr<TLMetaType> createTypeFromString(NSString *desc, std::set<int32_t> &typesToResolve, std::map<int32_t, TLMetaTypeArgumentWithName> &vectorTypeMap)
+std::shared_ptr<TLMetaType> createTypeFromString(NSString *desc, std::set<int32_t> &typesToResolve, std::map<int32_t, TLMetaTypeArgumentWithName> &vectorTypeMap)
 {
     bool hasUnresolvedTypes = false;
     TLMetaTypeArgument type = createTypeArgumentFromString(desc, typesToResolve, vectorTypeMap, hasUnresolvedTypes);
@@ -399,10 +450,10 @@ void TLMetaClassStore::mergeScheme(TLScheme *scheme)
 {
     if ([scheme isKindOfClass:[TLScheme$scheme class]])
     {   
-        std::tr1::unordered_map<int32_t, std::pair<TLMetaTypeArgument, bool> > cachedFieldTypes;
+        std::unordered_map<int32_t, std::pair<TLMetaTypeArgument, bool> > cachedFieldTypes;
         std::map<int32_t, TLMetaTypeArgumentWithName> vectorTypeMap;
         std::set<int32_t> typesToResolve;
-        std::vector<std::tr1::shared_ptr<TLMetaConstructor> > constructorsWithUnresolvedTypes;
+        std::vector<std::shared_ptr<TLMetaConstructor> > constructorsWithUnresolvedTypes;
         
         NSMutableArray *types = [[NSMutableArray alloc] initWithArray:((TLScheme$scheme *)scheme).types];
         NSArray *methods = ((TLScheme$scheme *)scheme).methods;
@@ -456,31 +507,81 @@ void TLMetaClassStore::mergeScheme(TLScheme *scheme)
         
         manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x5162463, [[TLResPQ$resPQ_manual alloc] init]));
         manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x62d6b459, [[TLMsgsAck$msgs_ack_manual alloc] init]));
-        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xC09BE45F, [[TLMessage$modernMessage alloc] init]));
-        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xC06B9607, [[TLMessage$modernMessageService alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x44f9b43d, [[TLMessage$modernMessage alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x9e19a1f6, [[TLMessage$modernMessageService alloc] init]));
         
-        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >((int32_t)0xCA820ED7, [[TLWebPage_manual alloc] init]));
-        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >((int32_t)0xD10D979A, [[TLUser$modernUser alloc] init]));
-        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >((int32_t)0x05D8C6CC, [[TLDcOption$modernDcOption alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >((int32_t)0x5f07b4bc, [[TLWebPage_manual alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >((int32_t)0x2e13f4c3, [[TLUser$modernUser alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >((int32_t)0x18b7a10d, [[TLDcOption$modernDcOption alloc] init]));
         manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x914FBF11, [[TLUpdates$modernUpdateShortMessage alloc] init]));
         manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x16812688, [[TLUpdates$modernUpdateShortChatMessage alloc] init]));
         manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xBC0F17BC, [[TLmessages_Messages$modernChannelMessages alloc] init]));
         manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x11f1331c, [[TLUpdates$updateShortSentMessage alloc] init]));
         manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x2064674E, [[TLUpdates_ChannelDifference$channelDifference alloc] init]));
         manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x3E11AFFB, [[TLUpdates_ChannelDifference$empty alloc] init]));
-        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x5E167646, [[TLUpdates_ChannelDifference$tooLong alloc] init]));
-        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x4B1B7506, [[TLChat$channel alloc] init]));
-        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x9e341ddf, [[TLChatFull$channelFull alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xc88974ac, [[TLChat$channel alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x76af5481, [[TLChatFull$channelFull alloc] init]));
         manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xFC900C2B, [[TLChatParticipants$chatParticipantsForbidden alloc] init]));
         manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xD91CDD54, [[TLChat$chat alloc] init]));
         manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xB08FBB93, [[TLWebPage$webPageExternal alloc] init]));
-        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x1170b0a3, [[TLMessages_BotResults$botResults alloc] init]));
-        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xA56197A9, [[TLBotInlineMessage$botInlineMessageText alloc] init]));
-        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x9BEBAEB9, [[TLBotInlineResult$botInlineResult alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x947ca848, [[TLMessages_BotResults$botResults alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x764cf810, [[TLBotInlineMessage$botInlineMessageMediaAuto alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x8c7f65e2, [[TLBotInlineMessage$botInlineMessageText alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xb722de65, [[TLBotInlineMessage$botInlineMessageMediaGeo alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x8a86659c, [[TLBotInlineMessage$botInlineMessageMediaVenue alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x18d1cdc2, [[TLBotInlineMessage$botInlineMessageMediaContact alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x11965f3a, [[TLBotInlineResult$botInlineResult alloc] init]));
         manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x9852F9C6, [[TLDocumentAttribute$documentAttributeAudio alloc] init]));
-        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x67E1255F, [[TLchannels_MessageEditData$messageEditData alloc] init]));
-        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xC786DDCB, [[TLMessageFwdHeader$messageFwdHeader alloc] init]));
-        
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x559ebe6d, [[TLMessageFwdHeader$messageFwdHeader alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xf220f3f, [[TLUserFull$userFull alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xeb0467fb, [[TLUpdate$updateChannelTooLong alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x38faab5f, [[TLauth_SentCode$auth_sentCode alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x36585ea4, [[TLmessages_BotCallbackAnswer$botCallbackAnswer alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x17db940b, [[TLBotInlineResult$botInlineMediaResult alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xe4def5db, [[TLDialog$dialog alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x36086d42, [[TLDialog$dialogFeed alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xfd8e711f, [[TLDraftMessage$draftMessage alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xdb74f558, [[TLChatInvite$chatInvite alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x3213dbba, [[TLConfig$config alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xcd050916, [[TLauth_Authorization$auth_authorization alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x6319d612, [[TLDocumentAttributeSticker alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xbdf9653b, [[TLGame$game alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xcde200d1, [[TLPageBlock$pageBlockEmbed alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x1b8f4ad1, [[TLPhoneCall$phoneCallWaiting alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xebe46819, [[TLUpdate$updateServiceNotification alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x50ca4de1, [[TLPhoneCall$phoneCallDiscarded alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xea4cb65b, [[TLUpdate$updatePinnedDialogs alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x80e11a7f, [[TLMessageAction$messageActionPhoneCall alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xc30aa358, [[TLInvoice$invoice alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x84551347, [[TLMessageMedia$messageMediaInvoice alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x3f56aea3, [[TLpayments_PaymentForm$payments_paymentForm alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xfb8fe43c, [[TLpayments_SavedInfo$payments_savedInfo alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x909c3f94, [[TLPaymentRequestedInfo$paymentRequestedInfo alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x500911e1, [[TLPayments_PaymentCeceipt$payments_paymentReceipt alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xd1451883, [[TLpayments_ValidatedRequestedInfo$payments_validatedRequestedInfo alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x6c47ac9f, [[TLLangPackStringPluralized alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x289da732, [[TLChat$channelForbidden alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x695150d7, [[TLMessageMedia$messageMediaPhoto alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x9cb070d7, [[TLMessageMedia$messageMediaDocument alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x6a9d7b35, [[TLchannelDifferenceTooLong alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x55c3a1b1, [[TLmessages_FeedMessages$messages_feedMessages alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x8e8bca3d, [[TLchannels_FeedSources$channels_feedSources alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x31bc3d25, [[TLInputSingleMedia$inputSingleMedia alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x5585a139, [[TLStickerSet$stickerSet alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x6fa68e41, [[TLUpdate$updateReadFeed alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xe09e1fb8, [[TLhelp_ProxyData$proxyDataEmpty alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x2bf7ee23, [[TLhelp_ProxyData$proxyDataPromo alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x780a0310, [[TLhelp_TermsOfService$help_termsOfService alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x187fa0ca, [[TLSecureValue$secureValue alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xdb21d0a7, [[TLInputSecureValue$inputSecureValue alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xad2e1cd8, [[TLaccount_AuthorizationForm$account_authorizationForm alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xaf509d20, [[TLPeerNotifySettings$peerNotifySettings alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x6a4ee832, [[TLhelp_DeepLinkInfo$help_deepLinkInfo alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x1b0c841a, [[TLDraftMessage$draftMessageEmpty alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x1da7158f, [[TLhelp_AppUpdate$help_appUpdate alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0xad2641f8, [[TLaccount_Password$account_password alloc] init]));
+        manualObjectParsers.insert(std::pair<int32_t, id<TLObject> >(0x9a5c33e5, [[TLaccount_PasswordSettings$account_passwordSettings alloc] init]));
+
         {
             TLSchemeType$schemeType *constructor = [[TLSchemeType$schemeType alloc] init];
             constructor.n_id = (int32_t)0xae500895;
@@ -517,7 +618,7 @@ void TLMetaClassStore::mergeScheme(TLScheme *scheme)
                 continue;
             }
             
-            std::tr1::shared_ptr<std::vector<TLMetaField> > fields(new std::vector<TLMetaField>());
+            std::shared_ptr<std::vector<TLMetaField> > fields(new std::vector<TLMetaField>());
             
             bool hasUnresolvedTypes = false;
             
@@ -529,7 +630,7 @@ void TLMetaClassStore::mergeScheme(TLScheme *scheme)
                 NSString *typeName = argDesc.type;
                 
                 int32_t fieldTypeName = murMurHash32(typeName);
-                std::tr1::unordered_map<int32_t, std::pair<TLMetaTypeArgument, bool> >::iterator it = cachedFieldTypes.find(fieldTypeName);
+                std::unordered_map<int32_t, std::pair<TLMetaTypeArgument, bool> >::iterator it = cachedFieldTypes.find(fieldTypeName);
                 if (it == cachedFieldTypes.end())
                 {
                     bool fieldUnresolvedTypes = false;
@@ -548,10 +649,10 @@ void TLMetaClassStore::mergeScheme(TLScheme *scheme)
                 fields->push_back(field);
             }
             
-            std::tr1::shared_ptr<TLMetaType> resultType = createTypeFromString(name, typesToResolve, vectorTypeMap);
+            std::shared_ptr<TLMetaType> resultType = createTypeFromString(name, typesToResolve, vectorTypeMap);
             typesByName[resultType->getName()] = resultType;
             
-            std::tr1::shared_ptr<TLMetaConstructor> constructor(new TLMetaConstructor(murMurHash32(typeDesc.predicate), typeDesc.n_id, fields, resultType));
+            std::shared_ptr<TLMetaConstructor> constructor(new TLMetaConstructor(murMurHash32(typeDesc.predicate), typeDesc.n_id, fields, resultType));
             constructorsBySignature[constructor->getSignature()] = constructor;
             constructorsByName[constructor->getName()] = constructor;
             
@@ -596,7 +697,7 @@ void TLMetaClassStore::mergeScheme(TLScheme *scheme)
             NSString *resultTypeName = methodDesc.type;
             NSString *method = methodDesc.method;
             
-            std::tr1::shared_ptr<std::vector<TLMetaField> > fields(new std::vector<TLMetaField>());
+            std::shared_ptr<std::vector<TLMetaField> > fields(new std::vector<TLMetaField>());
             
             bool hasUnresolvedTypes = false;
             
@@ -608,7 +709,7 @@ void TLMetaClassStore::mergeScheme(TLScheme *scheme)
                 NSString *typeName = argDesc.type;
                 
                 int32_t fieldTypeName = murMurHash32(typeName);
-                std::tr1::unordered_map<int32_t, std::pair<TLMetaTypeArgument, bool> >::iterator it = cachedFieldTypes.find(fieldTypeName);
+                std::unordered_map<int32_t, std::pair<TLMetaTypeArgument, bool> >::iterator it = cachedFieldTypes.find(fieldTypeName);
                 if (it == cachedFieldTypes.end())
                 {
                     bool fieldUnresolvedTypes = false;
@@ -627,7 +728,7 @@ void TLMetaClassStore::mergeScheme(TLScheme *scheme)
                 fields->push_back(field);
             }
             
-            std::tr1::shared_ptr<TLMetaType> resultType = createTypeFromString(resultTypeName, typesToResolve, vectorTypeMap);
+            std::shared_ptr<TLMetaType> resultType = createTypeFromString(resultTypeName, typesToResolve, vectorTypeMap);
             
             if (!([resultTypeName isEqualToString:@"Bool"] || [resultTypeName hasPrefix:@"Vector<"]))
             {
@@ -637,7 +738,7 @@ void TLMetaClassStore::mergeScheme(TLScheme *scheme)
                 }
             }
             
-            std::tr1::shared_ptr<TLMetaConstructor> constructor(new TLMetaConstructor(murMurHash32(method), methodDesc.n_id, fields, resultType));
+            std::shared_ptr<TLMetaConstructor> constructor(new TLMetaConstructor(murMurHash32(method), methodDesc.n_id, fields, resultType));
             constructorsBySignature[constructor->getSignature()] = constructor;
             constructorsByName[constructor->getName()] = constructor;
             
@@ -655,16 +756,16 @@ void TLMetaClassStore::mergeScheme(TLScheme *scheme)
             }
         }
         
-        for (std::vector<std::tr1::shared_ptr<TLMetaConstructor> >::iterator it = constructorsWithUnresolvedTypes.begin(); it != constructorsWithUnresolvedTypes.end(); it++)
+        for (std::vector<std::shared_ptr<TLMetaConstructor> >::iterator it = constructorsWithUnresolvedTypes.begin(); it != constructorsWithUnresolvedTypes.end(); it++)
         {
-            std::tr1::shared_ptr<std::vector<TLMetaField> > fields = (*it)->getFields();
+            std::shared_ptr<std::vector<TLMetaField> > fields = (*it)->getFields();
             for (std::vector<TLMetaField>::iterator fieldIt = fields->begin(); fieldIt != fields->end(); fieldIt++)
             {
                 resolveUnboxedTypes(&fieldIt->type, constructorsByName, vectorElementTypesByConstructor);
             }
         }
         
-        for (std::tr1::unordered_map<int32_t, TLMetaTypeArgument>::iterator it = vectorElementTypesByConstructor.begin(); it != vectorElementTypesByConstructor.end(); it++)
+        for (std::unordered_map<int32_t, TLMetaTypeArgument>::iterator it = vectorElementTypesByConstructor.begin(); it != vectorElementTypesByConstructor.end(); it++)
         {
             resolveUnboxedTypes(&it->second, constructorsByName, vectorElementTypesByConstructor);
         }
@@ -839,16 +940,16 @@ TLConstructedValue TLMetaClassStore::constructValue(NSInputStream *is, int32_t s
         return value;
     }
     
-    std::tr1::shared_ptr<TLMetaConstructor> constructor = getConstructorBySignature(signature);
+    std::shared_ptr<TLMetaConstructor> constructor = getConstructorBySignature(signature);
     
     if (constructor == NULL)
     {
-        std::tr1::unordered_map<int32_t, TLMetaTypeArgument>::iterator it = vectorElementTypesByConstructor.find(signature);
+        std::unordered_map<int32_t, TLMetaTypeArgument>::iterator it = vectorElementTypesByConstructor.find(signature);
         if (it != vectorElementTypesByConstructor.end())
         {
             int32_t count = [is readInt32];
             
-            std::tr1::unordered_map<int32_t, id<TLVector> >::iterator classIt = vectorClassesBySignature.find(signature);
+            std::unordered_map<int32_t, id<TLVector> >::iterator classIt = vectorClassesBySignature.find(signature);
             
             NSMutableArray *array = nil;
             if (classIt != vectorClassesBySignature.end())
@@ -917,6 +1018,9 @@ TLConstructedValue TLMetaClassStore::constructValue(NSInputStream *is, int32_t s
         {
             if (error != NULL)
             {
+#if defined(DEBUG) || defined(INTERNAL_RELEASE)
+      //@throw [[NSException alloc] initWithName:@"tlmetaclassstore" reason:[NSString stringWithFormat:@"Constructor with signature %.8x not found", signature] userInfo:@{}];
+#endif
                 NSMutableDictionary *userInfo = [[NSMutableDictionary alloc] init];
                 [userInfo setValue:[NSString stringWithFormat:@"Constructor with signature %.8x not found", signature] forKey:NSLocalizedDescriptionKey];
                 *error = [[NSError alloc] initWithDomain:@"TL" code:-1 userInfo:userInfo];
@@ -947,7 +1051,7 @@ void TLMetaClassStore::serializeObject(NSOutputStream *os, id<TLObject> object, 
         if (boxed)
             [os writeInt32:[object TLconstructorSignature]];
         
-        std::tr1::shared_ptr<TLMetaConstructor> constructor = getConstructorByName([object TLconstructorName]);
+        std::shared_ptr<TLMetaConstructor> constructor = getConstructorByName([object TLconstructorName]);
         
         std::map<int32_t, TLConstructedValue> fieldValues;
         [object TLfillFieldsWithValues:&fieldValues];
@@ -981,7 +1085,7 @@ void TLMetaClassStore::serializeObject(NSOutputStream *os, id<TLObject> object, 
         }
         else
         {
-            std::tr1::shared_ptr<TLMetaConstructor> constructor = getConstructorByName([object TLconstructorName]);
+            std::shared_ptr<TLMetaConstructor> constructor = getConstructorByName([object TLconstructorName]);
             if (constructor != NULL)
             {
                 if (boxed)

@@ -1,14 +1,8 @@
-/*
- * This is the source code of Telegram for iOS v. 1.1
- * It is licensed under GNU GPL v. 2 or later.
- * You should have received a copy of the license in this archive (see LICENSE).
- *
- * Copyright Peter Iakovlev, 2013.
- */
-
 #import "TGSecretChatUserInfoController.h"
 
-#import "ActionStage.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/ActionStage.h>
 
 #import "TGDatabase.h"
 #import "TGTelegraph.h"
@@ -17,11 +11,7 @@
 
 #import "TGEncryptionKeyViewController.h"
 
-#import "TGActionSheet.h"
-
 #import <MTProtoKit/MTEncryption.h>
-#import "TGImageUtils.h"
-#import "TGStringUtils.h"
 
 @interface TGSecretChatUserInfoController ()
 {
@@ -127,7 +117,9 @@
 
 - (void)encryptionKeyPressed
 {
-    [self.navigationController pushViewController:[[TGEncryptionKeyViewController alloc] initWithEncryptedConversationId:_encryptedConversationId userId:self.uid] animated:true];
+    TGEncryptionKeyViewController *controller = [[TGEncryptionKeyViewController alloc] initWithEncryptedConversationId:_encryptedConversationId userId:self.uid];
+    controller.presentation = self.presentation;
+    [self.navigationController pushViewController:controller animated:true];
 }
 
 - (void)actionStageResourceDispatched:(NSString *)path resource:(id)resource arguments:(id)arguments

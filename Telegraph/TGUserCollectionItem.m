@@ -8,8 +8,9 @@
 
 #import "TGUserCollectionItem.h"
 
-#import "ASHandle.h"
-#import "TGUser.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/ASHandle.h>
 
 #import "TGUserCollectionItemView.h"
 
@@ -46,7 +47,7 @@
     ((TGUserCollectionItemView *)view).optionText = _deleteActionTitle;
     ((TGUserCollectionItemView *)view).delegate = self;
     [(TGUserCollectionItemView *)view setShowAvatar:_showAvatar];
-    [(TGUserCollectionItemView *)view setFirstName:_user.firstName lastName:_user.lastName uidForPlaceholderCalculation:_user.uid avatarUri:_user.photoUrlSmall];
+    [(TGUserCollectionItemView *)view setFirstName:_user.firstName lastName:_user.lastName uidForPlaceholderCalculation:_user.uid avatarUri:_user.photoFullUrlSmall];
 }
 
 - (void)unbindView

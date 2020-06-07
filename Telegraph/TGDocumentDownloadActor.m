@@ -1,22 +1,13 @@
-/*
- * This is the source code of Telegram for iOS v. 1.1
- * It is licensed under GNU GPL v. 2 or later.
- * You should have received a copy of the license in this archive (see LICENSE).
- *
- * Copyright Peter Iakovlev, 2013.
- */
-
 #import "TGDocumentDownloadActor.h"
 
-#import "ActionStage.h"
-#import "ASQueue.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/ActionStage.h>
+#import <LegacyComponents/ASQueue.h>
 
 #import "TL/TLMetaScheme.h"
-#import "TGDocumentMediaAttachment.h"
 
-#import "TGStringUtils.h"
-#import "TGImageUtils.h"
-#import "TGRemoteImageView.h"
+#import <LegacyComponents/TGRemoteImageView.h>
 
 #import "TGGenericModernConversationCompanion.h"
 #import "TGFileDownloadActor.h"
@@ -26,9 +17,10 @@
 #import "TGAppDelegate.h"
 
 #import "TGDocumentHttpFileReference.h"
-#import "PSKeyValueDecoder.h"
 
 #import "TGRemoteHttpLocationSignal.h"
+
+#import "TGTelegramNetworking.h"
 
 @interface TGDocumentDownloadActor ()
 {
@@ -144,9 +136,12 @@
         }
         else
         {
+            TGMediaOriginInfo *originInfo = documentAttachment.originInfo;
+            
             TLInputFileLocation$inputDocumentFileLocation *inputDocumentLocation = [[TLInputFileLocation$inputDocumentFileLocation alloc] init];
             inputDocumentLocation.n_id = documentAttachment.documentId;
             inputDocumentLocation.access_hash = documentAttachment.accessHash;
+            inputDocumentLocation.file_reference = [originInfo fileReference] ?: [NSData data];
             inputFileLocation = inputDocumentLocation;
             
             datacenterId = documentAttachment.datacenterId;
@@ -154,14 +149,29 @@
         
         if (inputFileLocation != nil)
         {
-            [ActionStageInstance() requestActor:[[NSString alloc] initWithFormat:@"/tg/multipart-file/(document:%" PRId64 ":%d:%@)", documentAttachment.documentId, documentAttachment.datacenterId, documentAttachment.documentUri.length != 0 ? documentAttachment.documentUri : @""] options:@{
-                @"fileLocation": inputFileLocation,
-                @"encryptedSize": @(encryptedSize),
-                @"decryptedSize": @(decryptedSize),
-                @"storeFilePath": _storeFilePath,
-                @"datacenterId": @(datacenterId),
-                @"encryptionArgs": encryptionArgs
-            } watcher:self];
+            TGNetworkMediaTypeTag mediaTypeTag = TGNetworkMediaTypeTagDocument;
+            for (id attribute in documentAttachment.attributes) {
+                if ([attribute isKindOfClass:[TGDocumentAttributeAudio class]]) {
+                    mediaTypeTag = TGNetworkMediaTypeTagAudio;
+                    break;
+                }
+            }
+            
+            NSMutableDictionary *multiPartOptions = [[NSMutableDictionary alloc] initWithDictionary:@{
+                                                                                                      @"identifier": @(_documentAttachment.documentId),
+                                                                                                      @"fileLocation": inputFileLocation,
+                                                                                                      @"encryptedSize": @(encryptedSize),
+                                                                                                      @"decryptedSize": @(decryptedSize),
+                                                                                                      @"storeFilePath": _storeFilePath,
+                                                                                                      @"datacenterId": @(datacenterId),
+                                                                                                      @"encryptionArgs": encryptionArgs,
+                                                                                                      @"mediaTypeTag": @(mediaTypeTag)
+                                                                                                      }];
+            
+            if (documentAttachment.originInfo != nil)
+                multiPartOptions[@"originInfo"] = documentAttachment.originInfo;
+            
+            [ActionStageInstance() requestActor:[[NSString alloc] initWithFormat:@"/tg/multipart-file/(document:%" PRId64 ":%d:%@)", documentAttachment.documentId, documentAttachment.datacenterId, documentAttachment.documentUri.length != 0 ? documentAttachment.documentUri : @""] options:multiPartOptions watcher:self];
         }
         else
             [ActionStageInstance() actionFailed:self.path reason:-1];

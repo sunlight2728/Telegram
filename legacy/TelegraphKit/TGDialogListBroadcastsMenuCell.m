@@ -1,9 +1,8 @@
 #import "TGDialogListBroadcastsMenuCell.h"
 
-#import "TGModernButton.h"
+#import <LegacyComponents/LegacyComponents.h>
 
-#import "TGFont.h"
-#import "TGImageUtils.h"
+#import <LegacyComponents/TGModernButton.h>
 
 @interface TGDialogListBroadcastsMenuCell ()
 {
@@ -26,9 +25,10 @@
         _separatorView = [[UIView alloc] init];
         _separatorView.backgroundColor = TGSeparatorColor();
         [self.contentView addSubview:_separatorView];
+        self.contentView.clipsToBounds = false;
         
         _broadcastListsButton = [[TGModernButton alloc] init];
-        [_broadcastListsButton setTitle:TGLocalized(@"Compose.NewChannelButton") forState:UIControlStateNormal];
+        [_broadcastListsButton setTitle:TGLocalized(@"Compose.NewChannel") forState:UIControlStateNormal];
         [_broadcastListsButton setTitleColor:TGAccentColor()];
         _broadcastListsButton.titleLabel.font = TGSystemFontOfSize(15.0f + TGRetinaPixel);
         [_broadcastListsButton setContentEdgeInsets:UIEdgeInsetsMake(0, 8, 0, 8)];
@@ -50,8 +50,8 @@
 {
     [super layoutSubviews];
     
-    CGFloat separatorHeight = TGIsRetina() ? 0.5f : 1.0f;
-    _separatorView.frame = CGRectMake(0.0f, self.contentView.frame.size.height - separatorHeight, self.contentView.frame.size.width, separatorHeight);
+    CGFloat separatorHeight = TGScreenPixel;
+    _separatorView.frame = CGRectMake(0.0f, self.contentView.frame.size.height, self.contentView.frame.size.width, separatorHeight);
     
     [_newGroupButton sizeToFit];
     _newGroupButton.frame = (CGRect){{CGFloor((self.contentView.frame.size.width / 2.0f - _newGroupButton.frame.size.width) / 2.0f), 0.0f}, {_newGroupButton.frame.size.width, self.contentView.frame.size.height}};
@@ -74,7 +74,7 @@
 
 - (void)resetLocalization
 {
-    [_broadcastListsButton setTitle:TGLocalized(@"DialogList.Broadcast") forState:UIControlStateNormal];
+    [_broadcastListsButton setTitle:TGLocalized(@"Compose.NewChannel") forState:UIControlStateNormal];
     [_newGroupButton setTitle:TGLocalized(@"Compose.NewGroup") forState:UIControlStateNormal];
     
     [self setNeedsLayout];

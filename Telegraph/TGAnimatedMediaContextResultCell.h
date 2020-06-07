@@ -10,10 +10,13 @@
 
 @interface TGAnimatedMediaContextResultCell : UICollectionViewCell
 
-- (void)setResult:(TGBotContextResult *)result;
+@property (nonatomic, strong) TGBotContextResult *result;
 
 - (TGAnimatedMediaContextResultCellContents *)_takeContent;
 - (void)_putContent:(TGAnimatedMediaContextResultCellContents *)content;
 - (bool)hasContent;
+
+- (void)setSelectionColor:(UIColor *)color;
+- (void)setHighlighted:(bool)highlighted animated:(bool)animated;
 
 @end

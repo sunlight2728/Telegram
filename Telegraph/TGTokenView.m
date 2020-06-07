@@ -1,6 +1,8 @@
 #import "TGTokenView.h"
 
-#import "TGFont.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import "TGPresentation.h"
 
 static UIImage *tokenBackgroundImage()
 {
@@ -58,6 +60,34 @@ static UIImage *tokenBackgroundHighlightedImage()
     [self addTarget:self action:@selector(buttonPressed) forControlEvents:UIControlEventTouchDown];
 }
 
+- (void)setPresentation:(TGPresentation *)presentation
+{
+    _presentation = presentation;
+    
+    UIImage *image = TGTintedImage(tokenBackgroundImage(), presentation.pallete.textColor);
+    image = [image stretchableImageWithLeftCapWidth:(int)(image.size.width / 2) topCapHeight:0];
+    [self setBackgroundImage:image forState:UIControlStateNormal];
+    
+    image = TGTintedImage(tokenBackgroundHighlightedImage(), presentation.pallete.accentColor);
+    image = [image stretchableImageWithLeftCapWidth:(int)(image.size.width / 2) topCapHeight:0];
+    [self setBackgroundImage:image forState:UIControlStateHighlighted];
+    [self setBackgroundImage:image forState:UIControlStateSelected];
+    [self setBackgroundImage:image forState:UIControlStateHighlighted | UIControlStateSelected];
+    
+    [self setTitleColor:presentation.pallete.textColor forState:UIControlStateNormal];
+    
+    UIColor *highlightedTextColor = presentation.pallete.accentContrastColor;
+    
+    [self setTitleColor:highlightedTextColor forState:UIControlStateHighlighted];
+    [self setTitleColor:highlightedTextColor forState:UIControlStateSelected];
+    [self setTitleColor:highlightedTextColor forState:UIControlStateHighlighted | UIControlStateSelected];
+}
+
+- (UIKeyboardAppearance)keyboardAppearance
+{
+    return _presentation.pallete.isDark ? UIKeyboardAppearanceAlert : UIKeyboardAppearanceDefault;
+}
+
 - (void)buttonPressed
 {
     [self becomeFirstResponder];
@@ -83,8 +113,11 @@ static UIImage *tokenBackgroundHighlightedImage()
 {
     if ([super becomeFirstResponder])
     {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wundeclared-selector"
         if ([self.superview.superview respondsToSelector:@selector(highlightToken:)])
             [self.superview.superview performSelector:@selector(highlightToken:) withObject:self];
+#pragma clang diagnostic pop
         return true;
     }
     
@@ -95,8 +128,11 @@ static UIImage *tokenBackgroundHighlightedImage()
 {
     if ([super resignFirstResponder])
     {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wundeclared-selector"
         if ([self.superview.superview respondsToSelector:@selector(unhighlightToken:)])
             [self.superview.superview performSelector:@selector(unhighlightToken:) withObject:self];
+#pragma clang diagnostic pop
         return true;
     }
     
@@ -105,8 +141,11 @@ static UIImage *tokenBackgroundHighlightedImage()
 
 - (void)deleteBackward
 {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wundeclared-selector"
     if ([self.superview.superview respondsToSelector:@selector(deleteToken:)])
         [self.superview.superview performSelector:@selector(deleteToken:) withObject:self];
+#pragma clang diagnostic pop
 }
 
 - (BOOL)hasText

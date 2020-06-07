@@ -1,10 +1,12 @@
 #import "TGLoginPasswordController.h"
 
-#import "ActionStage.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/ActionStage.h>
 
 #import "TGLoginPasswordView.h"
 
-#import "TGProgressWindow.h"
+#import <LegacyComponents/TGProgressWindow.h>
 
 #import "TGAppDelegate.h"
 #import "TGTelegraph.h"
@@ -20,17 +22,19 @@
 #import "TGLoginCodeController.h"
 #import "TGLoginProfileController.h"
 
-#import "TGPhoneUtils.h"
-
 #import "TGPasswordRecoveryController.h"
 
 #import "TGTwoStepConfigSignal.h"
 #import "TGTwoStepRecoverySignals.h"
 #import "TGAccountSignals.h"
 
+#import "TGLoginResetAccountProtectedController.h"
+
 @interface TGLoginPasswordController () <ASWatcher>
 {
-    TGTwoStepConfig *_config;
+    SVariable *_config;
+    NSString *_hint;
+    
     NSString *_phoneNumber;
     NSString *_phoneCode;
     NSString *_phoneCodeHash;
@@ -62,7 +66,9 @@
     {
         _requestRecoveryDisposable = [[SMetaDisposable alloc] init];
         
-        _config = config;
+        _config = [[SVariable alloc] init];
+        [_config set:[SSignal single:config]];
+        _hint = config.currentHint;
         _phoneNumber = phoneNumber;
         _phoneCode = phoneCode;
         _phoneCodeHash = phoneCodeHash;
@@ -86,24 +92,35 @@
 
 - (void)donePressed
 {
-    _progressWindow = [[TGProgressWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
-    [_progressWindow show:true];
-    
-    [ActionStageInstance() requestActor:[[NSString alloc] initWithFormat:@"/checkPassword/(%d)", (int)_currentPassword.hash] options:@{@"password": _currentPassword == nil ? @"" : _currentPassword} flags:0 watcher:self];
+    __weak TGLoginPasswordController *weakSelf = self;
+    [[[_config.signal take:1] deliverOn:[SQueue mainQueue]] startWithNext:^(TGTwoStepConfig *config)
+    {
+        __strong TGLoginPasswordController *strongSelf = weakSelf;
+        if (strongSelf != nil)
+        {
+            strongSelf->_progressWindow = [[TGProgressWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+            [strongSelf->_progressWindow show:true];
+            
+            NSString *password = strongSelf->_currentPassword ?: @"";
+            
+            [ActionStageInstance() requestActor:[[NSString alloc] initWithFormat:@"/checkPassword/(%d)", (int)strongSelf->_currentPassword.hash] options:@{@"password": password, @"twoStepConfig": config} flags:0 watcher:self];
+        }
+    }];
 }
 
 - (void)viewWillAppear:(BOOL)animated
 {
     [super viewWillAppear:animated];
     
+    [_view layoutSubviews];
     [_view setFirstReponder];
 }
 
 - (void)viewDidLayoutSubviews
 {
-    [super viewDidLayoutSubviews];
-    
     [_view setFirstReponder];
+    
+    [super viewDidLayoutSubviews];
 }
 
 - (void)loadView
@@ -113,7 +130,7 @@
     self.view.backgroundColor = [UIColor whiteColor];
     
     _view = [[TGLoginPasswordView alloc] initWithFrame:self.view.bounds];
-    _view.hint = _config.currentHint;
+    _view.hint = _hint;
     _view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     __weak TGLoginPasswordController *weakSelf = self;
     _view.passwordChanged = ^(NSString *password)
@@ -148,74 +165,80 @@
 
 - (void)forgotPressed
 {
-    if (_config.hasRecovery)
+    __weak TGLoginPasswordController *weakSelf = self;
+    [[[_config.signal take:1] deliverOn:[SQueue mainQueue]] startWithNext:^(TGTwoStepConfig *config)
     {
-        __weak TGLoginPasswordController *weakSelf = self;
+        __strong TGLoginPasswordController *strongSelf = weakSelf;
+        if (strongSelf == nil)
+            return;
         
-        TGProgressWindow *progressWindow = [[TGProgressWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
-        [progressWindow show:true];
-        
-        [_requestRecoveryDisposable setDisposable:[[[[TGTwoStepRecoverySignals requestPasswordRecovery] deliverOn:[SQueue mainQueue]] onDispose:^
+        if (config.hasRecovery)
         {
-            TGDispatchOnMainThread(^
+            TGProgressWindow *progressWindow = [[TGProgressWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+            [progressWindow show:true];
+            
+            [strongSelf->_requestRecoveryDisposable setDisposable:[[[[TGTwoStepRecoverySignals requestPasswordRecovery] deliverOn:[SQueue mainQueue]] onDispose:^
             {
-                [progressWindow dismiss:true];
-            });
-        }] startWithNext:^(NSString *emailPattern)
-        {
-            __strong TGLoginPasswordController *strongSelf = weakSelf;
-            if (strongSelf != nil)
-            {
-                TGPasswordRecoveryController *controller = [[TGPasswordRecoveryController alloc] initWithEmailPattern:emailPattern];
-                controller.completion = ^(bool success, int32_t userId)
+                TGDispatchOnMainThread(^
                 {
-                    __strong TGLoginPasswordController *strongSelf = weakSelf;
-                    if (strongSelf != nil)
+                    [progressWindow dismiss:true];
+                });
+            }] startWithNext:^(NSString *emailPattern)
+            {
+                __strong TGLoginPasswordController *strongSelf = weakSelf;
+                if (strongSelf != nil)
+                {
+                    TGPasswordRecoveryController *controller = [[TGPasswordRecoveryController alloc] initWithEmailPattern:emailPattern];
+                    controller.completion = ^(bool success, int32_t userId)
                     {
-                        if (success)
+                        __strong TGLoginPasswordController *strongSelf = weakSelf;
+                        if (strongSelf != nil)
                         {
-                            [strongSelf dismissViewControllerAnimated:true completion:^
+                            if (success)
                             {
-                                __strong TGLoginPasswordController *strongSelf = weakSelf;
-                                [strongSelf _completedRestore:userId];
-                            }];
+                                [strongSelf dismissViewControllerAnimated:true completion:^
+                                {
+                                    __strong TGLoginPasswordController *strongSelf = weakSelf;
+                                    [strongSelf _completedRestore:userId];
+                                }];
+                            }
+                            else
+                            {
+                                [strongSelf dismissViewControllerAnimated:true completion:nil];
+                                
+                                [[[TGAlertView alloc] initWithTitle:nil message:TGLocalized(@"TwoStepAuth.RecoveryFailed") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil] show];
+                                
+                                strongSelf->_view.resetMode = true;
+                            }
                         }
-                        else
+                    };
+                    controller.cancelled = ^
+                    {
+                        __strong TGLoginPasswordController *strongSelf = weakSelf;
+                        if (strongSelf != nil)
                         {
                             [strongSelf dismissViewControllerAnimated:true completion:nil];
-                            
-                            [[[TGAlertView alloc] initWithTitle:nil message:TGLocalized(@"TwoStepAuth.RecoveryFailed") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil] show];
-                            
-                            strongSelf->_view.resetMode = true;
                         }
-                    }
-                };
-                controller.cancelled = ^
-                {
-                    __strong TGLoginPasswordController *strongSelf = weakSelf;
-                    if (strongSelf != nil)
-                    {
-                        [strongSelf dismissViewControllerAnimated:true completion:nil];
-                    }
-                };
-                
-                TGNavigationController *navigationController = [TGNavigationController navigationControllerWithControllers:@[controller]];
-                [strongSelf presentViewController:navigationController animated:true completion:nil];
-            }
-        } error:^(id error)
+                    };
+                    
+                    TGNavigationController *navigationController = [TGNavigationController navigationControllerWithControllers:@[controller]];
+                    [strongSelf presentViewController:navigationController animated:true completion:nil];
+                }
+            } error:^(id error)
+            {
+                NSString *errorText = TGLocalized(@"Login.UnknownError");
+                if ([error hasPrefix:@"FLOOD_WAIT"])
+                    errorText = TGLocalized(@"TwoStepAuth.FloodError");
+                [[[TGAlertView alloc] initWithTitle:nil message:errorText cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil] show];
+            } completed:nil]];
+        }
+        else
         {
-            NSString *errorText = TGLocalized(@"TwoStepAuth.GenericError");
-            if ([error hasPrefix:@"FLOOD_WAIT"])
-                errorText = TGLocalized(@"TwoStepAuth.FloodError");
-            [[[TGAlertView alloc] initWithTitle:nil message:errorText cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil] show];
-        } completed:nil]];
-    }
-    else
-    {
-        [[[TGAlertView alloc] initWithTitle:nil message:TGLocalized(@"TwoStepAuth.RecoveryUnavailable") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil] show];
-        
-        _view.resetMode = true;
-    }
+            [[[TGAlertView alloc] initWithTitle:nil message:TGLocalized(@"TwoStepAuth.RecoveryUnavailable") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil] show];
+            
+            strongSelf->_view.resetMode = true;
+        }
+    }];
 }
 
 - (void)resetPressed
@@ -231,11 +254,23 @@
                 TGProgressWindow *progressWindow = [[TGProgressWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
                 [progressWindow show:true];
                 
-                [[[[TGAccountSignals deleteAccount] deliverOn:[SQueue mainQueue]] onDispose:^
+                [[[[TGAccountSignals deleteAccount:@"Forgot password"] deliverOn:[SQueue mainQueue]] onDispose:^
                 {
                     [progressWindow dismiss:true];
-                }] startWithNext:nil error:^(__unused id error)
-                {
+                }] startWithNext:nil error:^(id error) {
+                    __strong TGLoginPasswordController *strongSelf = weakSelf;
+                    if (strongSelf != nil) {
+                        NSString *errorType = [[TGTelegramNetworking instance] extractNetworkErrorType:error];
+                        if ([errorType hasPrefix:@"2FA_CONFIRM_WAIT_"]) {
+                            int32_t waitSeconds = [[errorType substringFromIndex:@"2FA_CONFIRM_WAIT_".length] intValue];
+                            int stateDate = [[TGAppDelegateInstance loadLoginState][@"date"] intValue];
+                            NSTimeInterval protectedUntilDate = CFAbsoluteTimeGetCurrent() + waitSeconds;
+                            [TGAppDelegateInstance saveLoginStateWithDate:stateDate phoneNumber:_phoneNumber phoneCode:_phoneCode phoneCodeHash:_phoneCodeHash codeSentToTelegram:false codeSentViaPhone:false firstName:nil lastName:nil photo:nil resetAccountState:[[TGResetAccountState alloc] initWithPhoneNumber:_phoneNumber protectedUntilDate:protectedUntilDate]];
+                            [strongSelf.navigationController pushViewController:[[TGLoginResetAccountProtectedController alloc] initWithPhoneNumber:_phoneNumber protectedUntilDate:protectedUntilDate] animated:true];
+                        } else if ([errorType isEqualToString:@"2FA_RECENT_CONFIRM"]) {
+                            [[[TGAlertView alloc] initWithTitle:nil message:TGLocalized(@"Login.ResetAccountProtected.LimitExceeded") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil] show];
+                        }
+                    }
                 } completed:^
                 {
                     __strong TGLoginPasswordController *strongSelf = weakSelf;
@@ -302,6 +337,8 @@
                 NSString *errorText = TGLocalized(@"LoginPassword.InvalidPasswordError");
                 if (status == TGCheckPasswordErrorCodeFlood)
                     errorText = TGLocalized(@"LoginPassword.FloodError");
+                else
+                    [_config set:[TGTwoStepConfigSignal twoStepConfig]];
                 
                 [[[TGAlertView alloc] initWithTitle:nil message:errorText cancelButtonTitle:TGLocalized(@"Common.OK") otherButtonTitles:nil completionBlock:nil] show];
             }
@@ -346,13 +383,18 @@
     NSString *phoneCodeHash = nil;
     if ([self loginPhoneNumber:&phoneNumber phoneCode:&phoneCode phoneCodeHash:&phoneCodeHash])
     {
-        [self.navigationController pushViewController:[[TGLoginProfileController alloc] initWithShowKeyboard:true phoneNumber:phoneNumber phoneCodeHash:phoneCodeHash phoneCode:phoneCode] animated:true];
+        [self.navigationController pushViewController:[[TGLoginProfileController alloc] initWithShowKeyboard:true phoneNumber:phoneNumber phoneCodeHash:phoneCodeHash phoneCode:phoneCode termsOfService:nil] animated:true];
     }
     else
     {
         NSString *phone = [TGPhoneUtils cleanPhone:[TGDatabaseInstance() loadUser:TGTelegraphInstance.clientUserId].phoneNumber];
         [TGTelegraphInstance doLogout:phone];
     }
+}
+
+- (UIStatusBarStyle)preferredStatusBarStyle
+{
+    return UIStatusBarStyleDefault;
 }
 
 @end

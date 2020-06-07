@@ -2,6 +2,8 @@
 
 #import "TLMetaClassStore.h"
 
+//botInlineResult#11965f3a flags:# id:string type:string title:flags.1?string description:flags.2?string url:flags.3?string thumb:flags.4?WebDocument content:flags.5?WebDocument send_message:BotInlineMessage = BotInlineResult;
+
 @implementation TLBotInlineResult$botInlineResult
 
 - (void)TLserialize:(NSOutputStream *)__unused os
@@ -32,26 +34,27 @@
     }
     
     if (flags & (1 << 4)) {
-        result.thumb_url = [is readString];
+        int32_t signature = [is readInt32];
+        result.thumb = TLMetaClassStore::constructObject(is, signature, environment, nil, error);
+        if (error != nil && *error != nil) {
+            return nil;
+        }
     }
     
     if (flags & (1 << 5)) {
-        result.content_url = [is readString];
-        result.content_type = [is readString];
-    }
-    
-    if (flags & (1 << 6)) {
-        result.w = [is readInt32];
-        result.h = [is readInt32];
-    }
-    
-    if (flags & (1 << 7)) {
-        result.duration = [is readInt32];
+        int32_t signature = [is readInt32];
+        result.content = TLMetaClassStore::constructObject(is, signature, environment, nil, error);
+        if (error != nil && *error != nil) {
+            return nil;
+        }
     }
     
     {
         int32_t signature = [is readInt32];
         result.send_message = TLMetaClassStore::constructObject(is, signature, environment, nil, error);
+        if (error != nil && *error != nil) {
+            return nil;
+        }
     }
     
     return result;

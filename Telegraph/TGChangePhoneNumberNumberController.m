@@ -1,6 +1,8 @@
 #import "TGChangePhoneNumberNumberController.h"
 
-#import "ActionStage.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/ActionStage.h>
 
 #import "TGHeaderCollectionItem.h"
 #import "TGCommentCollectionItem.h"
@@ -8,12 +10,10 @@
 
 #import "TGChangePhoneNumberCodeController.h"
 
-#import "TGProgressWindow.h"
-#import "TGAlertView.h"
+#import <LegacyComponents/TGProgressWindow.h>
+#import "TGCustomAlertView.h"
 
 #import "TGVerifyChangePhoneActor.h"
-
-#import "TGPhoneUtils.h"
 
 @interface TGChangePhoneNumberNumberController () <ASWatcher>
 {
@@ -155,15 +155,11 @@
                 
                 if (occupied)
                 {
-                    TGAlertView *alertView = [[TGAlertView alloc] initWithTitle:nil message:errorText cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:TGLocalized(@"ChangePhone.DeleteHelp") completionBlock:^(bool okButtonPressed)
-                    {
-                        
-                    }];
+                    [TGCustomAlertView presentAlertWithTitle:nil message:errorText cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:TGLocalized(@"Generic.ErrorMoreInfo") completionBlock:nil];
                 }
                 else
                 {
-                    TGAlertView *alertView = [[TGAlertView alloc] initWithTitle:nil message:errorText delegate:nil cancelButtonTitle:TGLocalized(@"Common.OK") otherButtonTitles:nil];
-                    [alertView show];
+                    [TGCustomAlertView presentAlertWithTitle:nil message:errorText cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
                 }
             }
         });

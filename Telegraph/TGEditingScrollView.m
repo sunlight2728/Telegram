@@ -35,6 +35,7 @@
     self = [super initWithFrame:frame];
     if (self != nil)
     {
+        self.tag = 0xbeef;
         self.scrollsToTop = false;
         self.showsHorizontalScrollIndicator = false;
         self.showsVerticalScrollIndicator = false;
@@ -164,6 +165,10 @@
 {
     contentOffset.x = MAX(0.0f, contentOffset.x);
     [super setContentOffset:contentOffset];
+    if ([self.superview isKindOfClass:[UICollectionViewCell class]]) {
+        if (((UICollectionViewCell *)self.superview).highlighted)
+            [(UICollectionViewCell *)self.superview setHighlighted:false];
+    }
     
     [self _postOffsetChangeNotification];
 }
@@ -202,8 +207,10 @@
 {
     if (!_lockScroll && self.bounds.origin.x < FLT_EPSILON)
     {
-        if (((TGCollectionItem *)((TGCollectionItemView *)self.superview).boundItem).selectable)
-            [(TGCollectionItemView *)self.superview setHighlighted:true];
+        if ([self.superview isKindOfClass:[UICollectionViewCell class]]) {
+            if (((TGCollectionItem *)((TGCollectionItemView *)self.superview).boundItem).selectable)
+                [(TGCollectionItemView *)self.superview setHighlighted:true];
+        }
     }
     
     [super touchesBegan:touches withEvent:event];
@@ -211,28 +218,29 @@
 
 - (void)touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event
 {
-    if (((UICollectionViewCell *)self.superview).highlighted)
-    {
-        [(UICollectionViewCell *)self.superview setHighlighted:false];
-        [(TGEditableCollectionItemView *)self.superview _requestSelection];
+    if ([self.superview isKindOfClass:[UICollectionViewCell class]]) {
+        if (((UICollectionViewCell *)self.superview).highlighted)
+        {
+            [(UICollectionViewCell *)self.superview setHighlighted:false];
+            [(TGEditableCollectionItemView *)self.superview _requestSelection];
+        }
+        else
+            [(TGEditableCollectionItemView *)self.superview setShowsEditingOptions:false animated:true];
     }
-    else
-        [(TGEditableCollectionItemView *)self.superview setShowsEditingOptions:false animated:true];
     
     [super touchesEnded:touches withEvent:event];
 }
 
 - (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event
 {
-    if (((UICollectionViewCell *)self.superview).highlighted)
-        [(UICollectionViewCell *)self.superview setHighlighted:false];
-    
     [super touchesMoved:touches withEvent:event];
 }
 
 - (void)touchesCancelled:(NSSet *)touches withEvent:(UIEvent *)event
 {
-    [(UICollectionViewCell *)self.superview setHighlighted:false];
+    if ([self.superview isKindOfClass:[UICollectionViewCell class]]) {
+        [(UICollectionViewCell *)self.superview setHighlighted:false];
+    }
     
     [super touchesCancelled:touches withEvent:event];
 }

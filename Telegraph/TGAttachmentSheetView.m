@@ -1,9 +1,10 @@
 #import "TGAttachmentSheetView.h"
 
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGAttachmentSheetWindow.h"
 
 #import "TGAttachmentSheetItemView.h"
-#import "TGImageUtils.h"
 #import "TGVerticalSwipeDismissGestureRecognizer.h"
 #import "TGAttachmentSheetScrollView.h"
 
@@ -459,7 +460,7 @@ static CGFloat blurDynamicOffset = 5.0f;
     
     CGFloat maxHeight = self.frame.size.width < (maxScreenSide - FLT_EPSILON) ? (maxScreenSide - 20.0f - 44.0f + 4.0f) : (minScreenHeight - 20.0f - 32.0f + 4.0f);
     
-    CGFloat separatorHeight = TGIsRetina() ? 0.5f : 1.0f;
+    CGFloat separatorHeight = TGScreenPixel;
     CGFloat containerHeight = 0.0f;
     for (TGAttachmentSheetItemView *itemView in _items)
     {

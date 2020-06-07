@@ -1,8 +1,9 @@
 #import "TGShareToolbarButton.h"
 #import "TGShareButton.h"
-#import "TGColor.h"
 
-#import "UIControl+HitTestEdgeInsets.h"
+#import <LegacyDatabase/LegacyDatabase.h>
+
+#import "UIControl+ShareHitTestEdgeInsets.h"
 
 @interface TGShareToolbarButton ()
 {
@@ -23,7 +24,7 @@
         
         _button = [[TGShareButton alloc] initWithFrame:self.bounds];
         _button.hitTestEdgeInsets = self.hitTestEdgeInsets;
-        _button.tintColor = TGColorWithHex(0x007ee5);
+        _button.tintColor = [UIColor hexColor:0x007ee5];
         [_button addTarget:self action:@selector(buttonPressed) forControlEvents:UIControlEventTouchUpInside];
         [self addSubview:_button];
     }

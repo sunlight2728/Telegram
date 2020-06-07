@@ -19,7 +19,7 @@
     return 0;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)__unused metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)__unused metaObject
 {
     TGLog(@"TLbuildFromMetaObject is not implemented for base type");
     return nil;
@@ -38,7 +38,7 @@
 
 - (int32_t)TLconstructorSignature
 {
-    return (int32_t)0x14637196;
+    return (int32_t)0xdfdaabe1;
 }
 
 - (int32_t)TLconstructorName
@@ -46,12 +46,13 @@
     return (int32_t)0xcab26024;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)metaObject
 {
     TLInputFileLocation$inputFileLocation *object = [[TLInputFileLocation$inputFileLocation alloc] init];
     object.volume_id = metaObject->getInt64((int32_t)0xdfa67416);
     object.local_id = metaObject->getInt32((int32_t)0x1a9ce92a);
     object.secret = metaObject->getInt64((int32_t)0x6706b4b7);
+    object.file_reference = metaObject->getBytes((int32_t)0x8bad663c);
     return object;
 }
 
@@ -75,6 +76,12 @@
         value.primitive.int64Value = self.secret;
         values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0x6706b4b7, value));
     }
+    {
+        TLConstructedValue value;
+        value.type = TLConstructedValueTypeBytes;
+        value.nativeObject = self.file_reference;
+        values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0x8bad663c, value));
+    }
 }
 
 
@@ -93,7 +100,7 @@
     return (int32_t)0xeabc984c;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)metaObject
 {
     TLInputFileLocation$inputEncryptedFileLocation *object = [[TLInputFileLocation$inputEncryptedFileLocation alloc] init];
     object.n_id = metaObject->getInt64((int32_t)0x7a5601fb);
@@ -125,7 +132,7 @@
 
 - (int32_t)TLconstructorSignature
 {
-    return (int32_t)0x4e45abe9;
+    return (int32_t)0x196683d9;
 }
 
 - (int32_t)TLconstructorName
@@ -133,9 +140,56 @@
     return (int32_t)0x9e5e6145;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)metaObject
 {
     TLInputFileLocation$inputDocumentFileLocation *object = [[TLInputFileLocation$inputDocumentFileLocation alloc] init];
+    object.n_id = metaObject->getInt64((int32_t)0x7a5601fb);
+    object.access_hash = metaObject->getInt64((int32_t)0x8f305224);
+    object.file_reference = metaObject->getBytes((int32_t)0x8bad663c);
+    return object;
+}
+
+- (void)TLfillFieldsWithValues:(std::map<int32_t, TLConstructedValue> *)values
+{
+    {
+        TLConstructedValue value;
+        value.type = TLConstructedValueTypePrimitiveInt64;
+        value.primitive.int64Value = self.n_id;
+        values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0x7a5601fb, value));
+    }
+    {
+        TLConstructedValue value;
+        value.type = TLConstructedValueTypePrimitiveInt64;
+        value.primitive.int64Value = self.access_hash;
+        values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0x8f305224, value));
+    }
+    {
+        TLConstructedValue value;
+        value.type = TLConstructedValueTypeBytes;
+        value.nativeObject = self.file_reference;
+        values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0x8bad663c, value));
+    }
+}
+
+
+@end
+
+@implementation TLInputFileLocation$inputSecureFileLocation : TLInputFileLocation
+
+
+- (int32_t)TLconstructorSignature
+{
+    return (int32_t)0xcbc7ee28;
+}
+
+- (int32_t)TLconstructorName
+{
+    return (int32_t)0x0da7ad9c;
+}
+
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)metaObject
+{
+    TLInputFileLocation$inputSecureFileLocation *object = [[TLInputFileLocation$inputSecureFileLocation alloc] init];
     object.n_id = metaObject->getInt64((int32_t)0x7a5601fb);
     object.access_hash = metaObject->getInt64((int32_t)0x8f305224);
     return object;
@@ -159,4 +213,3 @@
 
 
 @end
-

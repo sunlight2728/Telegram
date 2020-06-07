@@ -255,7 +255,7 @@ NSString *const TGUserInfoControllerIdentifier = @"TGUserInfoController";
     NSMutableArray *handles = [[NSMutableArray alloc] init];
     if (_channelModel.userName.length > 0)
     {
-        [handles addObject:[[TGUserHandle alloc] initWithHandle:[NSString stringWithFormat:@"telegram.me/%@", self->_channelModel.userName] type:TGLocalized(@"Channel.LinkItem") handleType:TGUserHandleTypeUndefined data:nil]];
+        [handles addObject:[[TGUserHandle alloc] initWithHandle:[NSString stringWithFormat:@"t.me/%@", self->_channelModel.userName] type:TGLocalized(@"Channel.LinkItem") handleType:TGUserHandleTypeUndefined data:nil]];
     }
     if (_channelModel.about.length > 0)
     {
@@ -333,7 +333,7 @@ NSString *const TGUserInfoControllerIdentifier = @"TGUserInfoController";
     
     bool muteForever = _channelModel.isChannelGroup;
     int32_t muteFor = muteForever ? INT_MAX : 1;
-    NSString *muteTitle = muteForever ? TGLocalized(@"Watch.UserInfo.Mute") : [NSString stringWithFormat:TGLocalized([TGStringUtils integerValueFormat:@"Watch.UserInfo.Mute_" value:muteFor]), muteFor];
+    NSString *muteTitle = muteForever ? TGLocalized(@"Watch.UserInfo.MuteTitle") : [NSString stringWithFormat:TGLocalized([TGStringUtils integerValueFormat:@"Watch.UserInfo.Mute_" value:muteFor]), muteFor];
     
     TGInterfaceMenuItem *muteItem = [[TGInterfaceMenuItem alloc] initWithItemIcon:muted ? WKMenuItemIconSpeaker : WKMenuItemIconMute title:muted ? TGLocalized(@"Watch.UserInfo.Unmute") : muteTitle actionBlock:^(TGInterfaceController *controller, TGInterfaceMenuItem *sender)
     {

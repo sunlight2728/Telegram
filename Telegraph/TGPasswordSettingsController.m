@@ -5,21 +5,24 @@
 #import "TGHeaderCollectionItem.h"
 #import "TGButtonCollectionItem.h"
 
-#import "TGProgressWindow.h"
-#import "TGAlertView.h"
+#import <LegacyComponents/TGProgressWindow.h>
+#import "TGCustomAlertView.h"
 
 #import "TGPasswordSetupController.h"
 #import "TGPasswordEmailController.h"
 #import "TGPasswordHintController.h"
 #import "TGPasswordConfirmationController.h"
+#import "TGPasswordPlaceholderItem.h"
 
 #import "TGTwoStepConfigSignal.h"
 #import "TGTwoStepSetPaswordSignal.h"
 #import "TGTwoStepVerifyPasswordSignal.h"
 
-#import "TGObserverProxy.h"
+#import <LegacyComponents/TGObserverProxy.h>
 
 #import <MTProtoKit/MTEncryption.h>
+
+#import "TGPresentation.h"
 
 @interface TGPasswordSettingsController ()
 {
@@ -31,6 +34,7 @@
     TGProgressWindow *_progressWindow;
     
     TGCollectionMenuSection *_withoutPasswordSection;
+    TGPasswordPlaceholderItem *_placeholderItem;
     TGButtonCollectionItem *_setPasswordItem;
     TGCommentCollectionItem *_setPasswordCommentItem;
     TGCommentCollectionItem *_passwordHelpItem;
@@ -63,9 +67,13 @@
         _configDisposable = [[SMetaDisposable alloc] init];
         _setPasswordDisposable = [[SMetaDisposable alloc] init];
         
+        _placeholderItem = [[TGPasswordPlaceholderItem alloc] initWithIcon:TGImageNamed(@"PasswordPlaceholderIcon.png") title:TGLocalized(@"TwoStepAuth.AdditionalPassword") text:TGLocalized(@"TwoStepAuth.SetPasswordHelp")];
+        
         _setPasswordItem = [[TGButtonCollectionItem alloc] initWithTitle:TGLocalized(@"TwoStepAuth.SetPassword") action:@selector(setPasswordPressed)];
+        _setPasswordItem.alignment = NSTextAlignmentCenter;
+        
         _setPasswordCommentItem = [[TGCommentCollectionItem alloc] initWithFormattedText:TGLocalized(@"TwoStepAuth.SetPasswordHelp")];
-        _withoutPasswordSection = [[TGCollectionMenuSection alloc] initWithItems:@[_setPasswordItem, _setPasswordCommentItem]];
+        _withoutPasswordSection = [[TGCollectionMenuSection alloc] initWithItems:@[_placeholderItem, _setPasswordItem, _setPasswordCommentItem]];
         _withoutPasswordSection.insets = UIEdgeInsetsMake(34.0f, 0.0f, 34.0f, 0.0f);
         
         _changePasswordItem = [[TGButtonCollectionItem alloc] initWithTitle:TGLocalized(@"TwoStepAuth.ChangePassword") action:@selector(changePasswordPressed)];
@@ -88,6 +96,24 @@
 {
     [_configDisposable dispose];
     [_setPasswordDisposable dispose];
+}
+
+- (void)viewDidLoad
+{
+    _setPasswordCommentItem.hidden = self.view.frame.size.width < self.view.frame.size.height;
+    [_setPasswordCommentItem setAlpha:!_setPasswordCommentItem.hidden ? 1.0f : 0.0f];
+    [self.collectionView reloadData];
+}
+
+- (void)layoutControllerForSize:(CGSize)size duration:(NSTimeInterval)duration
+{
+    [super layoutControllerForSize:size duration:duration];
+    
+    _setPasswordCommentItem.hidden = size.width < size.height;
+    [UIView animateWithDuration:duration animations:^
+    {
+       [_setPasswordCommentItem setAlpha:!_setPasswordCommentItem.hidden ? 1.0f : 0.0f];
+    }];
 }
 
 - (void)willEnterForeground:(__unused id)notification
@@ -118,7 +144,7 @@
         [self.menuSections deleteSection:0];
     }
     
-    if (_twoStepConfig.currentSalt != nil)
+    if (_twoStepConfig.hasPassword)
     {
         [self.menuSections addSection:_withPasswordSection];
         
@@ -164,7 +190,7 @@
                             TGProgressWindow *progressWindow = [[TGProgressWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
                             [progressWindow show:true];
                             
-                            [strongSelf->_setPasswordDisposable setDisposable:[[[[TGTwoStepSetPaswordSignal setPasswordWithCurrentSalt:nil currentPassword:nil nextSalt:strongSelf->_twoStepConfig.nextSalt nextPassword:password nextHint:hint email:email] deliverOn:[SQueue mainQueue]] onDispose:^
+                            [strongSelf->_setPasswordDisposable setDisposable:[[[[TGTwoStepSetPaswordSignal setPasswordWithCurrentAlgo:nil currentPassword:nil currentSecret:nil nextAlgo:strongSelf->_twoStepConfig.nextAlgo nextPassword:password nextHint:hint email:email nextSecureAlgo:strongSelf->_twoStepConfig.nextSecureAlgo secureRandom:strongSelf->_twoStepConfig.secureRandom srpId:strongSelf->_twoStepConfig.srpId srpB:strongSelf->_twoStepConfig.srpB] deliverOn:[SQueue mainQueue]] onDispose:^
                             {
                                 TGDispatchOnMainThread(^
                                 {
@@ -221,7 +247,7 @@
                                     }
                                     else
                                     {
-                                        [[[TGAlertView alloc] initWithTitle:nil message:TGLocalized(@"TwoStepAuth.PasswordSet") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil] show];
+                                        [TGCustomAlertView presentAlertWithTitle:nil message:TGLocalized(@"TwoStepAuth.PasswordSet") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
                                         
                                         [strongSelf.navigationController popToViewController:strongSelf animated:true];
                                     }
@@ -231,7 +257,7 @@
                                 NSString *errorText = TGLocalized(@"TwoStepAuth.EmailInvalid");
                                 if ([error respondsToSelector:@selector(hasPrefix:)] && [error hasPrefix:@"FLOOD_WAIT"])
                                     errorText = TGLocalized(@"TwoStepAuth.FloodError");
-                                [[[TGAlertView alloc] initWithTitle:nil message:errorText cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil] show];
+                                [TGCustomAlertView presentAlertWithTitle:nil message:errorText cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
                             } completed:nil]];
                         }
                     };
@@ -256,13 +282,13 @@
     
 }
 
-+ (void)removePasswordWhileWaitingForActivation:(UINavigationController *)navigationController twoStepConfig:(TGTwoStepConfig *)twoStepConfig
++ (void)removePasswordWhileWaitingForActivation:(UINavigationController *)navigationController twoStepConfig:(TGTwoStepConfig *)__unused twoStepConfig
 {
     TGProgressWindow *progressWindow = [[TGProgressWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
     [progressWindow show:true];
     
     __weak UINavigationController *weakNavigationController = navigationController;
-    [[[[TGTwoStepSetPaswordSignal setPasswordWithCurrentSalt:nil currentPassword:nil nextSalt:twoStepConfig.nextSalt nextPassword:nil nextHint:nil email:nil] deliverOn:[SQueue mainQueue]] onDispose:^
+    [[[[TGTwoStepSetPaswordSignal setPasswordWithCurrentAlgo:nil currentPassword:nil currentSecret:nil nextAlgo:nil nextPassword:nil nextHint:nil email:nil nextSecureAlgo:nil secureRandom:nil srpId:0 srpB:nil] deliverOn:[SQueue mainQueue]] onDispose:^
     {
         TGDispatchOnMainThread(^
         {
@@ -270,10 +296,10 @@
         });
     }] startWithNext:nil error:^(id error)
     {
-        NSString *errorText = TGLocalized(@"TwoStepAuth.GenericError");
+        NSString *errorText = TGLocalized(@"Login.UnknownError");
         if ([error respondsToSelector:@selector(hasPrefix:)] && [error hasPrefix:@"FLOOD_WAIT"])
             errorText = TGLocalized(@"TwoStepAuth.FloodError");
-        [[[TGAlertView alloc] initWithTitle:nil message:errorText cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil] show];
+        [TGCustomAlertView presentAlertWithTitle:nil message:errorText cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
     } completed:^
     {
         __strong UINavigationController *navigationController = weakNavigationController;
@@ -303,7 +329,16 @@
                         [progressWindow show:true];
                         
                         __weak TGPasswordSettingsController *weakSelf = strongSelf;
-                        [strongSelf->_setPasswordDisposable setDisposable:[[[TGTwoStepSetPaswordSignal setPasswordWithCurrentSalt:strongSelf->_twoStepConfig.currentSalt currentPassword:strongSelf->_currentPassword nextSalt:strongSelf->_twoStepConfig.nextSalt nextPassword:password nextHint:hint email:nil] deliverOn:[SQueue mainQueue]] startWithNext:^(TGTwoStepConfig *config)
+                        
+                        SSignal *signal = [[TGTwoStepVerifyPasswordSignal passwordSettings:strongSelf->_currentPassword config:strongSelf->_twoStepConfig] mapToSignal:^SSignal *(TGPasswordSettings *settings)
+                        {
+                            return [[TGTwoStepConfigSignal twoStepConfig] mapToSignal:^SSignal *(TGTwoStepConfig *nextConfig) {
+                                return [TGTwoStepSetPaswordSignal setPasswordWithCurrentAlgo:nextConfig.currentAlgo currentPassword:settings.password currentSecret:settings.secret nextAlgo:nextConfig.nextAlgo nextPassword:password nextHint:hint email:nil nextSecureAlgo:nextConfig.nextSecureAlgo secureRandom:nextConfig.secureRandom srpId:nextConfig.srpId srpB:nextConfig.srpB];
+                            }];
+                        }];
+                        
+                        
+                        [strongSelf->_setPasswordDisposable setDisposable:[[signal deliverOn:[SQueue mainQueue]] startWithNext:^(TGTwoStepConfig *config)
                         {
                             __strong TGPasswordSettingsController *strongSelf = weakSelf;
                             if (strongSelf != nil)
@@ -316,10 +351,10 @@
                         {
                             [progressWindow dismiss:true];
                             
-                            NSString *errorText = TGLocalized(@"TwoStepAuth.GenericError");
+                            NSString *errorText = TGLocalized(@"Login.UnknownError");
                             if ([error respondsToSelector:@selector(hasPrefix:)] && [error hasPrefix:@"FLOOD_WAIT"])
                                 errorText = TGLocalized(@"TwoStepAuth.FloodError");
-                            [[[TGAlertView alloc] initWithTitle:nil message:errorText cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil] show];
+                            [TGCustomAlertView presentAlertWithTitle:nil message:errorText cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
                         } completed:^
                         {
                             [progressWindow dismiss:true];
@@ -336,7 +371,14 @@
                                 TGProgressWindow *progressWindow = [[TGProgressWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
                                 [progressWindow show:true];
                                 
-                                [strongSelf->_setPasswordDisposable setDisposable:[[[[TGTwoStepSetPaswordSignal setPasswordWithCurrentSalt:strongSelf->_twoStepConfig.currentSalt currentPassword:strongSelf->_currentPassword nextSalt:strongSelf->_twoStepConfig.nextSalt nextPassword:password nextHint:hint email:email] deliverOn:[SQueue mainQueue]] onDispose:^
+                                SSignal *signal = [[TGTwoStepVerifyPasswordSignal passwordSettings:strongSelf->_currentPassword config:strongSelf->_twoStepConfig] mapToSignal:^SSignal *(TGPasswordSettings *settings)
+                                {
+                                    return [[TGTwoStepConfigSignal twoStepConfig] mapToSignal:^SSignal *(TGTwoStepConfig *nextConfig) {
+                                        return [TGTwoStepSetPaswordSignal setPasswordWithCurrentAlgo:nextConfig.currentAlgo currentPassword:settings.password currentSecret:settings.secret nextAlgo:nextConfig.nextAlgo nextPassword:password nextHint:hint email:email  nextSecureAlgo:nextConfig.nextSecureAlgo secureRandom:nextConfig.secureRandom srpId:nextConfig.srpId srpB:nextConfig.srpB];
+                                    }];
+                                }];
+                                
+                                [strongSelf->_setPasswordDisposable setDisposable:[[[signal deliverOn:[SQueue mainQueue]] onDispose:^
                                 {
                                     [progressWindow dismiss:true];
                                 }] startWithNext:^(TGTwoStepConfig *config)
@@ -346,11 +388,11 @@
                                     {
                                         if (email.length != 0)
                                         {
-                                            [[[TGAlertView alloc] initWithTitle:nil message:TGLocalized(@"TwoStepAuth.EmailSent") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil] show];
+                                            [TGCustomAlertView presentAlertWithTitle:nil message:TGLocalized(@"TwoStepAuth.EmailSent") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
                                         }
                                         else
                                         {
-                                            [[[TGAlertView alloc] initWithTitle:nil message:TGLocalized(@"TwoStepAuth.PasswordSet") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil] show];
+                                            [TGCustomAlertView presentAlertWithTitle:nil message:TGLocalized(@"TwoStepAuth.PasswordSet") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
                                         }
                                         
                                         [strongSelf setTwoStepConfig:config];
@@ -358,7 +400,7 @@
                                     }
                                 } error:^(__unused id error)
                                 {
-                                    [[[TGAlertView alloc] initWithTitle:nil message:TGLocalized(@"TwoStepAuth.EmailInvalid") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil] show];
+                                    [TGCustomAlertView presentAlertWithTitle:nil message:TGLocalized(@"TwoStepAuth.EmailInvalid") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
                                 } completed:nil]];
                             }
                         };
@@ -381,8 +423,10 @@
 
 - (void)removePasswordPressed
 {
+    NSString *text = _twoStepConfig.hasSecureValues ? TGLocalized(@"TwoStepAuth.PasswordRemovePassportConfirmation") : TGLocalized(@"TwoStepAuth.PasswordRemoveConfirmation");
+    
     __weak TGPasswordSettingsController *weakSelf = self;
-    [[[TGAlertView alloc] initWithTitle:nil message:TGLocalized(@"TwoStepAuth.PasswordRemoveConfirmation") cancelButtonTitle:TGLocalized(@"Common.Cancel") okButtonTitle:TGLocalized(@"Common.OK") completionBlock:^(bool okButtonPressed)
+    [TGCustomAlertView presentAlertWithTitle:nil message:text cancelButtonTitle:TGLocalized(@"Common.Cancel") okButtonTitle:TGLocalized(@"Common.OK") completionBlock:^(bool okButtonPressed)
     {
         if (okButtonPressed)
         {
@@ -392,7 +436,11 @@
                 TGProgressWindow *progressWindow = [[TGProgressWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
                 [progressWindow show:true];
                 
-                [strongSelf->_setPasswordDisposable setDisposable:[[[TGTwoStepSetPaswordSignal setPasswordWithCurrentSalt:strongSelf->_twoStepConfig.currentSalt currentPassword:strongSelf->_currentPassword nextSalt:nil nextPassword:@"" nextHint:nil email:nil] deliverOn:[SQueue mainQueue]] startWithNext:^(TGTwoStepConfig *config)
+                SSignal *signal = [[TGTwoStepConfigSignal twoStepConfig] mapToSignal:^SSignal *(TGTwoStepConfig *nextConfig) {
+                    return [TGTwoStepSetPaswordSignal setPasswordWithCurrentAlgo:nextConfig.currentAlgo currentPassword:strongSelf->_currentPassword currentSecret:nil nextAlgo:nil nextPassword:@"" nextHint:nil email:nil nextSecureAlgo:nil secureRandom:nil srpId:nextConfig.srpId srpB:nextConfig.srpB];
+                }];
+                
+                [strongSelf->_setPasswordDisposable setDisposable:[[signal deliverOn:[SQueue mainQueue]] startWithNext:^(TGTwoStepConfig *config)
                 {
                     __strong TGPasswordSettingsController *strongSelf = weakSelf;
                     if (strongSelf != nil)
@@ -404,17 +452,17 @@
                 {
                     [progressWindow dismiss:true];
                     
-                    NSString *errorText = TGLocalized(@"TwoStepAuth.GenericError");
+                    NSString *errorText = TGLocalized(@"Login.UnknownError");
                     if ([error respondsToSelector:@selector(hasPrefix:)] && [error hasPrefix:@"FLOOD_WAIT"])
                         errorText = TGLocalized(@"TwoStepAuth.FloodError");
-                    [[[TGAlertView alloc] initWithTitle:nil message:errorText cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil] show];
+                    [TGCustomAlertView presentAlertWithTitle:nil message:errorText cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
                 } completed:^
                 {
                     [progressWindow dismiss:true];
                 }]];
             }
         }
-    }] show];
+    }];
 }
 
 - (void)emailActionPressed
@@ -432,7 +480,12 @@
                 TGProgressWindow *progressWindow = [[TGProgressWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
                 [progressWindow show:true];
                 
-                [strongSelf->_setPasswordDisposable setDisposable:[[[[TGTwoStepSetPaswordSignal setRecoveryEmail:strongSelf->_twoStepConfig.currentSalt currentPassword:strongSelf->_currentPassword recoveryEmail:email] deliverOn:[SQueue mainQueue]] onDispose:^
+                SSignal *signal = [[TGTwoStepConfigSignal twoStepConfig] mapToSignal:^SSignal *(TGTwoStepConfig *nextConfig)
+                {
+                    return [TGTwoStepSetPaswordSignal setRecoveryEmail:email currentPassword:strongSelf->_currentPassword algo:nextConfig.currentAlgo srpId:nextConfig.srpId srpB:nextConfig.srpB];
+                }];
+                
+                [strongSelf->_setPasswordDisposable setDisposable:[[[signal deliverOn:[SQueue mainQueue]] onDispose:^
                 {
                     [progressWindow dismiss:true];
                 }] startWithNext:^(TGTwoStepConfig *config)
@@ -440,14 +493,14 @@
                     __strong TGPasswordSettingsController *strongSelf = weakSelf;
                     if (strongSelf != nil)
                     {
-                        [[[TGAlertView alloc] initWithTitle:nil message:TGLocalized(@"TwoStepAuth.EmailSent") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil] show];
+                        [TGCustomAlertView presentAlertWithTitle:nil message:TGLocalized(@"TwoStepAuth.EmailSent") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
                         
                         [strongSelf setTwoStepConfig:config];
                         [strongSelf.navigationController popToViewController:strongSelf animated:true];
                     }
                 } error:^(__unused id error)
                 {
-                    [[[TGAlertView alloc] initWithTitle:nil message:TGLocalized(@"TwoStepAuth.EmailInvalid") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil] show];
+                    [TGCustomAlertView presentAlertWithTitle:nil message:TGLocalized(@"TwoStepAuth.EmailInvalid") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
                 } completed:nil]];
             }
         }

@@ -1,28 +1,24 @@
 #import "TGSelectContactController.h"
 
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGAppDelegate.h"
 #import "TGRootController.h"
 
-#import "TGToolbarButton.h"
-
-#import "TGUser.h"
 #import "TGInterfaceManager.h"
 
-#import "SGraphObjectNode.h"
+#import <LegacyComponents/SGraphObjectNode.h>
 
 #import "TGMessage+Telegraph.h"
 
 #import "TGDatabase.h"
 #import "TGTelegraph.h"
 
-#import "TGProgressWindow.h"
+#import <LegacyComponents/TGProgressWindow.h>
 
 #import "TGCreateGroupController.h"
 
-#import "TGImageUtils.h"
-#import "TGFont.h"
-
-#import "TGAlertView.h"
+#import "TGCustomAlertView.h"
 #import "TGApplicationFeatures.h"
 
 #import "TGChannelManagementSignals.h"
@@ -30,6 +26,8 @@
 #import "TGTelegramNetworking.h"
 
 #import "TGGroupInfoContactListCreateLinkCell.h"
+
+#import "TGPresentation.h"
 
 @interface TGSelectContactController ()
 {
@@ -46,6 +44,7 @@
 @property (nonatomic) bool createBroadcast;
 @property (nonatomic) bool createChannel;
 @property (nonatomic) bool inviteToChannel;
+@property (nonatomic) bool call;
 
 @property (nonatomic, strong) TGProgressWindow *progressWindow;
 
@@ -57,6 +56,11 @@
 
 - (id)initWithCreateGroup:(bool)createGroup createEncrypted:(bool)createEncrypted createBroadcast:(bool)createBroadcast createChannel:(bool)createChannel inviteToChannel:(bool)inviteToChannel showLink:(bool)showLink
 {
+    return [self initWithCreateGroup:createGroup createEncrypted:createEncrypted createBroadcast:createBroadcast createChannel:createChannel inviteToChannel:inviteToChannel showLink:showLink call:false];
+}
+
+- (id)initWithCreateGroup:(bool)createGroup createEncrypted:(bool)createEncrypted createBroadcast:(bool)createBroadcast createChannel:(bool)createChannel inviteToChannel:(bool)inviteToChannel showLink:(bool)showLink call:(bool)call
+{
     int contactsMode = TGContactsModeRegistered;
     if (createEncrypted)
     {
@@ -67,19 +71,23 @@
         _createBroadcast = createBroadcast;
         _createChannel = createChannel;
         _inviteToChannel = inviteToChannel;
+        _call = call;
         
         if (createGroup)
-            contactsMode |= TGContactsModeCompose;
+            contactsMode |= TGContactsModeCompose | TGContactsModeSearchGlobal;
         else if (createChannel || inviteToChannel) {
             contactsMode |= (TGContactsModeCompose | TGContactsModeSearchGlobal);
             if (showLink) {
                 contactsMode |= TGContactsModeCreateGroupLink | TGContactsModeManualFirstSection;
             }
         }
-        else
+        else if (!call)
         {
             contactsMode |= TGContactsModeCreateGroupOption;
         }
+        
+        if (call)
+            contactsMode |= TGContactsModeCalls;
         
         if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad)
         {
@@ -90,6 +98,7 @@
     self = [super initWithContactsMode:contactsMode];
     if (self)
     {
+        self.presentation = TGPresentation.current;
         if (createChannel || inviteToChannel) {
             self.usersSelectedLimit = 0;
             self.composePlaceholder = TGLocalized(@"Compose.ChannelTokenListPlaceholder");
@@ -110,6 +119,10 @@
 #if TARGET_IPHONE_SIMULATOR
             //self.usersSelectedLimit = 10;
 #endif
+            
+            if (createEncrypted || call) {
+                self.ignoreBots = true;
+            }
             
             _displayUserCountLimit = self.usersSelectedLimit + 1;
             
@@ -207,10 +220,10 @@
             NSString *errorType = [[TGTelegramNetworking instance] extractNetworkErrorType:error];
             NSString *errorText = TGLocalized(@"Profile.CreateEncryptedChatError");
             if ([errorType isEqual:@"USER_BLOCKED"]) {
-                errorText = _channelConversation.isChannelGroup ? TGLocalized(@"Group.ErrorAddBlocked") : TGLocalized(@"Channel.ErrorAddBlocked");
+                errorText = _channelConversation.isChannelGroup ? TGLocalized(@"Group.ErrorAddBlocked") : TGLocalized(@"Group.ErrorAddBlocked");
             } else if ([errorType isEqual:@"USERS_TOO_MUCH"]) {
                 if (_channelConversation.isChannelGroup) {
-                    errorText = TGLocalized(@"Group.ErrorAddTooMuch");
+                    errorText = TGLocalized(@"ConversationProfile.UsersTooMuchError");
                 } else {
                     errorText = TGLocalized(@"Channel.ErrorAddTooMuch");
                 }
@@ -228,7 +241,7 @@
                 }
             }
             
-            [[[TGAlertView alloc] initWithTitle:nil message:errorText cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil] show];
+            [TGCustomAlertView presentAlertWithTitle:nil message:errorText cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
         } completed:nil];
     }
 }
@@ -240,7 +253,7 @@
     {
         if ([self.tableView indexPathForSelectedRow])
             [self.tableView deselectRowAtIndexPath:[self.tableView indexPathForSelectedRow] animated:true];
-        [[[TGAlertView alloc] initWithTitle:TGLocalized(@"FeatureDisabled.Oops") message:disabledMessage cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil] show];
+        [TGCustomAlertView presentAlertWithTitle:TGLocalized(@"FeatureDisabled.Oops") message:disabledMessage cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
         return;
     }
     
@@ -287,7 +300,7 @@
         
         _titleLabel = [[UILabel alloc] init];
         _titleLabel.backgroundColor = [UIColor clearColor];
-        _titleLabel.textColor = [UIColor blackColor];
+        _titleLabel.textColor = self.presentation.pallete.navigationTitleColor;
         _titleLabel.font = TGBoldSystemFontOfSize(17.0f);
         _titleLabel.text = [self baseTitle];
         [_titleLabel sizeToFit];
@@ -295,7 +308,7 @@
         
         _counterLabel = [[UILabel alloc] init];
         _counterLabel.backgroundColor = [UIColor clearColor];
-        _counterLabel.textColor = UIColorRGB(0x8e8e93);
+        _counterLabel.textColor = self.presentation.pallete.navigationSubtitleColor;
         _counterLabel.font = TGSystemFontOfSize(15.0f);
         _counterLabel.text = [[NSString alloc] initWithFormat:@"0/%d", _displayUserCountLimit];
         if (!_createChannel && !_inviteToChannel) {
@@ -307,6 +320,10 @@
     else if (_createEncrypted)
     {
         self.titleText = TGLocalized(@"Compose.NewEncryptedChat");
+    }
+    else if (_call)
+    {
+        self.titleText = TGLocalized(@"Calls.NewCall");
     }
     else
     {
@@ -350,7 +367,11 @@
         landscapeOffset = 1.0f;
         indicatorOffset = 0.0f;
     }
-    
+    if (UIInterfaceOrientationIsPortrait(orientation)) {
+        _counterLabel.font = TGSystemFontOfSize(13.0f);
+    } else {
+        _counterLabel.font = TGSystemFontOfSize(15.0f);
+    }
     [_counterLabel sizeToFit];
     CGSize counterSize = _counterLabel.frame.size;
     
@@ -360,10 +381,14 @@
         titleLabelFrame.origin = CGPointMake(CGFloor((_titleContainer.frame.size.width - titleLabelFrame.size.width) / 2.0f), CGFloor((_titleContainer.frame.size.height - titleLabelFrame.size.height) / 2.0f) + (UIInterfaceOrientationIsPortrait(orientation) ? portraitOffset : landscapeOffset));
         _titleLabel.frame = titleLabelFrame;
     } else {
-        titleLabelFrame.origin = CGPointMake(CGFloor((_titleContainer.frame.size.width - titleLabelFrame.size.width) / 2.0f - counterSize.width / 2.0f), CGFloor((_titleContainer.frame.size.height - titleLabelFrame.size.height) / 2.0f) + (UIInterfaceOrientationIsPortrait(orientation) ? portraitOffset : landscapeOffset));
+        titleLabelFrame.origin = CGPointMake(CGFloor((_titleContainer.frame.size.width - titleLabelFrame.size.width) / 2.0f - (UIInterfaceOrientationIsPortrait(orientation) ? 0 : counterSize.width / 2.0f)), CGFloor((_titleContainer.frame.size.height - titleLabelFrame.size.height) / 2.0f) + (UIInterfaceOrientationIsPortrait(orientation) ? portraitOffset : landscapeOffset) - (UIInterfaceOrientationIsPortrait(orientation) ? 7.0f : 0.0f));
         _titleLabel.frame = titleLabelFrame;
         
-        _counterLabel.frame = CGRectMake(CGRectGetMaxX(titleLabelFrame) + 4, titleLabelFrame.origin.y + 2 - TGRetinaPixel, counterSize.width, counterSize.height);
+        if (UIInterfaceOrientationIsPortrait(orientation)) {
+            _counterLabel.frame = CGRectMake(CGFloor((_titleContainer.frame.size.width - counterSize.width) / 2.0f), CGRectGetMaxY(titleLabelFrame) - 2.0f, counterSize.width, counterSize.height);
+        } else {
+            _counterLabel.frame = CGRectMake(CGRectGetMaxX(titleLabelFrame) + 4, titleLabelFrame.origin.y + 2 - TGScreenPixel, counterSize.width, counterSize.height);
+        }
     }
 }
 
@@ -424,6 +449,11 @@
         static int actionId = 0;
         [ActionStageInstance() requestActor:[[NSString alloc] initWithFormat:@"/tg/encrypted/createChat/(profile%d)", actionId++] options:@{@"uid": @(user.uid)} flags:0 watcher:self];
     }
+    else if (_call)
+    {
+        if (self.onCall != nil)
+            self.onCall(user);
+    }
     else
     {
         [super singleUserSelected:user];
@@ -472,7 +502,7 @@
             }
             else
             {
-                [[[TGAlertView alloc] initWithTitle:nil message:status == -2 ? [[NSString alloc] initWithFormat:TGLocalized(@"Profile.CreateEncryptedChatOutdatedError"), _currentEncryptedUser.displayFirstName, _currentEncryptedUser.displayFirstName] : TGLocalized(@"Profile.CreateEncryptedChatError") delegate:nil cancelButtonTitle:TGLocalized(@"Common.OK") otherButtonTitles:nil] show];
+                [TGCustomAlertView presentAlertWithTitle:nil message:status == -2 ? [[NSString alloc] initWithFormat:TGLocalized(@"Profile.CreateEncryptedChatOutdatedError"), _currentEncryptedUser.displayFirstName, _currentEncryptedUser.displayFirstName] : TGLocalized(@"Profile.CreateEncryptedChatError") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
             }
         });
     }
@@ -488,7 +518,7 @@
     {
         cell = [[TGGroupInfoContactListCreateLinkCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"TGGroupInfoContactListCreateLinkCell"];
     }
-    
+    cell.presentation = self.presentation;
     return cell;
 }
 

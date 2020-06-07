@@ -19,7 +19,7 @@
     return 0;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)__unused metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)__unused metaObject
 {
     TGLog(@"TLbuildFromMetaObject is not implemented for base type");
     return nil;
@@ -33,22 +33,23 @@
 
 @end
 
-@implementation TLConfig$config : TLConfig
+@implementation TLConfig$configMeta : TLConfig
 
 
 - (int32_t)TLconstructorSignature
 {
-    return (int32_t)0x317ceef4;
+    return (int32_t)0x1a65a4a8;
 }
 
 - (int32_t)TLconstructorName
 {
-    return (int32_t)0x9167d250;
+    return (int32_t)0x75d38a0e;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)metaObject
 {
-    TLConfig$config *object = [[TLConfig$config alloc] init];
+    TLConfig$configMeta *object = [[TLConfig$configMeta alloc] init];
+    object.flags = metaObject->getInt32((int32_t)0x81915c23);
     object.date = metaObject->getInt32((int32_t)0xb76958ba);
     object.expires = metaObject->getInt32((int32_t)0x4743fb6b);
     object.test_mode = metaObject->getBool((int32_t)0x1288ca35);
@@ -63,17 +64,34 @@
     object.online_cloud_timeout_ms = metaObject->getInt32((int32_t)0x97f00373);
     object.notify_cloud_delay_ms = metaObject->getInt32((int32_t)0x58eb0cde);
     object.notify_default_delay_ms = metaObject->getInt32((int32_t)0xffe3a208);
-    object.chat_big_size = metaObject->getInt32((int32_t)0xbb094b49);
     object.push_chat_period_ms = metaObject->getInt32((int32_t)0x6755b26f);
     object.push_chat_limit = metaObject->getInt32((int32_t)0x68adc403);
     object.saved_gifs_limit = metaObject->getInt32((int32_t)0xc5b5cecd);
     object.edit_time_limit = metaObject->getInt32((int32_t)0x70ce70f9);
-    object.disabled_features = metaObject->getArray((int32_t)0x4f56c735);
+    object.rating_e_decay = metaObject->getInt32((int32_t)0x86a34057);
+    object.stickers_recent_limit = metaObject->getInt32((int32_t)0x7efa480e);
+    object.stickers_faved_limit = metaObject->getInt32((int32_t)0x809f4d42);
+    object.channels_read_media_period = metaObject->getInt32((int32_t)0xbaf97684);
+    object.tmp_sessions = metaObject->getInt32((int32_t)0xe9a8fb12);
+    object.pinned_dialogs_count_max = metaObject->getInt32((int32_t)0x52bee8cc);
+    object.call_receive_timeout_ms = metaObject->getInt32((int32_t)0x6ee06778);
+    object.call_ring_timeout_ms = metaObject->getInt32((int32_t)0xa81b0ad3);
+    object.call_connect_timeout_ms = metaObject->getInt32((int32_t)0x20390966);
+    object.call_packet_timeout_ms = metaObject->getInt32((int32_t)0x18855e6);
+    object.me_url_prefix = metaObject->getString((int32_t)0xf0f97064);
+    object.suggested_lang_code = metaObject->getString((int32_t)0x71655114);
+    object.lang_pack_version = metaObject->getInt32((int32_t)0xa3b7dbcd);
     return object;
 }
 
 - (void)TLfillFieldsWithValues:(std::map<int32_t, TLConstructedValue> *)values
 {
+    {
+        TLConstructedValue value;
+        value.type = TLConstructedValueTypePrimitiveInt32;
+        value.primitive.int32Value = self.flags;
+        values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0x81915c23, value));
+    }
     {
         TLConstructedValue value;
         value.type = TLConstructedValueTypePrimitiveInt32;
@@ -161,12 +179,6 @@
     {
         TLConstructedValue value;
         value.type = TLConstructedValueTypePrimitiveInt32;
-        value.primitive.int32Value = self.chat_big_size;
-        values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0xbb094b49, value));
-    }
-    {
-        TLConstructedValue value;
-        value.type = TLConstructedValueTypePrimitiveInt32;
         value.primitive.int32Value = self.push_chat_period_ms;
         values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0x6755b26f, value));
     }
@@ -190,9 +202,81 @@
     }
     {
         TLConstructedValue value;
-        value.type = TLConstructedValueTypeVector;
-        value.nativeObject = self.disabled_features;
-        values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0x4f56c735, value));
+        value.type = TLConstructedValueTypePrimitiveInt32;
+        value.primitive.int32Value = self.rating_e_decay;
+        values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0x86a34057, value));
+    }
+    {
+        TLConstructedValue value;
+        value.type = TLConstructedValueTypePrimitiveInt32;
+        value.primitive.int32Value = self.stickers_recent_limit;
+        values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0x7efa480e, value));
+    }
+    {
+        TLConstructedValue value;
+        value.type = TLConstructedValueTypePrimitiveInt32;
+        value.primitive.int32Value = self.stickers_faved_limit;
+        values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0x809f4d42, value));
+    }
+    {
+        TLConstructedValue value;
+        value.type = TLConstructedValueTypePrimitiveInt32;
+        value.primitive.int32Value = self.channels_read_media_period;
+        values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0xbaf97684, value));
+    }
+    {
+        TLConstructedValue value;
+        value.type = TLConstructedValueTypePrimitiveInt32;
+        value.primitive.int32Value = self.tmp_sessions;
+        values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0xe9a8fb12, value));
+    }
+    {
+        TLConstructedValue value;
+        value.type = TLConstructedValueTypePrimitiveInt32;
+        value.primitive.int32Value = self.pinned_dialogs_count_max;
+        values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0x52bee8cc, value));
+    }
+    {
+        TLConstructedValue value;
+        value.type = TLConstructedValueTypePrimitiveInt32;
+        value.primitive.int32Value = self.call_receive_timeout_ms;
+        values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0x6ee06778, value));
+    }
+    {
+        TLConstructedValue value;
+        value.type = TLConstructedValueTypePrimitiveInt32;
+        value.primitive.int32Value = self.call_ring_timeout_ms;
+        values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0xa81b0ad3, value));
+    }
+    {
+        TLConstructedValue value;
+        value.type = TLConstructedValueTypePrimitiveInt32;
+        value.primitive.int32Value = self.call_connect_timeout_ms;
+        values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0x20390966, value));
+    }
+    {
+        TLConstructedValue value;
+        value.type = TLConstructedValueTypePrimitiveInt32;
+        value.primitive.int32Value = self.call_packet_timeout_ms;
+        values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0x18855e6, value));
+    }
+    {
+        TLConstructedValue value;
+        value.type = TLConstructedValueTypeString;
+        value.nativeObject = self.me_url_prefix;
+        values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0xf0f97064, value));
+    }
+    {
+        TLConstructedValue value;
+        value.type = TLConstructedValueTypeString;
+        value.nativeObject = self.suggested_lang_code;
+        values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0x71655114, value));
+    }
+    {
+        TLConstructedValue value;
+        value.type = TLConstructedValueTypePrimitiveInt32;
+        value.primitive.int32Value = self.lang_pack_version;
+        values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0xa3b7dbcd, value));
     }
 }
 

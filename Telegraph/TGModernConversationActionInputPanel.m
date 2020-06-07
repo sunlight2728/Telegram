@@ -1,16 +1,19 @@
 #import "TGModernConversationActionInputPanel.h"
 
-#import "TGImageUtils.h"
-#import "TGViewController.h"
+#import <LegacyComponents/LegacyComponents.h>
 
-#import "TGModernButton.h"
+#import <LegacyComponents/TGModernButton.h>
 
-#import "ASHandle.h"
+#import <LegacyComponents/ASHandle.h>
+
+#import "TGPresentation.h"
 
 @interface TGModernConversationActionInputPanel ()
 {
-    NSString *_action;
+    UIEdgeInsets _safeAreaInset;
     
+    NSString *_action;
+        
     CALayer *_stripeLayer;
     TGModernButton *_actionButton;
     UIImageView *_iconView;
@@ -18,6 +21,7 @@
     UIActivityIndicatorView *_activityIndicator;
     
     TGModernConversationActionInputPanelIcon _icon;
+    bool _destructive;
 }
 
 @end
@@ -41,10 +45,10 @@
     self = [super initWithFrame:CGRectMake(frame.origin.x, frame.origin.y, frame.size.width, [self baseHeight])];
     if (self)
     {
-        self.backgroundColor = UIColorRGBA(0xfafafa, 0.98f);
+        self.backgroundColor = UIColorRGB(0xf7f7f7);
         
         _stripeLayer = [[CALayer alloc] init];
-        _stripeLayer.backgroundColor = UIColorRGBA(0xb3aab2, 0.4f).CGColor;
+        _stripeLayer.backgroundColor = UIColorRGB(0xb2b2b2).CGColor;
         [self.layer addSublayer:_stripeLayer];
         
         _actionButton = [[TGModernButton alloc] initWithFrame:CGRectZero];
@@ -56,9 +60,24 @@
     return self;
 }
 
+- (void)setPresentation:(TGPresentation *)presentation
+{
+    [super setPresentation:presentation];
+    
+    self.backgroundColor = presentation.pallete.barBackgroundColor;
+    _stripeLayer.backgroundColor = presentation.pallete.barSeparatorColor.CGColor;
+    
+    if (_icon == TGModernConversationActionInputPanelIconJoin)
+        _iconView.image = [self joinImage:self.presentation.pallete.accentColor];
+    
+    if (_destructive)
+        [_actionButton setTitleColor:self.presentation.pallete.destructiveColor];
+}
+
 - (void)setActionWithTitle:(NSString *)title action:(NSString *)action
 {
-    [self setActionWithTitle:title action:action color:TGDestructiveAccentColor()];
+    _destructive = true;
+    [self setActionWithTitle:title action:action color:self.presentation.pallete.destructiveColor];
 }
 
 - (void)setActionWithTitle:(NSString *)title action:(NSString *)action color:(UIColor *)color
@@ -66,19 +85,17 @@
     [self setActionWithTitle:title action:action color:color icon:TGModernConversationActionInputPanelIconNone];
 }
 
-- (UIImage *)joinImage {
-    static UIImage *image = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        CGFloat side = 18.0f;
-        UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), false, 0.0f);
-        CGContextRef context = UIGraphicsGetCurrentContext();
-        CGContextSetFillColorWithColor(context, TGAccentColor().CGColor);
-        CGContextFillRect(context, CGRectMake(side / 2.0f - 0.5f, 0.0f, 1.5f, side));
-        CGContextFillRect(context, CGRectMake(0.0f, side / 2.0f - 0.5f, side, 1.5f));
-        image = UIGraphicsGetImageFromCurrentImageContext();
-        UIGraphicsEndImageContext();
-    });
+- (UIImage *)joinImage:(UIColor *)color
+{
+    CGFloat side = 18.0f;
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), false, 0.0f);
+    CGContextRef context = UIGraphicsGetCurrentContext();
+    CGContextSetFillColorWithColor(context, color.CGColor);
+    CGContextFillRect(context, CGRectMake(side / 2.0f - 0.5f, 0.0f, 1.5f, side));
+    CGContextFillRect(context, CGRectMake(0.0f, side / 2.0f - 0.5f, side, 1.5f));
+    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    
     return image;
 }
 
@@ -99,13 +116,16 @@
         }
         case TGModernConversationActionInputPanelIconJoin: {
             if (_iconView == nil) {
-                _iconView = [[UIImageView alloc] init];
+                _iconView = [[UIImageView alloc] initWithFrame:CGRectMake(0.0f, 0.0f, 18.0f, 18.0f)];
             }
             if (_iconView.superview == nil) {
                 [_actionButton addSubview:_iconView];
             }
-            _iconView.image = [self joinImage];
-            [_iconView sizeToFit];
+            if (self.presentation != nil)
+            {
+                _iconView.image = [self joinImage:self.presentation.pallete.accentColor];
+                [_iconView sizeToFit];
+            }
             break;
         }
     }
@@ -122,6 +142,7 @@
         if (_activityIndicator == nil)
         {
             _activityIndicator = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleGray];
+            _activityIndicator.color = self.presentation.pallete.secondaryTextColor;
         }
         
         if (_activityIndicator.superview == nil)
@@ -138,18 +159,20 @@
     }
 }
 
-- (void)adjustForSize:(CGSize)size keyboardHeight:(CGFloat)keyboardHeight duration:(NSTimeInterval)duration animationCurve:(int)animationCurve
+- (void)adjustForSize:(CGSize)size keyboardHeight:(CGFloat)keyboardHeight duration:(NSTimeInterval)duration animationCurve:(int)animationCurve contentAreaHeight:(CGFloat)contentAreaHeight safeAreaInset:(UIEdgeInsets)safeAreaInset
 {
-    [self _adjustForSize:size keyboardHeight:keyboardHeight duration:duration animationCurve:animationCurve];
+    [self _adjustForSize:size keyboardHeight:keyboardHeight duration:duration animationCurve:animationCurve contentAreaHeight:contentAreaHeight safeAreaInset:safeAreaInset];
 }
 
-- (void)_adjustForSize:(CGSize)size keyboardHeight:(CGFloat)keyboardHeight duration:(NSTimeInterval)duration animationCurve:(int)animationCurve
+- (void)_adjustForSize:(CGSize)size keyboardHeight:(CGFloat)keyboardHeight duration:(NSTimeInterval)duration animationCurve:(int)animationCurve contentAreaHeight:(CGFloat)__unused contentAreaHeight safeAreaInset:(UIEdgeInsets)safeAreaInset
 {
+    _safeAreaInset = safeAreaInset;
+    
     dispatch_block_t block = ^
     {
         CGSize messageAreaSize = size;
         
-        self.frame = CGRectMake(0, messageAreaSize.height - keyboardHeight - [self baseHeight], messageAreaSize.width, [self baseHeight]);
+        self.frame = CGRectMake(0, messageAreaSize.height - keyboardHeight - [self baseHeight] - safeAreaInset.bottom, messageAreaSize.width, [self baseHeight] + safeAreaInset.bottom);
         [self layoutSubviews];
     };
     
@@ -159,17 +182,17 @@
         block();
 }
 
-- (void)changeToSize:(CGSize)size keyboardHeight:(CGFloat)keyboardHeight duration:(NSTimeInterval)duration
+- (void)changeToSize:(CGSize)size keyboardHeight:(CGFloat)keyboardHeight duration:(NSTimeInterval)duration contentAreaHeight:(CGFloat)contentAreaHeight safeAreaInset:(UIEdgeInsets)safeAreaInset
 {
-    [self _adjustForSize:size keyboardHeight:keyboardHeight duration:duration animationCurve:0];
+    [self _adjustForSize:size keyboardHeight:keyboardHeight duration:duration animationCurve:0 contentAreaHeight:contentAreaHeight safeAreaInset:safeAreaInset];
 }
 
 - (void)layoutSubviews
 {
     [super layoutSubviews];
     
-    _stripeLayer.frame = CGRectMake(0.0f, -TGRetinaPixel, self.frame.size.width, TGRetinaPixel);
-    _actionButton.frame = CGRectMake(0.0f, 0.0f, self.frame.size.width, self.frame.size.height);
+    _stripeLayer.frame = CGRectMake(0.0f, -TGScreenPixel, self.frame.size.width, TGScreenPixel);
+    _actionButton.frame = CGRectMake(0.0f, 0.0f, self.frame.size.width, [self baseHeight]);
     
     if (_icon != TGModernConversationActionInputPanelIconNone) {
         CGSize titleSize = [_actionButton.titleLabel sizeThatFits:_actionButton.bounds.size];
@@ -179,7 +202,7 @@
         [_actionButton setContentEdgeInsets:UIEdgeInsetsZero];
     }
     
-    _activityIndicator.frame = CGRectMake(self.frame.size.width - _activityIndicator.frame.size.width - 12.0f, CGFloor((self.frame.size.height - _activityIndicator.frame.size.height) / 2.0f), _activityIndicator.frame.size.width, _activityIndicator.frame.size.height);
+    _activityIndicator.frame = CGRectMake(self.frame.size.width - _activityIndicator.frame.size.width - 12.0f - _safeAreaInset.right, CGFloor(([self baseHeight] - _activityIndicator.frame.size.height) / 2.0f), _activityIndicator.frame.size.width, _activityIndicator.frame.size.height);
 }
 
 - (void)actionButtonPressed

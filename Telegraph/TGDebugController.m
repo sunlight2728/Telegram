@@ -5,22 +5,36 @@
 
 #import "TGSwitchCollectionItem.h"
 #import "TGButtonCollectionItem.h"
+#import "TGVersionCollectionItem.h"
 
 #import "TGForwardTargetController.h"
 
 #import "TL/TLMetaScheme.h"
 
-#import "TGProgressWindow.h"
-#import "TGAlertView.h"
+#import <LegacyComponents/TGProgressWindow.h>
+#import "TGCustomAlertView.h"
 
 #import "TGDatabase.h"
 
 #import "TGNetworkOverridesController.h"
 
-@interface TGDebugController ()
+#import "TGCustomActionSheet.h"
+
+#import <MessageUI/MessageUI.h>
+
+#import "TGTelegraph.h"
+
+#import "TGDatabase.h"
+
+#import "TGAccountSignals.h"
+
+@interface TGDebugController () <MFMailComposeViewControllerDelegate, UINavigationControllerDelegate, ASWatcher>
 {
     TGSwitchCollectionItem *_logsEnabledItem;
+    TGProgressWindow *_progressWindow;
 }
+
+@property (nonatomic, strong) ASHandle *actionHandle;
 
 @end
 
@@ -31,8 +45,10 @@
     self = [super init];
     if (self != nil)
     {
+        _actionHandle = [[ASHandle alloc] initWithDelegate:self];
+        
         _logsEnabledItem = [[TGSwitchCollectionItem alloc] initWithTitle:@"Enable Logging" isOn:[TGAppDelegateInstance enableLogging]];
-        _logsEnabledItem.toggled = ^(bool logsEnabled)
+        _logsEnabledItem.toggled = ^(bool logsEnabled, __unused TGSwitchCollectionItem *item)
         {
             [TGAppDelegateInstance setEnableLogging:logsEnabled];
         };
@@ -61,6 +77,37 @@
         TGButtonCollectionItem *networkOverridesItem = [[TGButtonCollectionItem alloc] initWithTitle:@"Network Overrides" action:@selector(networkOverridesPressed)];
         TGCollectionMenuSection *networkOverridesSection = [[TGCollectionMenuSection alloc] initWithItems:@[networkOverridesItem]];
         [self.menuSections addSection:networkOverridesSection];
+        
+        TGButtonCollectionItem *resetPaymentsItem = [[TGButtonCollectionItem alloc] initWithTitle:@"Reset Saved Payment Info" action:@selector(resetPaymentsPressed)];
+        TGCollectionMenuSection *resetPaymentsSection = [[TGCollectionMenuSection alloc] initWithItems:@[resetPaymentsItem]];
+        [self.menuSections addSection:resetPaymentsSection];
+        
+        TGButtonCollectionItem *databaseItem = [[TGButtonCollectionItem alloc] initWithTitle:@"Switch to WAL" action:@selector(walPressed)];
+        TGCollectionMenuSection *databaseSection = [[TGCollectionMenuSection alloc] initWithItems:@[databaseItem]];
+        [self.menuSections addSection:databaseSection];
+        
+        TGButtonCollectionItem *clearCacheItem = [[TGButtonCollectionItem alloc] initWithTitle:@"Wipe Cache" action:@selector(clearCachePressed)];
+        clearCacheItem.deselectAutomatically = true;
+        TGCollectionMenuSection *clearCacheSection = [[TGCollectionMenuSection alloc] initWithItems:@[clearCacheItem]];
+        [self.menuSections addSection:clearCacheSection];
+        
+        TGButtonCollectionItem *resetContactsItem = [[TGButtonCollectionItem alloc] initWithTitle:@"Reset Server Contacts" action:@selector(resetContactsPressed)];
+        resetContactsItem.deselectAutomatically = true;
+        TGCollectionMenuSection *resetContactsItemSection = [[TGCollectionMenuSection alloc] initWithItems:@[resetContactsItem]];
+        [self.menuSections addSection:resetContactsItemSection];
+        
+        NSString *version = [NSString stringWithFormat:@"v%@", [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleShortVersionString"]];
+        version = [NSString stringWithFormat:@"%@ (%@)", version, [[[NSBundle mainBundle] infoDictionary] objectForKey:(NSString *)kCFBundleVersionKey]];
+        TGVersionCollectionItem *versionItem = [[TGVersionCollectionItem alloc] initWithVersion:version];
+        
+        TGButtonCollectionItem *resetCallsTabItem = [[TGButtonCollectionItem alloc] initWithTitle:@"Reset Calls Tab" action:@selector(resetCallsTabPressed)];
+        resetCallsTabItem.deselectAutomatically = true;
+        
+        TGButtonCollectionItem *dropFeeds = [[TGButtonCollectionItem alloc] initWithTitle:@"Reset Feeds" action:@selector(resetFeedsPressed)];
+        dropFeeds.deselectAutomatically = true;
+        
+        TGCollectionMenuSection *callsSection = [[TGCollectionMenuSection alloc] initWithItems:@[resetCallsTabItem, versionItem]];
+        [self.menuSections addSection:callsSection];
     }
     return self;
 }
@@ -71,31 +118,63 @@
 
 - (void)sendLogsButtonPressed
 {
-    NSMutableArray *uploadFileArray = [[NSMutableArray alloc] init];
-    
-    for (NSString *filePath in TGGetLogFilePaths(4))
-    {
-        int64_t randomId = 0;
-        arc4random_buf(&randomId, 8);
+    [[[TGCustomActionSheet alloc] initWithTitle:nil actions:@[
+        [[TGActionSheetAction alloc] initWithTitle:@"Forward via Telegram" action:@"tg"],
+        [[TGActionSheetAction alloc] initWithTitle:@"Forward via Mail" action:@"mail"],
+        [[TGActionSheetAction alloc] initWithTitle:@"Cancel" action:@"cancel" type:TGActionSheetActionTypeCancel]
+    ] actionBlock:^(id target, NSString *action) {
+        TGDebugController *strongSelf = target;
         
-        NSString *tempFilePath = [NSTemporaryDirectory() stringByAppendingPathComponent:[[NSString alloc] initWithFormat:@"%@_%" PRId64 ".txt", [filePath lastPathComponent], randomId]];
-        
-        if ([[NSFileManager defaultManager] copyItemAtPath:filePath toPath:tempFilePath error:NULL])
-        {
-            [uploadFileArray addObject:@{@"url": [NSURL fileURLWithPath:tempFilePath]}];
+        if ([action isEqualToString:@"tg"]) {
+            NSMutableArray *uploadFileArray = [[NSMutableArray alloc] init];
+            
+            for (NSString *filePath in TGGetLogFilePaths(4))
+            {
+                int64_t randomId = 0;
+                arc4random_buf(&randomId, 8);
+                
+                NSString *tempFilePath = [NSTemporaryDirectory() stringByAppendingPathComponent:[[NSString alloc] initWithFormat:@"%@_%" PRId64 ".txt", [filePath lastPathComponent], randomId]];
+                
+                if ([[NSFileManager defaultManager] copyItemAtPath:filePath toPath:tempFilePath error:NULL])
+                {
+                    [uploadFileArray addObject:@{@"url": [NSURL fileURLWithPath:tempFilePath]}];
+                }
+            }
+            
+            [TGAppDelegateInstance.rootController clearContentControllers];
+            
+            TGForwardTargetController *forwardController = [[TGForwardTargetController alloc] initWithDocumentFiles:uploadFileArray];
+            TGNavigationController *navigationController = [TGNavigationController navigationControllerWithControllers:@[forwardController]];
+            if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad)
+            {
+                navigationController.presentationStyle = TGNavigationControllerPresentationStyleInFormSheet;
+                navigationController.modalPresentationStyle = UIModalPresentationFormSheet;
+            }
+            [TGAppDelegateInstance.rootController presentViewController:navigationController animated:false completion:nil];
+        } else if ([action isEqualToString:@"mail"]) {
+            if ([MFMailComposeViewController canSendMail])
+            {
+                MFMailComposeViewController *composeController = [[MFMailComposeViewController alloc] init];
+                composeController.mailComposeDelegate = strongSelf;
+                [composeController setSubject:@"Telegram Logs"];
+                NSString *versionString = [[NSString alloc] initWithFormat:@"%@ (%@)", [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleShortVersionString"], [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleVersion"]];
+                [composeController setMessageBody:[NSString stringWithFormat:@"User %d v %@", TGTelegraphInstance.clientUserId, versionString] isHTML:false];
+                
+                for (NSString *filePath in TGGetLogFilePaths(4)) {
+                    NSData *data = [NSData dataWithContentsOfFile:filePath options:NSDataReadingMappedIfSafe error:nil];
+                    if (data != nil && data.length != 0) {
+                        [composeController addAttachmentData:data mimeType:@"application/text" fileName:[filePath lastPathComponent]];
+                    }
+                }
+                
+                [strongSelf presentViewController:composeController animated:true completion:nil];
+            }
+            else
+            {
+                [TGCustomAlertView presentAlertWithTitle:nil message:TGLocalized(@"Login.EmailNotConfiguredError") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
+            }
         }
-    }
-    
-    [TGAppDelegateInstance.rootController clearContentControllers];
-    
-    TGForwardTargetController *forwardController = [[TGForwardTargetController alloc] initWithDocumentFiles:uploadFileArray];
-    TGNavigationController *navigationController = [TGNavigationController navigationControllerWithControllers:@[forwardController]];
-    if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad)
-    {
-        navigationController.presentationStyle = TGNavigationControllerPresentationStyleInFormSheet;
-        navigationController.modalPresentationStyle = UIModalPresentationFormSheet;
-    }
-    [TGAppDelegateInstance.rootController presentViewController:navigationController animated:false completion:nil];
+    } target:self] showInView:self.view];
 }
 
 - (void)sendMoreLogsButtonPressed
@@ -148,7 +227,7 @@
                 [TGDatabaseInstance() applyPts:currentState.pts date:currentState.date seq:currentState.seq qts:currentState.qts unreadCount:state.unread_count];
                 TGDispatchOnMainThread(^
                 {
-                    [[[TGAlertView alloc] initWithTitle:nil message:@"Unread count corrected" cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil] show];
+                    [TGCustomAlertView presentAlertWithTitle:nil message:@"Unread count corrected" cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
                 });
             }
         } synchronous:false];
@@ -169,8 +248,95 @@
 }
 
 - (void)resetTooltipsPressed {
-    [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"TG_didShowSilentBroadcastTooltip"];
+    NSArray *keys = @
+    [
+        @"TG_displayedGifsTooltip_v0",
+        @"TG_displayedCameraHoldToVideoTooltip_v0",
+        @"TG_displayedPrivateRecordModeTooltip_v0",
+        @"TG_displayedChannelRecordModeTooltip_v0",
+        @"TG_displayedPrivateRevertRecordModeTooltip_v0",
+        @"TG_displayedChannelRevertRecordModeTooltip_v0",
+        @"TG_lastPrivateRecordModeIsVideo_v0",
+        @"TG_lastChannelRecordModeIsAudio_v0",
+        @"TG_displayedMediaTimerTooltip_v0",
+        @"TG_displayedGroupTooltip_v0"
+    ];
+
+    for (NSString *key in keys)
+        [[NSUserDefaults standardUserDefaults] removeObjectForKey:key];
+    
+
     [[NSUserDefaults standardUserDefaults] synchronize];
+    
+    [TGDatabaseInstance() setCustomProperty:@"checkedLocalization" value:nil];
+    [TGDatabaseInstance() setCustomProperty:@"didDisplayProxyAdNotice" value:nil];
+}
+
+- (void)resetFeedsPressed {
+    [TGDatabaseInstance() _dropFeeds];
+}
+
+- (void)mailComposeController:(MFMailComposeViewController *)__unused controller didFinishWithResult:(MFMailComposeResult)__unused result error:(NSError *)__unused error
+{
+    [self dismissViewControllerAnimated:true completion:nil];
+}
+
+- (void)resetPaymentsPressed {
+    TGProgressWindow *progressWindow = [[TGProgressWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+    [progressWindow show:true];
+    
+    TLRPCpayments_clearSavedInfo$payments_clearSavedInfo *clearSavedInfo = [[TLRPCpayments_clearSavedInfo$payments_clearSavedInfo alloc] init];
+    clearSavedInfo.flags = 1 | 2;
+    
+    [[[[[TGTelegramNetworking instance] requestSignal:clearSavedInfo] deliverOn:[SQueue mainQueue]] onDispose:^
+    {
+        TGDispatchOnMainThread(^
+        {
+            [progressWindow dismiss:true];
+        });
+    }] startWithNext:nil];
+}
+
+- (void)resetCallsTabPressed {
+    [TGAppDelegateInstance resetCallsTab];
+    [TGAppDelegateInstance.rootController.mainTabsController setCallsHidden:true animated:false];
+}
+
+- (void)walPressed {
+    [TGDatabaseInstance() switchToWal];
+}
+
+- (void)clearCachePressed {
+    [TGDatabaseInstance() setCustomProperty:@"cachedStickersByQuery" value:nil];
+    
+    [[TGRemoteImageView sharedCache] clearCache:TGCacheBoth];
+    
+    NSString *documentsPath = [TGAppDelegate documentsPath];
+    
+    NSString *filesPath = [[NSString alloc] initWithFormat:@"%@/files", documentsPath];
+    [[NSFileManager defaultManager] removeItemAtPath:filesPath error:nil];
+    
+    NSString *stickerCachePath = [[NSString alloc] initWithFormat:@"%@/sticker-cache", documentsPath];
+    [[NSFileManager defaultManager] removeItemAtPath:stickerCachePath error:nil];
+}
+
+- (void)resetContactsPressed {
+    [_progressWindow dismiss:true];
+    
+    _progressWindow = [[TGProgressWindow alloc] init];
+    [_progressWindow show:true];
+    [[[TGTelegramNetworking instance] requestSignal:[[TLRPCcontacts_resetSaved$contacts_resetSaved alloc] init]] startWithNext:nil completed:^{
+        [ActionStageInstance() requestActor:@"/tg/synchronizeContacts/(sync)" options:@{@"forceFirstTime": @(true)} watcher:self];
+    }];
+}
+
+- (void)actorCompleted:(int)__unused status path:(NSString *)path result:(id)__unused result {
+    if ([path isEqualToString:@"/tg/synchronizeContacts/(sync)"]) {
+        TGDispatchOnMainThread(^{
+            [_progressWindow dismissWithSuccess];
+            _progressWindow = nil;
+        });
+    }
 }
 
 @end

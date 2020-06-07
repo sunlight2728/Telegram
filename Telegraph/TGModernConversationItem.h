@@ -9,6 +9,7 @@
 #import "TGModernCollectionCell.h"
 
 #import "TGModernViewStorage.h"
+#import "TGMessageGroupedLayout.h"
 
 @class TGModernCollectionCell;
 @class TGModernViewModel;
@@ -21,6 +22,9 @@ typedef enum {
 @interface TGModernConversationItem : NSObject
 {
     int _collapseFlags;
+    
+@protected
+    __weak TGModernCollectionCell *_cell;
 }
 
 @property (nonatomic) int collapseFlags;
@@ -40,13 +44,17 @@ typedef enum {
 - (void)bindSpecialViewsToContainer:(UIView *)container viewStorage:(TGModernViewStorage *)viewStorage atItemPosition:(CGPoint)itemPosition;
 - (void)drawInContext:(CGContextRef)context;
 
-- (CGSize)sizeForContainerSize:(CGSize)containerSize;
+- (void)resetViewModel;
 
-- (void)updateToItem:(TGModernConversationItem *)updatedItem viewStorage:(TGModernViewStorage *)viewStorage sizeChanged:(bool *)sizeChanged delayAvailability:(bool)delayAvailability;
+- (CGSize)sizeForContainerSize:(CGSize)containerSize viewStorage:(TGModernViewStorage *)viewStorage;
+
+- (void)updateToItem:(TGModernConversationItem *)updatedItem viewStorage:(TGModernViewStorage *)viewStorage sizeChanged:(bool *)sizeChanged delayAvailability:(bool)delayAvailability containerSize:(CGSize)containerSize;
+- (void)updateToItem:(TGModernConversationItem *)updatedItem viewStorage:(TGModernViewStorage *)viewStorage sizeChanged:(bool *)sizeChanged delayAvailability:(bool)delayAvailability containerSize:(CGSize)containerSize force:(bool)force;
 - (void)updateProgress:(float)progress viewStorage:(TGModernViewStorage *)viewStorage animated:(bool)animated;
 - (void)updateInlineMediaContext;
 - (void)updateAnimationsEnabled;
-- (void)stopInlineMedia;
+- (void)stopInlineMedia:(int32_t)excludeMid;
 - (void)resumeInlineMedia;
+- (void)updateGroupedLayout:(TGMessageGroupedLayout *)groupedLayout;
 
 @end

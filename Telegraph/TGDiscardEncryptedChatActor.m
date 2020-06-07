@@ -1,7 +1,9 @@
 #import "TGDiscardEncryptedChatActor.h"
 
-#import "ActionStage.h"
+#import <LegacyComponents/ActionStage.h>
 #import "TGTelegraph.h"
+
+#import "TGConversationAddMessagesActor.h"
 
 static NSMutableDictionary *processedChats()
 {
@@ -31,10 +33,20 @@ static NSMutableDictionary *processedChats()
 - (void)execute:(NSDictionary *)options
 {
     _encryptedConversationId = [options[@"encryptedConversationId"] longLongValue];
-    if (processedChats()[@(_encryptedConversationId)] != nil)
+    if ([options[@"locally"] boolValue]) {
+        TGConversation *conversation = [TGDatabaseInstance() loadConversationWithId:[TGDatabaseInstance() peerIdForEncryptedConversationId:_encryptedConversationId]];
+        if (conversation != nil) {
+            conversation.encryptedData.handshakeState = 3;
+            [TGDatabaseInstance() transactionAddMessages:nil updateConversationDatas:@{@(conversation.conversationId): conversation} notifyAdded:true];
+        }
+        
         [ActionStageInstance() actionCompleted:self.path result:nil];
-    else
-        self.cancelToken = [TGTelegraphInstance doRejectEncryptedChat:_encryptedConversationId actor:(TGSynchronizeActionQueueActor *)self];
+    } else {
+        if (processedChats()[@(_encryptedConversationId)] != nil)
+            [ActionStageInstance() actionCompleted:self.path result:nil];
+        else
+            self.cancelToken = [TGTelegraphInstance doRejectEncryptedChat:_encryptedConversationId actor:(TGSynchronizeActionQueueActor *)self];
+    }
 }
 
 - (void)rejectEncryptedChatSuccess

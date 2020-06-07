@@ -8,7 +8,8 @@
 
 #import "TGActor.h"
 
-#import "ASWatcher.h"
+#import <LegacyComponents/ASWatcher.h>
+#import "TGTelegramNetworking.h"
 
 #import <SSignalKit/SSignalKit.h>
 
@@ -36,15 +37,18 @@
 - (bool)_encryptUploads;
 - (void)_commitSend;
 - (void)_fail;
+- (void)_fail:(bool)manual;
 - (void)_success:(id)result;
+
 
 - (void)updatePreDownloadsProgress:(float)preDownloadsProgress;
 - (void)acquireMediaUploadActivityHolderForPreparedMessage:(TGPreparedMessage *)preparedMessage;
-- (void)uploadFilesWithExtensions:(NSArray *)filePathsAndExtensions;
+- (void)uploadFilesWithExtensions:(NSArray *)filePathsAndExtensions mediaTypeTag:(TGNetworkMediaTypeTag)mediaTypeTag;
 - (void)beginUploadProgress;
 - (void)uploadsStarted;
 - (void)uploadProgressChanged;
 - (void)uploadsCompleted:(NSDictionary *)filePathToUploadedFile;
+- (void)setUploadProgress:(float)uploadProgress;
 
 - (int64_t)peerId;
 

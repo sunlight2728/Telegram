@@ -1,19 +1,12 @@
-/*
- * This is the source code of Telegram for iOS v. 1.1
- * It is licensed under GNU GPL v. 2 or later.
- * You should have received a copy of the license in this archive (see LICENSE).
- *
- * Copyright Peter Iakovlev, 2013.
- */
-
 #import "TGGroupInfoCollectionItem.h"
+
+#import <LegacyComponents/LegacyComponents.h>
 
 #import "TGGroupInfoCollectionItemView.h"
 
-#import "TGConversation.h"
-#import "ASHandle.h"
+#import <LegacyComponents/ASHandle.h>
 
-#import "TGRemoteImageView.h"
+#import <LegacyComponents/TGRemoteImageView.h>
 
 @interface TGGroupInfoCollectionItem () <TGGroupInfoCollectionItemViewDelegate>
 {
@@ -71,7 +64,7 @@
     } else {
         [view setUpdatingAvatar:_hasUpdatingAvatar animated:false];
         if (_updatingAvatar == nil)
-            [view setAvatarUri:_conversation.chatPhotoSmall animated:false];
+            [view setAvatarUri:_conversation.chatPhotoFullSmall animated:false];
         else
             [view setAvatarImage:_updatingAvatar animated:false];
     }
@@ -104,7 +97,7 @@
         if (_conversation.conversationId == 0) {
             [view setAvatarImage:_staticAvatar animated:true];
         } else if (_updatingAvatar == nil)
-            [view setAvatarUri:_conversation.chatPhotoSmall animated:true];
+            [view setAvatarUri:_conversation.chatPhotoFullSmall animated:true];
         else
             [view setAvatarImage:_updatingAvatar animated:true];
         
@@ -158,7 +151,7 @@
             [view setUpdatingAvatar:_hasUpdatingAvatar animated:true];
             
             if (_updatingAvatar == nil)
-                [view setAvatarUri:_conversation.chatPhotoSmall animated:false];
+                [view setAvatarUri:_conversation.chatPhotoFullSmall animated:false];
             else
                 [view setAvatarImage:_updatingAvatar animated:false];
         }

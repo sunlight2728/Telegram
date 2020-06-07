@@ -15,6 +15,7 @@
 #endif
 
 @class TGMessageModernConversationItem;
+@class TGModernViewStorage;
 
 typedef struct {
     int index;
@@ -35,12 +36,14 @@ struct TGDecorationViewAttrubutesComparator
 
 @interface TGModernConversationViewLayout : UICollectionViewLayout
 
+@property (nonatomic) bool inhibitDateHeaders;
 @property (nonatomic) bool animateLayout;
+@property (nonatomic, strong) TGModernViewStorage *viewStorage;
 
 #ifdef __cplusplus
 - (std::vector<TGDecorationViewAttrubutes> *)allDecorationViewAttributes;
-- (NSArray *)layoutAttributesForItems:(NSArray *)items containerWidth:(CGFloat)containerWidth maxHeight:(CGFloat)maxHeight decorationViewAttributes:(std::vector<TGDecorationViewAttrubutes> *)decorationViewAttributes contentHeight:(CGFloat *)contentHeight;
-+ (NSArray *)layoutAttributesForItems:(NSArray *)items containerWidth:(CGFloat)containerWidth maxHeight:(CGFloat)maxHeight dateOffset:(int)dateOffset decorationViewAttributes:(std::vector<TGDecorationViewAttrubutes> *)decorationViewAttributes contentHeight:(CGFloat *)contentHeight unreadMessageRange:(TGMessageRange)unreadMessageRange;
+- (NSArray *)layoutAttributesForItems:(NSArray *)items containerWidth:(CGFloat)containerWidth maxHeight:(CGFloat)maxHeight decorationViewAttributes:(std::vector<TGDecorationViewAttrubutes> *)decorationViewAttributes contentHeight:(CGFloat *)contentHeight viewStorage:(TGModernViewStorage *)viewStorage;
++ (NSArray *)layoutAttributesForItems:(NSArray *)items containerWidth:(CGFloat)containerWidth maxHeight:(CGFloat)maxHeight dateOffset:(int)dateOffset decorationViewAttributes:(std::vector<TGDecorationViewAttrubutes> *)decorationViewAttributes contentHeight:(CGFloat *)contentHeight unreadMessageRange:(TGMessageRange)unreadMessageRange viewStorage:(TGModernViewStorage *)viewStorage cachedGroupedLayouts:(NSMutableDictionary *)cachedGroupedLayouts;
 #endif
 
 - (bool)hasLayoutAttributes;

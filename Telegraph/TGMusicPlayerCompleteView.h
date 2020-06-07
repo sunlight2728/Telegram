@@ -3,9 +3,9 @@
 @interface TGMusicPlayerCompleteView : UIView
 
 @property (nonatomic) CGFloat topInset;
-@property (nonatomic, copy) void (^setTitle)(NSString *);
-@property (nonatomic, copy) void (^actionsEnabled)(bool);
+@property (nonatomic, assign) bool preview;
 
-- (instancetype)initWithFrame:(CGRect)frame setTitle:(void (^)(NSString *))setTitle actionsEnabled:(void (^)(bool))actionsEnabled;
+- (instancetype)initWithFrame:(CGRect)frame;
+- (bool)isSwipeGestureAllowedAtPoint:(CGPoint)point;
 
 @end

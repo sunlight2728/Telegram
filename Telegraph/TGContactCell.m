@@ -1,11 +1,9 @@
 #import "TGContactCell.h"
 
-#import "TGLabel.h"
-#import "TGRemoteImageView.h"
-#import "TGDateLabel.h"
+#import <LegacyComponents/LegacyComponents.h>
 
-#import "TGImageUtils.h"
-#import "TGFont.h"
+#import <LegacyComponents/TGRemoteImageView.h>
+#import "TGDateLabel.h"
 
 #import "TGInterfaceAssets.h"
 
@@ -13,131 +11,12 @@
 
 #import "TGContactCellContents.h"
 
-#import "TGLetteredAvatarView.h"
+#import <LegacyComponents/TGLetteredAvatarView.h>
+#import <LegacyComponents/TGCheckButtonView.h>
 
 #import <QuartzCore/QuartzCore.h>
 
-static UIImage *contactCellCheckImage()
-{
-    static UIImage *image = nil;
-    if (image == nil)
-        image = [UIImage imageNamed:@"ModernContactSelectionEmpty.png"];
-    return image;
-}
-
-static UIImage *contactCellCheckedImage()
-{
-    static UIImage *image = nil;
-    if (image == nil)
-        image = [UIImage imageNamed:@"ModernContactSelectionChecked.png"];
-    return image;
-}
-
-@interface TGContactCheckButton : UIButton
-
-@property (nonatomic, strong) UIImageView *checkView;
-
-- (void)setChecked:(bool)checked animated:(bool)animated;
-
-@end
-
-@implementation TGContactCheckButton
-
-- (id)initWithFrame:(CGRect)frame
-{
-    self = [super initWithFrame:frame];
-    if (self != nil)
-    {
-        [self _commonInit];
-    }
-    return self;
-}
-
-- (void)_commonInit
-{
-    self.exclusiveTouch = true;
-    
-    _checkView = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, 22, 22)];
-    [self addSubview:_checkView];
-}
-
-- (void)setHighlighted:(BOOL)highlighted
-{
-    [super setHighlighted:highlighted];
-    
-    if (highlighted)
-        _checkView.transform = CGAffineTransformMakeScale(0.8f, 0.8f);
-}
-
-- (void)touchesCancelled:(NSSet *)touches withEvent:(UIEvent *)event
-{
-    _checkView.transform = CGAffineTransformIdentity;
-    
-    [super touchesCancelled:touches withEvent:event];
-}
-
-- (void)touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event
-{
-    UITouch *touch = [touches anyObject];
-    
-    if (!CGRectContainsPoint(self.bounds, [touch locationInView:self]))
-        _checkView.transform = CGAffineTransformIdentity;
-    else
-        _checkView.transform = CGAffineTransformMakeScale(0.8f, 0.8f);
-    
-    [super touchesEnded:touches withEvent:event];
-}
-
-- (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event
-{
-    UITouch *touch = [touches anyObject];
-    
-    if (!CGRectContainsPoint(self.bounds, [touch locationInView:self]))
-        _checkView.transform = CGAffineTransformIdentity;
-    else
-        _checkView.transform = CGAffineTransformMakeScale(0.8f, 0.8f);
-    
-    [super touchesMoved:touches withEvent:event];
-}
-
-- (void)setChecked:(bool)checked animated:(bool)animated
-{
-    _checkView.image = checked ? contactCellCheckedImage() : contactCellCheckImage();
-    
-    if (animated)
-    {
-        _checkView.transform = CGAffineTransformMakeScale(0.8f, 0.8f);
-        if (checked)
-        {
-            [UIView animateWithDuration:0.12 delay:0 options:UIViewAnimationOptionCurveEaseOut animations:^
-            {
-                _checkView.transform = CGAffineTransformMakeScale(1.16f, 1.16f);
-            } completion:^(BOOL finished)
-            {
-                if (finished)
-                {
-                    [UIView animateWithDuration:0.08 delay:0 options:UIViewAnimationOptionCurveEaseIn animations:^
-                    {
-                        _checkView.transform = CGAffineTransformIdentity;
-                    } completion:nil];
-                }
-            }];
-        }
-        else
-        {
-            [UIView animateWithDuration:0.16 delay:0 options:UIViewAnimationOptionCurveEaseOut animations:^
-            {
-                _checkView.transform = CGAffineTransformIdentity;
-            } completion:nil];
-        }
-    }
-    else
-    {
-        _checkView.transform = CGAffineTransformIdentity;
-    }
-}
-
-@end
+#import "TGPresentation.h"
 
 @interface TGContactCell ()
 {
@@ -147,7 +26,7 @@ static UIImage *contactCellCheckedImage()
 @property (nonatomic, strong) TGLetteredAvatarView *avatarView;
 @property (nonatomic, strong) TGDateLabel *subtitleLabel;
 
-@property (nonatomic, strong) TGContactCheckButton *checkButton;
+@property (nonatomic, strong) TGCheckButtonView *checkButton;
 
 @property (nonatomic, strong) UIView *highlightedBackgroundView;
 
@@ -193,7 +72,7 @@ static UIImage *contactCellCheckedImage()
         }
         
         _avatarView = [[TGLetteredAvatarView alloc] initWithFrame:CGRectMake(5, 5, 40, 40)];
-        [_avatarView setSingleFontSize:17.0f doubleFontSize:17.0f useBoldFont:true];
+        [_avatarView setSingleFontSize:18.0f doubleFontSize:18.0f useBoldFont:false];
         _avatarView.fadeTransition = true;
         [self.contentView addSubview:_avatarView];
         
@@ -224,13 +103,25 @@ static UIImage *contactCellCheckedImage()
         
         if (selectionControls)
         {
-            _checkButton = [[TGContactCheckButton alloc] init];
-            _checkButton.userInteractionEnabled = true;
+            _checkButton = [[TGCheckButtonView alloc] initWithStyle:TGCheckButtonStyleDefault];
             [_checkButton addTarget:self action:@selector(checkButtonPressed) forControlEvents:UIControlEventTouchUpInside];
             [self.contentView addSubview:_checkButton];
         }
     }
     return self;
+}
+
+- (void)setPresentation:(TGPresentation *)presentation
+{
+    _presentation = presentation;
+    
+    self.backgroundColor = presentation.pallete.backgroundColor;
+    
+    _contactContentsView.presentation = presentation;
+    _subtitleLabel.textColor = _subtitleActive ? _presentation.pallete.accentColor : _presentation.pallete.secondaryTextColor;
+    
+    _separatorLayer.backgroundColor = presentation.pallete.separatorColor.CGColor;
+    self.selectedBackgroundView.backgroundColor = presentation.pallete.selectionColor;
 }
 
 - (void)setSubtitleText:(NSString *)subtitleText
@@ -285,17 +176,25 @@ static UIImage *contactCellCheckedImage()
 
 - (void)resetView:(bool)animateState
 {
-    if (_titleTextSecond == nil || _titleTextSecond.length == 0)
+    NSString *displayFirstName = _titleTextFirst;
+    NSString *displayLastName = _titleTextSecond;
+    if (TGIsKorean())
+    {
+        displayFirstName = _titleTextSecond;
+        displayLastName = _titleTextFirst;
+    }
+    
+    if (displayLastName.length == 0)
     {
         _contactContentsView.titleBoldMode = 1;
-        _contactContentsView.titleFirst = _titleTextFirst;
+        _contactContentsView.titleFirst = displayFirstName;
         _contactContentsView.titleSecond = nil;
     }
     else
     {
         _contactContentsView.titleBoldMode = _boldMode;
-        _contactContentsView.titleFirst = _titleTextFirst;
-        _contactContentsView.titleSecond = _titleTextSecond;
+        _contactContentsView.titleFirst = displayFirstName;
+        _contactContentsView.titleSecond = displayLastName;
     }
     if (_subtitleAttributedText != nil)
     {
@@ -312,52 +211,27 @@ static UIImage *contactCellCheckedImage()
         _subtitleLabel.hidden = _subtitleText == nil || _subtitleText.length == 0;
     }
     
-    if (_hideAvatar)
+    _avatarView.hidden = false;
+    
+    CGFloat diameter = TGIsPad() ? 45.0f : 40.0f;
+    UIImage *placeholder = [self.presentation.images avatarPlaceholderWithDiameter:diameter];
+    if (_avatarUrl.length != 0)
     {
-        _avatarView.hidden = true;
+        _avatarView.fadeTransitionDuration = animateState ? 0.14 : 0.3;
+        if (![_avatarUrl isEqualToString:_avatarView.currentUrl])
+        {
+            if (animateState)
+            {
+                UIImage *currentImage = [_avatarView currentImage];
+                [_avatarView loadImage:_avatarUrl filter:TGIsPad() ? @"circle:45x45" : @"circle:40x40" placeholder:(currentImage != nil ? currentImage : placeholder) forceFade:true];
+            }
+            else
+                [_avatarView loadImage:_avatarUrl filter:TGIsPad() ? @"circle:45x45" : @"circle:40x40" placeholder:placeholder];
+        }
     }
     else
     {
-        _avatarView.hidden = false;
-        
-        CGFloat diameter = TGIsPad() ? 45.0f : 40.0f;
-        
-        static UIImage *placeholder = nil;
-        static dispatch_once_t onceToken;
-        dispatch_once(&onceToken, ^
-        {
-            UIGraphicsBeginImageContextWithOptions(CGSizeMake(diameter, diameter), false, 0.0f);
-            CGContextRef context = UIGraphicsGetCurrentContext();
-            
-            //!placeholder
-            CGContextSetFillColorWithColor(context, [UIColor whiteColor].CGColor);
-            CGContextFillEllipseInRect(context, CGRectMake(0.0f, 0.0f, diameter, diameter));
-            CGContextSetStrokeColorWithColor(context, UIColorRGB(0xd9d9d9).CGColor);
-            CGContextSetLineWidth(context, 1.0f);
-            CGContextStrokeEllipseInRect(context, CGRectMake(0.5f, 0.5f, diameter - 1.0f, diameter - 1.0f));
-            
-            placeholder = UIGraphicsGetImageFromCurrentImageContext();
-            UIGraphicsEndImageContext();
-        });
-        
-        if (_avatarUrl.length != 0)
-        {
-            _avatarView.fadeTransitionDuration = animateState ? 0.14 : 0.3;
-            if (![_avatarUrl isEqualToString:_avatarView.currentUrl])
-            {
-                if (animateState)
-                {
-                    UIImage *currentImage = [_avatarView currentImage];
-                    [_avatarView loadImage:_avatarUrl filter:TGIsPad() ? @"circle:45x45" : @"circle:40x40" placeholder:(currentImage != nil ? currentImage : placeholder) forceFade:true];
-                }
-                else
-                    [_avatarView loadImage:_avatarUrl filter:TGIsPad() ? @"circle:45x45" : @"circle:40x40" placeholder:placeholder];
-            }
-        }
-        else
-        {
-            [_avatarView loadUserPlaceholderWithSize:CGSizeMake(diameter, diameter) uid:(int32_t)_itemId firstName:_user.firstName lastName:_user.lastName placeholder:placeholder];
-        }
+        [_avatarView loadUserPlaceholderWithSize:CGSizeMake(diameter, diameter) uid:_hideAvatar ? 0 : (int32_t)_itemId firstName:_user.firstName lastName:_user.lastName placeholder:placeholder];
     }
     
     if (_checkButton != nil)
@@ -365,14 +239,7 @@ static UIImage *contactCellCheckedImage()
     
     if (!_subtitleLabel.hidden)
     {
-        static UIColor *normalColor = nil;
-        static UIColor *activeColor = nil;
-        if (normalColor == nil)
-        {
-            normalColor = UIColorRGB(0xa6a6a6);
-            activeColor = TGAccentColor();
-        }
-        _subtitleLabel.textColor = _subtitleActive ? activeColor : normalColor;
+        _subtitleLabel.textColor = _subtitleActive ? _presentation.pallete.accentColor : _presentation.pallete.secondaryTextColor;
         [_contactContentsView setNeedsDisplay];
     }
     
@@ -395,7 +262,7 @@ static UIImage *contactCellCheckedImage()
     if (_contactSelected != contactSelected || force)
     {
         _contactSelected = contactSelected;
-        [_checkButton setChecked:_contactSelected animated:animated];
+        [_checkButton setSelected:_contactSelected animated:animated];
     }
 }
 
@@ -409,7 +276,7 @@ static UIImage *contactCellCheckedImage()
         {
             _checkButton.hidden = false;
             
-            [_checkButton setChecked:_contactSelected animated:false];
+            [_checkButton setSelected:_contactSelected animated:false];
             
             if (animated)
             {
@@ -460,20 +327,22 @@ static UIImage *contactCellCheckedImage()
 {
     [super layoutSubviews];
     
-    CGFloat separatorHeight = TGIsRetina() ? 0.5f : 1.0f;
-    CGFloat separatorInset = _selectionEnabled ? (_hideAvatar ? 49 : 98) : (TGIsPad() ? 74.0f : 65.0f);
+    CGFloat separatorHeight = TGScreenPixel;
+    CGFloat separatorInset = _selectionEnabled ? 98 : (TGIsPad() ? 74.0f : 65.0f);
     if (TGIsPad() && _selectionEnabled)
         separatorInset += 21.0f;
     _separatorLayer.frame = CGRectMake(separatorInset, self.frame.size.height - separatorHeight, self.frame.size.width - separatorInset, separatorHeight);
     
     CGRect frame = self.selectedBackgroundView.frame;
-    frame.origin.y = true ? -1 : 0;
+    frame.origin.y = -1;
     frame.size.height = self.frame.size.height + 1;
     self.selectedBackgroundView.frame = frame;
     
     CGSize viewSize = self.contentView.frame.size;
+    //viewSize.width = MAX(viewSize.width, frame.size.width);
+    //self.contentView.frame = CGRectMake(self.contentView.frame.origin.x, self.contentView.frame.origin.y, viewSize.width, viewSize.height);
     
-    int leftPadding = _selectionEnabled ? (_hideAvatar ? -16 : (TGIsPad() ? 45.0f : 34.0f)) : 0;
+    int leftPadding = _selectionEnabled ? (TGIsPad() ? 45.0f : 34.0f) : 0;
     if (self.editing)
         leftPadding += 2;
     
@@ -496,7 +365,7 @@ static UIImage *contactCellCheckedImage()
     
     if (_checkButton != nil)
     {
-        _checkButton.frame = CGRectMake(_selectionEnabled ? (12 + (TGIsPad() ? 14.0f : 0.0f)) : (-12 - _checkButton.frame.size.width), CGFloor((self.frame.size.height - 22) / 2.0f), 22, 22);
+        _checkButton.frame = CGRectMake(_selectionEnabled ? (7 + (TGIsPad() ? 14.0f : 0.0f)) : (-12 - _checkButton.frame.size.width), CGFloor((self.frame.size.height - 32) / 2.0f), 32, 32);
     }
     
     int titleLabelsY = 0;
@@ -528,7 +397,7 @@ static UIImage *contactCellCheckedImage()
     if (selected || wasSelected)
     {
         CGRect frame = self.selectedBackgroundView.frame;
-        frame.origin.y = true ? -1 : 0;
+        frame.origin.y = -1;
         frame.size.height = self.frame.size.height + 1;
         self.selectedBackgroundView.frame = frame;
         
@@ -544,7 +413,7 @@ static UIImage *contactCellCheckedImage()
     if (highlighted || wasHighlighted)
     {
         CGRect frame = self.selectedBackgroundView.frame;
-        frame.origin.y = true ? -1 : 0;
+        frame.origin.y = -1;
         frame.size.height = self.frame.size.height + 1;
         self.selectedBackgroundView.frame = frame;
         

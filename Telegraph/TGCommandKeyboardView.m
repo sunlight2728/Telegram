@@ -1,11 +1,8 @@
 #import "TGCommandKeyboardView.h"
 
-#import "TGFont.h"
-#import "TGImageUtils.h"
+#import <LegacyComponents/LegacyComponents.h>
 
-#import "TGBotComandInfo.h"
-
-#import "TGBotReplyMarkup.h"
+#import "TGPresentation.h"
 
 @interface TGCommandKeyboardScrollView : UIScrollView
 
@@ -35,6 +32,9 @@
 
 @implementation TGCommandKeyboardView
 
+@synthesize safeAreaInset = _safeAreaInset;
+@synthesize presentation = _presentation;
+
 - (instancetype)initWithFrame:(CGRect)frame
 {
     self = [super initWithFrame:frame];
@@ -58,44 +58,18 @@
     return self;
 }
 
-+ (UIImage *)buttonImage
+- (void)setPresentation:(TGPresentation *)presentation
 {
-    static UIImage *image = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^
+    _presentation = presentation;
+    _backgroundView.backgroundColor = presentation.pallete.chatInputBotKeyboardBackgroundColor;
+    _topSeparatorView.backgroundColor = presentation.pallete.chatInputKeyboardBorderColor;
+    
+    for (UIButton *button in _buttons)
     {
-        CGFloat radius = 5.0f;
-        CGFloat shadowSize = 1.0f;
-        UIGraphicsBeginImageContextWithOptions(CGSizeMake(radius * 2.0f, radius * 2.0f + shadowSize), false, 0.0f);
-        CGContextRef context = UIGraphicsGetCurrentContext();
-        CGContextSetFillColorWithColor(context, UIColorRGB(0xc3c7c9).CGColor);
-        CGContextFillEllipseInRect(context, CGRectMake(0.0f, shadowSize, radius * 2.0f, radius * 2.0f));
-        CGContextSetFillColorWithColor(context, [UIColor whiteColor].CGColor);
-        CGContextFillEllipseInRect(context, CGRectMake(0.0f, 0.0f, radius * 2.0f, radius * 2.0f));
-        image = [UIGraphicsGetImageFromCurrentImageContext() stretchableImageWithLeftCapWidth:(NSInteger)radius topCapHeight:(NSInteger)radius];
-        UIGraphicsEndImageContext();
-    });
-    return image;
-}
-
-+ (UIImage *)buttonHighlightedImage
-{
-    static UIImage *image = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^
-    {
-        CGFloat radius = 5.0f;
-        CGFloat shadowSize = 1.0f;
-        UIGraphicsBeginImageContextWithOptions(CGSizeMake(radius * 2.0f, radius * 2.0f + shadowSize), false, 0.0f);
-        CGContextRef context = UIGraphicsGetCurrentContext();
-        CGContextSetFillColorWithColor(context, UIColorRGB(0xc3c7c9).CGColor);
-        CGContextFillEllipseInRect(context, CGRectMake(0.0f, shadowSize, radius * 2.0f, radius * 2.0f));
-        CGContextSetFillColorWithColor(context, UIColorRGB(0xa8b3c0).CGColor);
-        CGContextFillEllipseInRect(context, CGRectMake(0.0f, 0.0f, radius * 2.0f, radius * 2.0f));
-        image = [UIGraphicsGetImageFromCurrentImageContext() stretchableImageWithLeftCapWidth:(NSInteger)radius topCapHeight:(NSInteger)radius];
-        UIGraphicsEndImageContext();
-    });
-    return image;
+        [button setBackgroundImage:self.presentation.images.chatCommandsKeyboardButtonImage forState:UIControlStateNormal];
+        [button setBackgroundImage:self.presentation.images.chatCommandsKeyboardHighlightedButtonImage forState:UIControlStateHighlighted];
+        [button setTitleColor:self.presentation.pallete.chatInputBotKeyboardButtonTextColor forState:UIControlStateNormal];
+    }
 }
 
 - (void)setReplyMarkup:(TGBotReplyMarkup *)replyMarkup
@@ -131,11 +105,13 @@
 - (UIButton *)addButton:(NSString *)title
 {
     UIButton *button = [[UIButton alloc] init];
-    [button setBackgroundImage:[TGCommandKeyboardView buttonImage] forState:UIControlStateNormal];
-    [button setBackgroundImage:[TGCommandKeyboardView buttonHighlightedImage] forState:UIControlStateHighlighted];
+    [button setBackgroundImage:self.presentation.images.chatCommandsKeyboardButtonImage forState:UIControlStateNormal];
+    [button setBackgroundImage:self.presentation.images.chatCommandsKeyboardHighlightedButtonImage forState:UIControlStateHighlighted];
     [button setTitle:title forState:UIControlStateNormal];
-    [button setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
+    [button setTitleColor:self.presentation.pallete.chatInputBotKeyboardButtonTextColor forState:UIControlStateNormal];
     button.titleLabel.font = TGSystemFontOfSize(16.0f);
+    button.titleLabel.numberOfLines = 2;
+    button.titleLabel.textAlignment = NSTextAlignmentCenter;
     [button addTarget:self action:@selector(buttonPressed:) forControlEvents:UIControlEventTouchUpInside];
     [button setTitleEdgeInsets:UIEdgeInsetsMake(0.0f, 6.0f, 0.0f, 6.0f)];
     button.exclusiveTouch = true;
@@ -170,7 +146,7 @@
                 if (i == index)
                 {
                     if (_commandActivated)
-                        _commandActivated(button.text, _replyMarkup.userId, _replyMarkup.messageId);
+                        _commandActivated(button, _replyMarkup.userId, _replyMarkup.messageId);
                     found = true;
                     break;
                 }
@@ -210,11 +186,19 @@
     CGSize buttonSize = [self buttonSize];
     CGFloat rowSpacing = [self rowSpacing];
     
-    contentSize.height += insets.top + insets.bottom;
+    contentSize.height += insets.top + insets.bottom + _safeAreaInset.bottom;
     
     contentSize.height += _replyMarkup.rows.count * buttonSize.height + MAX((int)_replyMarkup.rows.count - 1, 0) * rowSpacing;
     
     return CGSizeMake(contentSize.width, MIN(190.0f, contentSize.height));
+}
+
+- (void)setSafeAreaInset:(UIEdgeInsets)safeAreaInset
+{
+    _safeAreaInset = safeAreaInset;
+    _scrollView.contentInset = UIEdgeInsetsMake(0.0f, 0.0f, safeAreaInset.bottom, 0.0f);
+    _scrollView.scrollIndicatorInsets = _scrollView.contentInset;
+    [self layoutSubviews];
 }
 
 - (void)layoutSubviews
@@ -222,15 +206,16 @@
     [super layoutSubviews];
     
     CGSize bounds = self.bounds.size;
+    CGFloat boundsWidth = bounds.width - _safeAreaInset.left - _safeAreaInset.right;
     
     _backgroundView.frame = CGRectMake(0.0f, 0.0f, bounds.width, bounds.height + 210.0f);
     
-    _topSeparatorView.frame = CGRectMake(0.0f, 0.0f, bounds.width, TGIsRetina() ? 0.5f : 1.0f);
+    _topSeparatorView.frame = CGRectMake(0.0f, 0.0f, bounds.width, TGScreenPixel);
     
-    _scrollView.frame = CGRectMake(0.0f, 0.0f, bounds.width, bounds.height);
+    _scrollView.frame = CGRectMake(_safeAreaInset.left, 0.0f, boundsWidth, bounds.height);
     
     CGSize contentSize = CGSizeZero;
-    contentSize.width = bounds.width;
+    contentSize.width = boundsWidth;
     UIEdgeInsets insets = [self insets];
     CGSize buttonSize = [self buttonSize];
     
@@ -242,7 +227,7 @@
     if (contentSize.height < self.frame.size.height)
     {
         CGFloat spacingHeight = 0.0f;
-        CGFloat availableHeight = self.frame.size.height - contentSize.height - spacingHeight;
+        CGFloat availableHeight = self.frame.size.height - contentSize.height - spacingHeight - _safeAreaInset.bottom;
         buttonSize.height += CGFloor(availableHeight / _replyMarkup.rows.count);
         
         contentSize.height = insets.top + insets.bottom + _replyMarkup.rows.count * buttonSize.height + MAX((int)_replyMarkup.rows.count - 1, 0) * rowSpacing;
@@ -255,7 +240,7 @@
     for (TGBotReplyMarkupRow *row in _replyMarkup.rows)
     {
         NSInteger columnCount = row.buttons.count;
-        buttonSize.width = CGFloor(((bounds.width - insets.left - insets.right) + columnSpacing - columnCount * columnSpacing) / columnCount);
+        buttonSize.width = CGFloor(((boundsWidth - insets.left - insets.right) + columnSpacing - columnCount * columnSpacing) / columnCount);
         
         CGFloat topEdge = insets.top + rowIndex * (buttonSize.height + rowSpacing);
         NSInteger columnIndex = 0;
@@ -271,6 +256,49 @@
         }
         rowIndex++;
     }
+}
+
+- (bool)isExpanded
+{
+    return false;
+}
+
+- (void)setExpanded:(bool)__unused expanded
+{
+    
+}
+
+- (void)setVisible:(bool)__unused visible animated:(bool)__unused animated
+{
+    
+}
+
+- (CGFloat)preferredHeight:(bool)landscape
+{
+    if (!self.matchDefaultHeight)
+    {
+        CGFloat height = [self sizeThatFits:CGSizeZero].height;
+        return height;
+    }
+    
+    if (TGIsPad())
+        return landscape ? 398.0f : 313.0f;
+    
+    if ([TGViewController hasTallScreen])
+        return landscape ? 209.0f : 333.0f;
+    else if ([TGViewController hasVeryLargeScreen])
+        return landscape ? 194.0f : 271.0f;
+    else if ([TGViewController hasLargeScreen])
+        return landscape ? 194.0f : 258.0f;
+    else if ([TGViewController isWidescreen])
+        return landscape ? 193.0f : 253.0f;
+    
+    return landscape ? 193.0f : 253.0f;
+}
+
+- (bool)isInteracting
+{
+    return false;
 }
 
 @end

@@ -1,9 +1,13 @@
 #import <Foundation/Foundation.h>
 
-@interface TGBotContextResultSendMessageAuto : NSObject
+@class TGBotReplyMarkup;
 
-@property (nonatomic, strong, readonly) NSString *caption;
+@interface TGBotContextResultSendMessageAuto : NSObject <NSCoding>
 
-- (instancetype)initWithCaption:(NSString *)caption;
+@property (nonatomic, strong, readonly) NSString *text;
+@property (nonatomic, strong, readonly) NSArray *entities;
+@property (nonatomic, strong, readonly) TGBotReplyMarkup *replyMarkup;
+
+- (instancetype)initWithText:(NSString *)text entities:(NSArray *)entities replyMarkup:(TGBotReplyMarkup *)replyMarkup;
 
 @end

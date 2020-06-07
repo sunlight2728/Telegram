@@ -1,6 +1,7 @@
 #import "TGGiphySearchResultItem.h"
-#import "TGMediaSelectionContext.h"
+#import <LegacyComponents/TGMediaSelectionContext.h>
+#import <LegacyComponents/TGMediaEditingContext.h>
 
-@interface TGGiphySearchResultItem (TGMediaItem) <TGMediaSelectableItem>
+@interface TGGiphySearchResultItem (TGMediaItem) <TGMediaSelectableItem, TGMediaEditableItem>
 
 @end

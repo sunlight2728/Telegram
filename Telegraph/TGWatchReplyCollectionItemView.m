@@ -1,7 +1,10 @@
 #import "TGWatchReplyCollectionItemView.h"
 
-#import "TGFont.h"
-#import "TGTextField.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/TGTextField.h>
+
+#import "TGPresentation.h"
 
 @interface TGWatchReplyCollectionItemView () <UITextFieldDelegate>
 {
@@ -32,6 +35,15 @@
     return self;
 }
 
+- (void)setPresentation:(TGPresentation *)presentation
+{
+    [super setPresentation:presentation];
+    
+    _textField.textColor = presentation.pallete.collectionMenuTextColor;
+    _textField.placeholderColor = presentation.pallete.collectionMenuPlaceholderColor;
+    _textField.keyboardAppearance = presentation.pallete.isDark ? UIKeyboardAppearanceAlert : UIKeyboardAppearanceDefault;
+}
+
 - (void)setValue:(NSString *)value
 {
     _textField.text = value;
@@ -47,16 +59,18 @@
     [super layoutSubviews];
     
     CGFloat textOffset = 14.0f;
-    _textField.frame = CGRectMake(textOffset, 0.0f, self.contentView.frame.size.width - 8.0f - 2.0f - textOffset, self.contentView.frame.size.height);
+    _textField.frame = CGRectMake(textOffset + self.safeAreaInset.left, 0.0f, self.contentView.frame.size.width - 8.0f - 2.0f - textOffset - self.safeAreaInset.left - self.safeAreaInset.right, self.contentView.frame.size.height);
 }
 
 - (void)becomeFirstResponder
 {
+    [super becomeFirstResponder];
     [_textField becomeFirstResponder];
 }
 
 - (void)resignFirstResponder
 {
+    [super resignFirstResponder];
     [_textField resignFirstResponder];
 }
 

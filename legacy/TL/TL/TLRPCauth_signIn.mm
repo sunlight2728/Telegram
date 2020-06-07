@@ -15,7 +15,7 @@
 
 - (int)impliedResponseSignature
 {
-    return (int)0xff036af1;
+    return (int)0xb1937d19;
 }
 
 - (int)layerVersion
@@ -35,7 +35,7 @@
     return 0;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)__unused metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)__unused metaObject
 {
     TGLog(@"TLbuildFromMetaObject is not implemented for base type");
     return nil;
@@ -62,7 +62,7 @@
     return (int32_t)0xc6e76afa;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)metaObject
 {
     TLRPCauth_signIn$auth_signIn *object = [[TLRPCauth_signIn$auth_signIn alloc] init];
     object.phone_number = metaObject->getString((int32_t)0xaecb6c79);

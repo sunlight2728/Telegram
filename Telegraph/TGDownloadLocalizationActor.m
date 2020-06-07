@@ -8,14 +8,14 @@
 
 #import "TGDownloadLocalizationActor.h"
 
-#import "ActionStage.h"
+#import <LegacyComponents/ActionStage.h>
 
-#import "TGProgressWindow.h"
+#import <LegacyComponents/TGProgressWindow.h>
 #import "TGTelegraph.h"
 
 #import "TGAppDelegate.h"
 
-#import "TGAlertView.h"
+#import "TGCustomAlertView.h"
 
 @interface TGDownloadLocalizationActor () <TGRawHttpActor>
 {
@@ -72,7 +72,7 @@
     int64_t randomId = 0;
     arc4random_buf(&randomId, 8);
     NSString *filePath = [NSTemporaryDirectory() stringByAppendingPathComponent:[[NSString alloc] initWithFormat:@"%" PRId64 ".strings", randomId]];
-    [response writeToFile:filePath atomically:false];
+    [response writeToFile:filePath atomically:true];
     
     TGProgressWindow *progressWindow = _progressWindow;
     _progressWindow = nil;
@@ -224,8 +224,7 @@
                 reasonString = [[NSString alloc] initWithFormat:@"invalid value format for keys %@", invalidFormatKeysString];
             }
             
-            TGAlertView *alertView = [[TGAlertView alloc] initWithTitle:nil message:[[NSString alloc] initWithFormat:@"Invalid localization file: %@", reasonString] delegate:nil cancelButtonTitle:TGLocalized(@"Common.OK") otherButtonTitles:nil];
-            [alertView show];
+            [TGCustomAlertView presentAlertWithTitle:nil message:[[NSString alloc] initWithFormat:@"Invalid localization file: %@", reasonString] cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
         }
     });
 }

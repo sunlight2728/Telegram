@@ -1,14 +1,16 @@
 #import "TGSendAudioSignal.h"
+
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGSendMessageSignals.h"
 
 #import "TGAppDelegate.h"
 
-#import "ActionStage.h"
+#import <LegacyComponents/ActionStage.h>
 #import "TGLiveUploadActor.h"
 
 #import "TGDataItem.h"
 
-#import "TGDocumentMediaAttachment.h"
 #import "TLInputMedia.h"
 
 #import "TLDocumentAttribute$documentAttributeAudio.h"
@@ -16,6 +18,10 @@
 #import "TGPreparedLocalDocumentMessage.h"
 
 #import "TGAudioWaveformSignal.h"
+
+#import "TLInputMediaUploadedDocument.h"
+
+#import "TGTelegramNetworking.h"
 
 @interface TGUploadFileAdapter : NSObject <ASWatcher>
 {
@@ -77,6 +83,8 @@
     if (_liveData != nil)
         options[@"liveData"] = _liveData;
     
+    options[@"mediaTypeTag"] = @(TGNetworkMediaTypeTagAudio);
+    
     [ActionStageInstance() dispatchOnStageQueue:^
     {
         static int actionId = 100000;
@@ -126,60 +134,50 @@
     documentAttachment.size = fileSize;
     documentAttachment.mimeType = @"audio/ogg";
     
-    NSString *audioFileDirectory = [TGPreparedLocalDocumentMessage localDocumentDirectoryForLocalDocumentId:localAudioId];
+    NSString *audioFileDirectory = [TGPreparedLocalDocumentMessage localDocumentDirectoryForLocalDocumentId:localAudioId version:0];
     NSString *audioFilePath = [audioFileDirectory stringByAppendingPathComponent:@"audio.ogg"];
     
     [[NSFileManager defaultManager] createDirectoryAtPath:audioFileDirectory withIntermediateDirectories:true attributes:nil error:NULL];
     [tempDataItem moveToPath:audioFilePath];
     
-    SSignal *addToDatabaseSignal = [TGSendMessageSignals _addMessageToDatabaseWithPeerId:peerId replyToMid:replyToMid text:nil attachment:documentAttachment];
-    
-    return [addToDatabaseSignal mapToSignal:^SSignal *(TGMessage *message)
+    SSignal *uploadSignal = [[SSignal alloc] initWithGenerator:^id<SDisposable>(SSubscriber *subscriber)
     {
-        SSignal *uploadSignal = [[SSignal alloc] initWithGenerator:^id<SDisposable>(SSubscriber *subscriber)
+        TGUploadFileAdapter *uploadAdapter = [[TGUploadFileAdapter alloc] initWithPath:audioFilePath liveData:liveData];
+        [uploadAdapter startWithCompletion:^(NSDictionary *result)
         {
-            TGUploadFileAdapter *uploadAdapter = [[TGUploadFileAdapter alloc] initWithPath:audioFilePath liveData:liveData];
-            [uploadAdapter startWithCompletion:^(NSDictionary *result)
+            if (result != nil)
             {
-                if (result != nil)
-                {
-                    [subscriber putNext:result];
-                    [subscriber putCompletion];
-                }
-                else
-                {
-                    [subscriber putError:nil];
-                }
-            }];
-            
-            return [[SBlockDisposable alloc] initWithBlock:^
+                [subscriber putNext:result];
+                [subscriber putCompletion];
+            }
+            else
             {
-                [uploadAdapter description];
-            }];
+                [subscriber putError:nil];
+            }
         }];
         
-        return [uploadSignal mapToSignal:^SSignal *(NSDictionary *result)
+        return [[SBlockDisposable alloc] initWithBlock:^
         {
-            return [TGSendMessageSignals _sendMediaWithMessage:message replyToMid:replyToMid mediaProducer:^TLInputMedia *
-            {
-                TLInputMedia$inputMediaUploadedDocument *uploadedDocument = [[TLInputMedia$inputMediaUploadedDocument alloc] init];
-                uploadedDocument.file = result[@"file"];
-                TLDocumentAttribute$documentAttributeAudio *audio = [[TLDocumentAttribute$documentAttributeAudio alloc] init];
-                audio.duration = duration;
-                audio.flags |= (1 << 10);
-                if (waveform != nil) {
-                    audio.waveform = [waveform bitstream];
-                    audio.flags |= (1 << 2);
-                }
-                
-                TLDocumentAttribute$documentAttributeFilename *filename = [[TLDocumentAttribute$documentAttributeFilename alloc] init];
-                filename.file_name = @"audio.ogg";
-                
-                uploadedDocument.attributes = @[audio, filename];
-                
-                return uploadedDocument;
-            }];
+            [uploadAdapter description];
         }];
+    }];
+    
+    return [TGSendMessageSignals sendMediaWithPeerId:peerId replyToMid:replyToMid attachment:documentAttachment uploadSignal:uploadSignal mediaProducer:^TLInputMedia *(NSDictionary *uploadInfo)
+    {
+        TLInputMediaUploadedDocument *uploadedDocument = [[TLInputMediaUploadedDocument alloc] init];
+        uploadedDocument.file = uploadInfo[@"file"];
+        uploadedDocument.mime_type = @"audio/ogg";
+        
+        TLDocumentAttribute$documentAttributeAudio *audio = [[TLDocumentAttribute$documentAttributeAudio alloc] init];
+        audio.duration = duration;
+        audio.flags |= (1 << 10);
+        if (waveform != nil) {
+            audio.waveform = [waveform bitstream];
+            audio.flags |= (1 << 2);
+        }
+        uploadedDocument.attributes = @[audio];
+        
+        return uploadedDocument;
     }];
 }
 

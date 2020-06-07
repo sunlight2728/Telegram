@@ -19,7 +19,7 @@
     return 0;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)__unused metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)__unused metaObject
 {
     TGLog(@"TLbuildFromMetaObject is not implemented for base type");
     return nil;
@@ -33,7 +33,7 @@
 
 @end
 
-@implementation TLStickerSet$stickerSet : TLStickerSet
+@implementation TLStickerSet$stickerSetMeta : TLStickerSet
 
 
 - (int32_t)TLconstructorSignature
@@ -46,9 +46,9 @@
     return (int32_t)0x1bf4595e;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)metaObject
 {
-    TLStickerSet$stickerSet *object = [[TLStickerSet$stickerSet alloc] init];
+    TLStickerSet$stickerSetMeta *object = [[TLStickerSet$stickerSetMeta alloc] init];
     object.flags = metaObject->getInt32((int32_t)0x81915c23);
     object.n_id = metaObject->getInt64((int32_t)0x7a5601fb);
     object.access_hash = metaObject->getInt64((int32_t)0x8f305224);

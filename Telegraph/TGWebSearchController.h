@@ -1,7 +1,9 @@
-#import "TGViewController.h"
+#import <LegacyComponents/TGViewController.h>
+#import <LegacyComponents/LegacyComponentsContext.h>
 
 @class TGImageInfo;
 @class TGSuggestionContext;
+@class TGPresentation;
 
 @interface TGWebSearchController : TGViewController
 
@@ -13,11 +15,15 @@
 
 @property (nonatomic, readonly) bool avatarSelection;
 @property (nonatomic, assign) bool captionsEnabled;
+@property (nonatomic, assign) bool allowCaptionEntities;
 @property (nonatomic, strong) TGSuggestionContext *suggestionContext;
 
-- (instancetype)initForAvatarSelection:(bool)avatarSelection embedded:(bool)embedded;
+@property (nonatomic, strong) TGPresentation *presentation;
+@property (nonatomic, strong) NSString *recipientName;
 
-- (NSArray *)selectedItemSignals:(id (^)(id, NSString *))imageDescriptionGenerator;
+- (instancetype)initWithContext:(id<LegacyComponentsContext>)context forAvatarSelection:(bool)avatarSelection embedded:(bool)embedded allowGrouping:(bool)allowGrouping;
+
+- (NSArray *)selectedItemSignals:(id (^)(id, NSString *, NSArray *))imageDescriptionGenerator;
 
 + (void)clearRecents;
 + (void)addRecentSelectedItems:(NSArray *)items;

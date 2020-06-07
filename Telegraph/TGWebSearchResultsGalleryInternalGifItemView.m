@@ -1,28 +1,25 @@
 #import "TGWebSearchResultsGalleryInternalGifItemView.h"
 
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGWebSearchResultsGalleryInternalGifItem.h"
 
-#import "TGImageView.h"
-#import "TGModernAnimatedImagePlayer.h"
-#import "TGImageUtils.h"
-#import "TGStringUtils.h"
+#import <LegacyComponents/TGImageView.h>
+#import <LegacyComponents/TGModernAnimatedImagePlayer.h>
 
-#import "ActionStage.h"
+#import <LegacyComponents/ActionStage.h>
 
-#import "TGMessageImageViewOverlayView.h"
+#import <LegacyComponents/TGMessageImageViewOverlayView.h>
 
-#import "TGModernButton.h"
+#import <LegacyComponents/TGModernButton.h>
 
 #import "ATQueue.h"
 
 #import "TGMediaStoreContext.h"
 
-#import "TGModernGalleryTransitionView.h"
-
-#import "TGImageInfo.h"
+#import <LegacyComponents/TGModernGalleryTransitionView.h>
 
 #import "TGPreparedLocalDocumentMessage.h"
-#import "TGDocumentMediaAttachment.h"
 
 @interface TGWebSearchResultsGalleryInternalGifItemView () <ASWatcher>
 {
@@ -160,7 +157,7 @@
     __weak TGWebSearchResultsGalleryInternalGifItemView *weakSelf = self;
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^
     {
-        NSString *filePath = [[TGPreparedLocalDocumentMessage localDocumentDirectoryForDocumentId:checkingItem.webSearchResult.documentId] stringByAppendingPathComponent:[TGDocumentMediaAttachment safeFileNameForFileName:checkingItem.webSearchResult.fileName]];
+        NSString *filePath = [[TGPreparedLocalDocumentMessage localDocumentDirectoryForDocumentId:checkingItem.webSearchResult.documentId version:0] stringByAppendingPathComponent:[TGDocumentMediaAttachment safeFileNameForFileName:checkingItem.webSearchResult.fileName]];
         NSData *data = [[NSData alloc] initWithContentsOfFile:filePath];
         
         TGDispatchOnMainThread(^

@@ -1,14 +1,16 @@
 #import "TGWebSearchResultsGalleryImageItemView.h"
-#import "TGModernGalleryImageItemImageView.h"
+
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/TGModernGalleryImageItemImageView.h>
 
 #import "TGWebSearchResultsGalleryImageItem.h"
 #import "TGWebSearchResultsGalleryInternalImageItem.h"
 
-#import "TGImageUtils.h"
-#import "TGPhotoEditorUtils.h"
+#import <LegacyComponents/TGPhotoEditorUtils.h>
 
 #import "TGWebSearchResult.h"
-#import "PGPhotoEditorValues.h"
+#import <LegacyComponents/PGPhotoEditorValues.h>
 
 #import "TGBingSearchResultItem+TGMediaItem.h"
 #import "TGWebSearchInternalImageResult+TGMediaItem.h"
@@ -81,7 +83,7 @@
             }
             else
             {
-                return [[editableItem.editableMediaItem originalImageSignal] afterNext:^(__unused id next)
+                return [[editableItem.editableMediaItem originalImageSignal:0] afterNext:^(__unused id next)
                 {
                     fadeOutRepView();
                 }];

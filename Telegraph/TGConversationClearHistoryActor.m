@@ -1,6 +1,6 @@
 #import "TGConversationClearHistoryActor.h"
 
-#import "ActionStage.h"
+#import <LegacyComponents/ActionStage.h>
 
 #import "TGTelegraph.h"
 #import "TGDatabase.h"
@@ -24,7 +24,7 @@
     }
     
     [ActionStageInstance() dispatchResource:@"/tg/conversation/historyCleared" resource:@(conversationId)];
-    [TGDatabaseInstance() clearConversation:conversationId populateActionQueue:true];
+    [TGDatabaseInstance() transactionClearConversationsWithPeerIds:@[@(conversationId)] interactive:true];
     
     dispatch_async([ActionStageInstance() globalStageDispatchQueue], ^
     {

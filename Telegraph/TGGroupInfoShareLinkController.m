@@ -1,5 +1,7 @@
 #import "TGGroupInfoShareLinkController.h"
 
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGGroupManagementSignals.h"
 
 #import "TGHeaderCollectionItem.h"
@@ -7,12 +9,13 @@
 #import "TGCommentCollectionItem.h"
 #import "TGButtonCollectionItem.h"
 
-#import "TGAlertView.h"
-#import "TGProgressWindow.h"
-
-#import "TGPeerIdAdapter.h"
+#import "TGCustomAlertView.h"
+#import <LegacyComponents/TGProgressWindow.h>
 
 #import "TGChannelManagementSignals.h"
+
+#import "TGShareMenu.h"
+#import "TGSendMessageSignals.h"
 
 @interface TGGroupInfoShareLinkController ()
 {
@@ -22,12 +25,17 @@
     int64_t _accessHash;
     
     TGGroupInfoShareLinkLinkItem *_linkItem;
+    TGButtonCollectionItem *_shareItem;
     UIActivityIndicatorView *_activityIndicator;
 }
 
 @end
 
 @implementation TGGroupInfoShareLinkController
+
+static NSString *updatedLink(NSString *link) {
+    return [link stringByReplacingOccurrencesOfString:@"https://telegram.me/" withString:@"https://t.me/"];
+}
 
 - (instancetype)initWithPeerId:(int64_t)peerId accessHash:(int64_t)accessHash currentLink:(NSString *)currentLink
 {
@@ -40,7 +48,7 @@
         self.title = TGLocalized(@"GroupInfo.InviteLink.Title");
         
         _linkItem = [[TGGroupInfoShareLinkLinkItem alloc] init];
-        _linkItem.text = currentLink;
+        _linkItem.text = updatedLink(currentLink);
         TGCollectionMenuSection *linkSection = [[TGCollectionMenuSection alloc] initWithItems:@[
             [[TGHeaderCollectionItem alloc] initWithTitle:TGLocalized(@"GroupInfo.InviteLink.LinkSection")],
             _linkItem,
@@ -53,13 +61,13 @@
         copyItem.deselectAutomatically = true;
         TGButtonCollectionItem *revokeItem = [[TGButtonCollectionItem alloc] initWithTitle:TGLocalized(@"GroupInfo.InviteLink.RevokeLink") action:@selector(revokePressed)];
         revokeItem.deselectAutomatically = true;
-        TGButtonCollectionItem *shareItem = [[TGButtonCollectionItem alloc] initWithTitle:TGLocalized(@"GroupInfo.InviteLink.ShareLink") action:@selector(sharePressed)];
-        shareItem.deselectAutomatically = true;
+        _shareItem = [[TGButtonCollectionItem alloc] initWithTitle:TGLocalized(@"GroupInfo.InviteLink.ShareLink") action:@selector(sharePressed)];
+        _shareItem.deselectAutomatically = true;
         
         TGCollectionMenuSection *actionSection = [[TGCollectionMenuSection alloc] initWithItems:@[
             copyItem,
             revokeItem,
-            shareItem
+            _shareItem
         ]];
         actionSection.insets = UIEdgeInsetsMake(27.0f, 0.0f, 32.0f, 0.0f);
         [self.menuSections addSection:actionSection];
@@ -121,7 +129,9 @@
 
 - (void)_setLink:(NSString *)link
 {
-    _linkItem.text = link;
+    _linkItem.text = updatedLink(link);
+    if (self.linkChanged != nil)
+        self.linkChanged(_linkItem.text);
     
     [self.collectionLayout invalidateLayout];
     [self.collectionView layoutSubviews];
@@ -131,13 +141,13 @@
 {
     [[UIPasteboard generalPasteboard] setString:_linkItem.text];
     
-    [[[TGAlertView alloc] initWithTitle:nil message:TGLocalized(@"GroupInfo.InviteLink.CopyAlert.Success") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil] show];
+    [TGCustomAlertView presentAlertWithTitle:nil message:TGLocalized(@"GroupInfo.InviteLink.CopyAlert.Success") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
 }
 
 - (void)revokePressed
 {
     __weak TGGroupInfoShareLinkController *weakSelf = self;
-    [[[TGAlertView alloc] initWithTitle:nil message:TGLocalized(@"GroupInfo.InviteLink.RevokeAlert.Text") cancelButtonTitle:TGLocalized(@"Common.Cancel") okButtonTitle:TGLocalized(@"GroupInfo.InviteLink.RevokeAlert.Revoke") completionBlock:^(bool okButtonPressed)
+    [TGCustomAlertView presentAlertWithTitle:nil message:TGLocalized(@"GroupInfo.InviteLink.RevokeAlert.Text") cancelButtonTitle:TGLocalized(@"Common.Cancel") okButtonTitle:TGLocalized(@"GroupInfo.InviteLink.RevokeAlert.Revoke") completionBlock:^(bool okButtonPressed)
     {
         __strong TGGroupInfoShareLinkController *strongSelf = weakSelf;
         if (strongSelf != nil)
@@ -145,7 +155,7 @@
             if (okButtonPressed)
                 [strongSelf _revokeLink];
         }
-    }] show];
+    }];
 }
 
 - (void)_revokeLink
@@ -170,7 +180,7 @@
             if (strongSelf != nil)
                 [strongSelf _setLink:link];
             
-            [[[TGAlertView alloc] initWithTitle:nil message:TGLocalized(@"GroupInfo.InviteLink.RevokeAlert.Success") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil] show];
+            [TGCustomAlertView presentAlertWithTitle:nil message:TGLocalized(@"GroupInfo.InviteLink.RevokeAlert.Success") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
         }]];
     } else {
         __weak TGGroupInfoShareLinkController *weakSelf = self;
@@ -186,16 +196,33 @@
             if (strongSelf != nil)
                 [strongSelf _setLink:link];
             
-            [[[TGAlertView alloc] initWithTitle:nil message:TGLocalized(@"GroupInfo.InviteLink.RevokeAlert.Success") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil] show];
+            [TGCustomAlertView presentAlertWithTitle:nil message:TGLocalized(@"GroupInfo.InviteLink.RevokeAlert.Success") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
         }]];
     }
 }
 
 - (void)sharePressed
 {
-    NSArray *dataToShare = @[[NSURL URLWithString:_linkItem.text]];
-    UIActivityViewController *activityViewController = [[UIActivityViewController alloc] initWithActivityItems:dataToShare applicationActivities:nil];
-    [self presentViewController:activityViewController animated:YES completion:nil];
+    NSString *linkString = _linkItem.text;
+    NSString *shareString = linkString;
+    
+    __weak TGGroupInfoShareLinkController *weakSelf = self;
+    CGRect (^sourceRect)(void) = ^CGRect
+    {
+        __strong TGGroupInfoShareLinkController *strongSelf = weakSelf;
+        if (strongSelf == nil)
+            return CGRectZero;
+        
+        return [strongSelf->_shareItem.view convertRect:strongSelf->_shareItem.view.bounds toView:strongSelf.view];
+    };
+    
+    [TGShareMenu presentInParentController:self menuController:nil buttonTitle:TGLocalized(@"ShareMenu.CopyShareLink") buttonAction:^
+    {
+        [[UIPasteboard generalPasteboard] setString:linkString];
+    } shareAction:^(NSArray *peerIds, NSString *caption)
+    {
+        [[TGShareSignals shareText:shareString toPeerIds:peerIds caption:caption] startWithNext:nil];
+    } externalShareItemSignal:[SSignal single:[NSURL URLWithString:shareString]] sourceView:self.view sourceRect:sourceRect barButtonItem:nil];
 }
 
 @end

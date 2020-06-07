@@ -1,8 +1,6 @@
 #import "TGPreparedDownloadExternalImageMessage.h"
 
-#import "TGMessage.h"
-
-#import "PSKeyValueCoder.h"
+#import <LegacyComponents/LegacyComponents.h>
 
 #import "TGDocumentHttpFileReference.h"
 
@@ -13,14 +11,16 @@
 
 @implementation TGPreparedDownloadExternalImageMessage
 
-- (instancetype)initWithSearchResult:(TGExternalImageSearchResult *)searchResult imageInfo:(TGImageInfo *)imageInfo caption:(NSString *)caption replyMessage:(TGMessage *)replyMessage botContextResult:(TGBotContextResultAttachment *)botContextResult {
+- (instancetype)initWithSearchResult:(TGExternalImageSearchResult *)searchResult imageInfo:(TGImageInfo *)imageInfo text:(NSString *)text entities:(NSArray *)entities replyMessage:(TGMessage *)replyMessage botContextResult:(TGBotContextResultAttachment *)botContextResult replyMarkup:(TGReplyMarkupAttachment *)replyMarkup {
     self = [super init];
     if (self != nil) {
         _searchResult = searchResult;
         _imageInfo = imageInfo;
-        _caption = caption;
+        self.text = text;
+        self.entities = entities;
         self.replyMessage = replyMessage;
         self.botContextResult = botContextResult;
+        self.replyMarkup = replyMarkup;
         
         self.executeOnAdd = ^{
             NSString *imageFilePath = [[[TGMediaStoreContext instance] temporaryFilesCache] getValuePathForKey:[searchResult.originalUrl dataUsingEncoding:NSUTF8StringEncoding]];
@@ -57,11 +57,12 @@
     message.date = self.date;
     message.isBroadcast = self.isBroadcast;
     message.messageLifetime = self.messageLifetime;
+    message.text = self.text;
+    message.entities = self.entities;
     
     NSMutableArray *attachments = [[NSMutableArray alloc] init];
     
     TGImageMediaAttachment *imageAttachment = [[TGImageMediaAttachment alloc] init];
-    imageAttachment.caption = _caption;
     imageAttachment.imageInfo = _imageInfo;
     
     [attachments addObject:imageAttachment];
@@ -78,6 +79,10 @@
         [attachments addObject:self.botContextResult];
         
         [attachments addObject:[[TGViaUserAttachment alloc] initWithUserId:self.botContextResult.userId username:nil]];
+    }
+    
+    if (self.replyMarkup != nil) {
+        [attachments addObject:self.replyMarkup];
     }
     
     message.mediaAttachments = attachments;

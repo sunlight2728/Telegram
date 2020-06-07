@@ -1,12 +1,10 @@
 #import "TGPreparedDownloadDocumentMessage.h"
 
-#import "TGMessage.h"
-
-#import "PSKeyValueCoder.h"
+#import <LegacyComponents/LegacyComponents.h>
 
 @implementation TGPreparedDownloadDocumentMessage
 
-- (instancetype)initWithGiphyId:(NSString *)giphyId documentUrl:(NSString *)documentUrl localDocumentId:(int64_t)localDocumentId mimeType:(NSString *)mimeType size:(int)size thumbnailInfo:(TGImageInfo *)thumbnailInfo attributes:(NSArray *)attributes replyMessage:(TGMessage *)replyMessage
+- (instancetype)initWithGiphyId:(NSString *)giphyId documentUrl:(NSString *)documentUrl localDocumentId:(int64_t)localDocumentId mimeType:(NSString *)mimeType size:(int)size thumbnailInfo:(TGImageInfo *)thumbnailInfo attributes:(NSArray *)attributes replyMessage:(TGMessage *)replyMessage replyMarkup:(TGReplyMarkupAttachment *)replyMarkup
 {
     self = [super init];
     if (self != nil)
@@ -19,6 +17,7 @@
         _size = size;
         _thumbnailInfo = thumbnailInfo;
         self.replyMessage = replyMessage;
+        self.replyMarkup = replyMarkup;
     }
     return self;
 }
@@ -50,8 +49,13 @@
         [attachments addObject:replyMedia];
     }
     
+    if (self.replyMarkup != nil) {
+        [attachments addObject:self.replyMarkup];
+    }
+    
     message.mediaAttachments = attachments;
     message.contentProperties = @{@"downloadDocumentUrl": [[TGDownloadDocumentUrl alloc] initWithGiphyId:_giphyId documentUrl:_documentUrl]};
+    message.entities = self.entities;
     
     return message;
 }

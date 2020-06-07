@@ -1,6 +1,8 @@
 #import "TGCacheIndexingItemView.h"
 
-#import "TGFont.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import "TGPresentation.h"
 
 @interface TGCacheIndexingItemView () {
     UIActivityIndicatorView *_activityIndicator;
@@ -29,6 +31,14 @@
         [self.contentView addSubview:_label];
     }
     return self;
+}
+
+- (void)setPresentation:(TGPresentation *)presentation
+{
+    [super setPresentation:presentation];
+    
+    _label.textColor = presentation.pallete.collectionMenuVariantColor;
+    _activityIndicator.color = presentation.pallete.collectionMenuSpinnerColor;
 }
 
 - (void)layoutSubviews {

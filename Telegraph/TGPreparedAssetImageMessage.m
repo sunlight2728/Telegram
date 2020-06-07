@@ -1,10 +1,9 @@
 #import "TGPreparedAssetImageMessage.h"
 
-#import "TGMessage.h"
-#import "TGImageInfo.h"
+#import <LegacyComponents/LegacyComponents.h>
 
 #import "TGAppDelegate.h"
-#import "TGRemoteImageView.h"
+#import <LegacyComponents/TGRemoteImageView.h>
 
 @interface TGPreparedAssetImageMessage ()
 {
@@ -14,14 +13,13 @@
 
 @implementation TGPreparedAssetImageMessage
 
-- (instancetype)initWithAssetIdentifier:(NSString *)assetIdentifier imageInfo:(TGImageInfo *)imageInfo caption:(NSString *)caption useMediaCache:(bool)useMediaCache isCloud:(bool)isCloud document:(bool)document localDocumentId:(int64_t)localDocumentId fileSize:(int)fileSize mimeType:(NSString *)mimeType attributes:(NSArray *)attributes replyMessage:(TGMessage *)replyMessage
+- (instancetype)initWithAssetIdentifier:(NSString *)assetIdentifier imageInfo:(TGImageInfo *)imageInfo text:(NSString *)text entities:(NSArray *)entities useMediaCache:(bool)useMediaCache isCloud:(bool)isCloud document:(bool)document localDocumentId:(int64_t)localDocumentId fileSize:(int)fileSize mimeType:(NSString *)mimeType attributes:(NSArray *)attributes replyMessage:(TGMessage *)replyMessage replyMarkup:(TGReplyMarkupAttachment *)replyMarkup messageLifetime:(int32_t)messageLifetime groupedId:(int64_t)groupedId
 {
     self = [self init];
     if (self != nil)
     {
         _assetIdentifier = assetIdentifier;
         _imageInfo = imageInfo;
-        _caption = caption;
         _useMediaCache = useMediaCache;
         _isCloud = isCloud;
         _document = document;
@@ -29,8 +27,13 @@
         _fileSize = fileSize;
         _mimeType = mimeType;
         _attributes = attributes;
+        self.groupedId = groupedId;
         
+        self.text = text;
+        self.entities = entities;
         self.replyMessage = replyMessage;
+        self.replyMarkup = replyMarkup;
+        self.messageLifetime = messageLifetime;
     }
     return self;
 }
@@ -117,12 +120,13 @@
     message.date = self.date;
     message.isBroadcast = self.isBroadcast;
     message.messageLifetime = self.messageLifetime;
+    message.groupedId = self.groupedId;
+    message.text = self.text;
     
     NSMutableArray *attachments = [[NSMutableArray alloc] init];
     
     TGImageMediaAttachment *imageAttachment = [[TGImageMediaAttachment alloc] init];
     imageAttachment.imageInfo = _imageInfo;
-    imageAttachment.caption = self.caption;
     [attachments addObject:imageAttachment];
     
     if (self.replyMessage != nil)
@@ -134,7 +138,11 @@
     }
     
     message.mediaAttachments = attachments;
-    message.contentProperties = @{@"mediaAsset": [[TGMediaAssetContentProperty alloc] initWithAssetIdentifier:_assetIdentifier isVideo:false isCloud:_isCloud useMediaCache:_useMediaCache]};
+    message.entities = self.entities;
+    
+    NSMutableDictionary *contentProperties = [[NSMutableDictionary alloc] initWithDictionary:message.contentProperties];
+    contentProperties[@"mediaAsset"] = [[TGMediaAssetContentProperty alloc] initWithAssetIdentifier:_assetIdentifier isVideo:false isCloud:_isCloud useMediaCache:_useMediaCache];
+    message.contentProperties = contentProperties;
     
     return message;
 }
@@ -146,6 +154,7 @@
     message.date = self.date;
     message.isBroadcast = self.isBroadcast;
     message.messageLifetime = self.messageLifetime;
+    message.text = self.text;
     
     NSMutableArray *attachments = [[NSMutableArray alloc] init];
     
@@ -164,8 +173,14 @@
         replyMedia.replyMessage = self.replyMessage;
         [attachments addObject:replyMedia];
     }
+    
+    if (self.replyMarkup != nil) {
+        [attachments addObject:self.replyMarkup];
+    }
 
     message.mediaAttachments = attachments;
+    message.entities = self.entities;
+    
     message.contentProperties = @{@"mediaAsset": [[TGMediaAssetContentProperty alloc] initWithAssetIdentifier:_assetIdentifier isVideo:false isCloud:_isCloud useMediaCache:false]};
     
     return message;
@@ -211,7 +226,7 @@
     arc4random_buf(&randomId, sizeof(randomId));
     NSString *imagePathComponent = [[NSString alloc] initWithFormat:@"%" PRIx64 ".bin", randomId];
     NSString *filePath = [uploadDirectory stringByAppendingPathComponent:imagePathComponent];
-    [data writeToFile:filePath atomically:false];
+    [data writeToFile:filePath atomically:true];
     
     return [@"file://" stringByAppendingString:filePath];
 }

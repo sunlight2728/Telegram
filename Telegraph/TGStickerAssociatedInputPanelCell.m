@@ -1,15 +1,15 @@
 #import "TGStickerAssociatedInputPanelCell.h"
 
-#import "TGDocumentMediaAttachment.h"
-#import "TGImageView.h"
+#import <LegacyComponents/LegacyComponents.h>
 
-#import "TGImageUtils.h"
-#import "TGStringUtils.h"
+#import <LegacyComponents/TGImageView.h>
 
 @interface TGStickerAssociatedInputPanelCell ()
 {
-    TGDocumentMediaAttachment *_document;
     TGImageView *_imageView;
+    NSString *_previousUri;
+    
+    bool _highlighted;
 }
 
 @end
@@ -32,6 +32,7 @@
 {
     [super prepareForReuse];
     
+    _previousUri = nil;
     [_imageView reset];
 }
 
@@ -41,9 +42,17 @@
     
     NSMutableString *uri = [[NSMutableString alloc] initWithString:@"sticker-preview://?"];
     if (document.documentId != 0)
+    {
         [uri appendFormat:@"documentId=%" PRId64 "", document.documentId];
+        
+        TGMediaOriginInfo *originInfo = document.originInfo ?: [TGMediaOriginInfo mediaOriginInfoForDocumentAttachment:document];
+        if (originInfo != nil)
+            [uri appendFormat:@"&origin_info=%@", [originInfo stringRepresentation]];
+    }
     else
+    {
         [uri appendFormat:@"localDocumentId=%" PRId64 "", document.localDocumentId];
+    }
     [uri appendFormat:@"&accessHash=%" PRId64 "", document.accessHash];
     [uri appendFormat:@"&datacenterId=%" PRId32 "", (int32_t)document.datacenterId];
     
@@ -54,7 +63,30 @@
     [uri appendFormat:@"&width=128&height=128"];
     [uri appendFormat:@"&highQuality=1"];
     
+    if ([_previousUri isEqualToString:uri])
+        return;
+    
+    _previousUri = uri;
     [_imageView loadUri:uri withOptions:nil];
+}
+
+- (void)setHighlighted:(bool)highlighted animated:(bool)__unused animated
+{
+    if (_highlighted != highlighted)
+    {
+        _highlighted = highlighted;
+        
+        if (iosMajorVersion() >= 8)
+        {
+            [UIView animateWithDuration:0.6 delay:0.0 usingSpringWithDamping:0.6f initialSpringVelocity:0.0f options:UIViewAnimationOptionBeginFromCurrentState animations:^
+            {
+                if (_highlighted)
+                    _imageView.transform = CGAffineTransformMakeScale(0.8f, 0.8f);
+                else
+                    _imageView.transform = CGAffineTransformIdentity;
+            } completion:nil];
+        }
+    }
 }
 
 @end

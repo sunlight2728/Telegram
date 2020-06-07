@@ -1,14 +1,18 @@
 #import "TGConversation+Telegraph.h"
 
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGImageInfo+Telegraph.h"
 
 #import "TGTelegraph.h"
 #import "TGDatabase.h"
 
-#import "TGPeerIdAdapter.h"
-
 #import "TLChat$channel.h"
 #import "TLChat$chat.h"
+#import "TLChat$channelForbidden.h"
+
+#import "TGChannelAdminRights+Telegraph.h"
+#import "TGChannelBannedRights+Telegraph.h"
 
 @implementation TGConversationParticipantsData (Telegraph)
 
@@ -90,6 +94,12 @@
                 self.chatPhotoSmall = extractFileUrl(concretePhoto.photo_small);
                 self.chatPhotoMedium = nil;
                 self.chatPhotoBig = extractFileUrl(concretePhoto.photo_big);
+                
+                if ([concretePhoto.photo_small isKindOfClass:[TLFileLocation$fileLocation class]])
+                    self.chatPhotoFileReferenceSmall = ((TLFileLocation$fileLocation *)concretePhoto.photo_small).file_reference;
+                
+                if ([concretePhoto.photo_big isKindOfClass:[TLFileLocation$fileLocation class]])
+                    self.chatPhotoFileReferenceBig = ((TLFileLocation$fileLocation *)concretePhoto.photo_big).file_reference;
             }
             
             self.chatParticipantCount = concreteChat.participants_count;
@@ -106,6 +116,7 @@
                     self.migratedToChannelAccessHash = inputChannel.access_hash;
                 }
             }
+            self.chatCreationDate = concreteChat.date;
         }
         else if ([chatDesc isKindOfClass:[TLChat$channel class]])
         {
@@ -122,7 +133,14 @@
                 self.chatPhotoSmall = extractFileUrl(concretePhoto.photo_small);
                 self.chatPhotoMedium = nil;
                 self.chatPhotoBig = extractFileUrl(concretePhoto.photo_big);
+                
+                if ([concretePhoto.photo_small isKindOfClass:[TLFileLocation$fileLocation class]])
+                    self.chatPhotoFileReferenceSmall = ((TLFileLocation$fileLocation *)concretePhoto.photo_small).file_reference;
+                
+                if ([concretePhoto.photo_big isKindOfClass:[TLFileLocation$fileLocation class]])
+                    self.chatPhotoFileReferenceBig = ((TLFileLocation$fileLocation *)concretePhoto.photo_big).file_reference;
             }
+            self.chatCreationDate = channel.date;
             self.chatVersion = channel.version;
             self.importantSortKey = TGConversationSortKeyMake(self.kind, channel.date, 0);
             self.unimportantSortKey = TGConversationSortKeyMake(self.kind, channel.date, 0);
@@ -144,6 +162,8 @@
             self.isChannelGroup = channel.flags & (1 << 8);
             self.everybodyCanAddMembers = channel.flags & (1 << 10);
             self.signaturesEnabled = channel.flags & (1 << 11);
+            self.isMin = channel.flags & (1 << 12);
+            self.canNotSetUsername = (channel.flags & (1 << 6)) == 0;
             
             self.displayVariant = self.isChannelGroup ? TGChannelDisplayVariantAll : TGChannelDisplayVariantImportant;
             
@@ -153,6 +173,14 @@
             self.restrictionReason = channel.restriction_reason;
             
             self.kind = (self.leftChat || self.kickedFromChat) ? TGConversationKindTemporaryChannel : TGConversationKindPersistentChannel;
+            
+            if (channel.admin_rights != nil) {
+                self.channelAdminRights = [[TGChannelAdminRights alloc] initWithTL:channel.admin_rights];
+            }
+            
+            if (channel.banned_rights != nil) {
+                self.channelBannedRights = [[TGChannelBannedRights alloc] initWithTL:channel.banned_rights];
+            }
         }
         else if ([chatDesc isKindOfClass:[TLChat$channelForbidden class]])
         {
@@ -162,6 +190,7 @@
             self.leftChat = false;
             self.kickedFromChat = true;
             self.chatTitle = channelForbidden.title;
+            self.channelBannedRights = [[TGChannelBannedRights alloc] initWithBanReadMessages:true banSendMessages:true banSendMedia:true banSendStickers:true banSendGifs:true banSendGames:true banSendInline:true banEmbedLinks:true timeout:channelForbidden.until_date == 0 ? INT32_MAX : channelForbidden.until_date];
             self.kind = TGConversationKindTemporaryChannel;
         }
         else if ([chatDesc isKindOfClass:[TLChat$chatForbidden class]])

@@ -1,12 +1,14 @@
-/*
- * This is the source code of Telegram for iOS v. 1.1
- * It is licensed under GNU GPL v. 2 or later.
- * You should have received a copy of the license in this archive (see LICENSE).
- *
- * Copyright Peter Iakovlev, 2013.
- */
-
 #import "TGDocumentController.h"
+
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <MobileCoreServices/MobileCoreServices.h>
+#import <LegacyComponents/TGMediaAssetsUtils.h>
+#import "TGAppDelegate.h"
+
+#import "TGShareMenu.h"
+
+#import "TGLegacyComponentsContext.h"
 
 @interface TGFilePreviewItem : NSObject <QLPreviewItem>
 
@@ -23,8 +25,7 @@
 {
     TGFilePreviewItem *_item;
     int32_t _messageId;
-    
-    UIDocumentInteractionController *_interactionController;
+    SMetaDisposable *_fullscreenDisposable;
 }
 
 @end
@@ -52,21 +53,56 @@
         {
             [self.navigationItem setLeftBarButtonItem:[[UIBarButtonItem alloc] initWithTitle:TGLocalized(@"Common.Done") style:UIBarButtonItemStyleDone target:self action:@selector(donePressed)]];
         }
+        
+        _fullscreenDisposable = [[SMetaDisposable alloc] init];
     }
     return self;
+}
+
+- (void)dealloc
+{
+    [_fullscreenDisposable dispose];
 }
 
 - (void)viewWillAppear:(BOOL)animated
 {
     [super viewWillAppear:animated];
-    
+        
     [self.navigationController setNavigationBarHidden:false animated:animated];
+    
+    if (_previewMode)
+    {
+        UIView *view = [[[self.view.subviews lastObject] subviews] lastObject];
+        if ([view isKindOfClass:[UINavigationBar class]])
+            ((UINavigationBar *)view).hidden = true;
+    }
+}
+
+- (void)viewDidAppear:(BOOL)animated
+{
+    [super viewDidAppear:animated];
+    
+    __weak TGDocumentController *weakSelf = self;
+    [_fullscreenDisposable setDisposable:[[(TGNavigationBar *)self.navigationController.navigationBar hiddenSignal] startWithNext:^(NSNumber *next)
+    {
+        __strong TGDocumentController *strongSelf = weakSelf;
+        [strongSelf setStatusBarHidden:next.boolValue];
+    }]];
+}
+
+- (void)setStatusBarHidden:(bool)hidden
+{
+    [UIView animateWithDuration:0.3 animations:^{
+        [[TGLegacyComponentsContext shared] setApplicationStatusBarAlpha:hidden ? 0.0f : 1.0f];
+    }];
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
     
     [self.navigationController setToolbarHidden:true animated:animated];
+    
+    [self setStatusBarHidden:false];
 }
 
 - (void)donePressed
@@ -75,32 +111,6 @@
         [self.presentingViewController dismissViewControllerAnimated:false completion:nil];
     else
         [self.presentingViewController dismissViewControllerAnimated:true completion:nil];
-}
-
-- (void)viewDidLoad
-{
-    if ([TGViewController useExperimentalRTL])
-        self.view.transform = CGAffineTransformMakeScale(-1.0f, 1.0f);
-}
-
-- (void)viewDidAppear:(BOOL)animated
-{
-    if (iosMajorVersion() >= 8)
-    {
-        NSDictionary *dict = @{@"url": [_item.previewItemURL absoluteString], @"messageId": @(_messageId)};
-        NSData *data = [NSKeyedArchiver archivedDataWithRootObject:dict];
-        
-        NSString *groupName = [@"group." stringByAppendingString:[[NSBundle mainBundle] bundleIdentifier]];
-        
-        NSURL *groupURL = [[NSFileManager defaultManager] containerURLForSecurityApplicationGroupIdentifier:groupName];
-        if (groupURL != nil)
-        {
-            NSURL *currentShareItemMetadataUrl = [groupURL URLByAppendingPathComponent:@"share-item-metadata" isDirectory:false];
-            [data writeToURL:currentShareItemMetadataUrl atomically:true];
-        }
-    }
-    
-    [super viewDidAppear:animated];
 }
 
 - (NSInteger)numberOfPreviewItemsInPreviewController:(QLPreviewController *)__unused controller
@@ -116,6 +126,16 @@
 - (UIViewController *)documentInteractionControllerViewControllerForPreview:(UIDocumentInteractionController *)__unused controller
 {
     return self;
+}
+
+- (BOOL)prefersStatusBarHidden
+{
+    return true;
+}
+
+- (UIStatusBarStyle)preferredStatusBarStyle
+{
+    return [[TGLegacyComponentsContext shared] prefersLightStatusBar] ? UIStatusBarStyleLightContent : UIStatusBarStyleDefault;
 }
 
 @end

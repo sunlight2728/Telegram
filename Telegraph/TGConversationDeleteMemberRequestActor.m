@@ -5,8 +5,8 @@
 #import "TGMessage+Telegraph.h"
 #import "TGConversation+Telegraph.h"
 
-#import "ActionStage.h"
-#import "SGraphObjectNode.h"
+#import <LegacyComponents/ActionStage.h>
+#import <LegacyComponents/SGraphObjectNode.h>
 
 #import "TGTelegraph.h"
 #import "TGTelegramNetworking.h"
@@ -122,8 +122,7 @@
         if (messageDesc != nil)
         {
             TGMessage *message = [[TGMessage alloc] initWithTelegraphMessageDesc:messageDesc];
-            static int actionId = 0;
-            [[[TGConversationAddMessagesActor alloc] initWithPath:[[NSString alloc] initWithFormat:@"/tg/addmessage/(deleteMember%d)", actionId++]] execute:[[NSDictionary alloc] initWithObjectsAndKeys:chats, @"chats", @[message], @"messages", nil]];
+            [TGDatabaseInstance() transactionAddMessages:message == nil ? nil : @[message] updateConversationDatas:chats notifyAdded:true];
         }
     }
     

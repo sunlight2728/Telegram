@@ -1,24 +1,21 @@
 #import "TGSharedMediaFileItemView.h"
 
-#import "TGDocumentMediaAttachment.h"
+#import <LegacyComponents/LegacyComponents.h>
 
-#import "TGFont.h"
-#import "TGImageUtils.h"
-#import "TGStringUtils.h"
-#import "TGDateUtils.h"
+#import <LegacyComponents/TGImageView.h>
 
-#import "TGImageView.h"
-
-#import "TGMessageImageViewOverlayView.h"
+#import <LegacyComponents/TGMessageImageViewOverlayView.h>
 #import "TGSharedMediaAvailabilityState.h"
 
 #import "TGSharedMediaFileThumbnailView.h"
 
 #import "TGSharedFileSignals.h"
-#import "TGViewController.h"
 #import "TGSharedMediaUtils.h"
+#import "TGMusicPlayerItemSignals.h"
 
 #import "TGSharedMediaCheckButton.h"
+
+#import "TGPresentation.h"
 
 @interface TGSharedMediaFileItemView ()
 {
@@ -46,6 +43,8 @@
     TGSharedMediaCheckButton *_checkButton;
     
     UIGestureRecognizer *_tapRecognizer;
+    
+    bool _isAudio;
 }
 
 @end
@@ -58,7 +57,7 @@
     if (self != nil)
     {
         _separatorView = [[UIView alloc] init];
-        _separatorView.backgroundColor = TGSeparatorColor();
+        _separatorView.backgroundColor = UIColorRGB(0xc8c7cc);
         [self.contentView addSubview:_separatorView];
         
         _titleLabel = [[UILabel alloc] init];
@@ -84,10 +83,10 @@
         _thumbnailIconView = [[TGImageView alloc] init];
         
         _progressView = [[UIView alloc] init];
-        _progressView.backgroundColor = TGAccentColor();
+        _progressView.backgroundColor = UIColorRGB(0x007ee5);
         
         self.selectedBackgroundView = [[UIView alloc] init];
-        self.selectedBackgroundView.backgroundColor = TGSelectionColor();
+        self.selectedBackgroundView.backgroundColor = UIColorRGB(0xd9d9d9);
         
         _availabilityStateIconView = [[UIImageView alloc] init];
         
@@ -103,6 +102,20 @@
     return self;
 }
 
+- (void)setPresentation:(TGPresentation *)presentation
+{
+    if (self.presentation == presentation)
+        return;
+    
+     [super setPresentation:presentation];
+    
+    _separatorView.backgroundColor = presentation.pallete.separatorColor;
+    _titleLabel.textColor = presentation.pallete.textColor;
+    _descriptionLabel.textColor = presentation.pallete.secondaryTextColor;
+    _progressView.backgroundColor = presentation.pallete.accentColor;
+    self.selectedBackgroundView.backgroundColor = presentation.pallete.selectionColor;
+}
+
 - (void)prepareForReuse
 {
     [super prepareForReuse];
@@ -112,30 +125,12 @@
 
 - (UIImage *)availabilityStateIconDownload
 {
-    static UIImage *image = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^
-    {
-        image = [UIImage imageNamed:@"SharedMediaDocumentStatusDownload.png"];
-    });
-    return image;
+    return self.presentation.images.sharedMediaDownloadIcon;
 }
 
 - (UIImage *)availabilityStateIconPause
 {
-    static UIImage *image = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^
-    {
-        UIGraphicsBeginImageContextWithOptions(CGSizeMake(11.0f, 11.0f), false, 0.0f);
-        CGContextRef context = UIGraphicsGetCurrentContext();
-        CGContextSetFillColorWithColor(context, UIColorRGB(0x0080fc).CGColor);
-        CGContextFillRect(context, CGRectMake(2.0f, 0.0f, 2.0f, 11.0f - 1.0f));
-        CGContextFillRect(context, CGRectMake(2.0f + 2.0f + 2.0f, 0.0f, 2.0f, 11.0f - 1.0f));
-        image = UIGraphicsGetImageFromCurrentImageContext();
-        UIGraphicsEndImageContext();
-    });
-    return image;
+    return self.presentation.images.sharedMediaPauseIcon;
 }
 
 - (void)setDocumentMediaAttachment:(TGDocumentMediaAttachment *)documentMediaAttachment date:(int)date lastInSection:(bool)__unused lastInSection availabilityState:(TGSharedMediaAvailabilityState *)availabilityState thumbnailColors:(NSArray *)thumbnailColors
@@ -143,17 +138,41 @@
     _documentAttachment = documentMediaAttachment;
     _date = date;
     
+    _titleLabel.lineBreakMode = NSLineBreakByTruncatingMiddle;
     _titleLabel.text = documentMediaAttachment.fileName;
+    
+    for (id attribute in _documentAttachment.attributes)
+    {
+        if ([attribute isKindOfClass:[TGDocumentAttributeAudio class]])
+        {
+            TGDocumentAttributeAudio *audioAttribute = (TGDocumentAttributeAudio *)attribute;
+            if (audioAttribute.title.length > 0)
+            {
+                NSString *title = audioAttribute.title;
+
+                if (audioAttribute.performer.length > 0)
+                    title = [NSString stringWithFormat:@"%@ — %@", audioAttribute.performer, title];
+                
+                _titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+                _titleLabel.text = title;
+            }
+            break;
+        }
+    }
     
     _separatorView.hidden = false;
     
     bool isSticker = false;
+    bool isAudio = false;
     for (id attribute in documentMediaAttachment.attributes)
     {
         if ([attribute isKindOfClass:[TGDocumentAttributeSticker class]])
         {
             isSticker = true;
-            break;
+        }
+        if ([attribute isKindOfClass:[TGDocumentAttributeAudio class]])
+        {
+            isAudio = true;
         }
     }
     
@@ -172,6 +191,14 @@
         useThumbnail = false;
         _legacyThumbnailUrl = nil;
         [_genericIconView setStyle:TGSharedMediaFileThumbnailViewStyleRounded colors:thumbnailColors];
+    }
+    
+    _isAudio = isAudio;
+    
+    if (isAudio)
+    {
+        _legacyThumbnailUrl = nil;
+        useThumbnail = true;
     }
     
     if (useThumbnail)
@@ -368,7 +395,17 @@
 
 - (SSignal *)_imageSignal
 {
-    return [TGSharedFileSignals squareFileThumbnail:_documentAttachment ofSize:![TGViewController isWidescreen] ? CGSizeMake(70.0f, 70.0f) : CGSizeMake(90.0f, 90.0f) threadPool:[TGSharedMediaUtils sharedMediaImageProcessingThreadPool] memoryCache:[TGSharedMediaUtils sharedMediaMemoryImageCache] pixelProcessingBlock:nil];
+    if (_isAudio)
+    {
+        return [[TGMusicPlayerItemSignals albumArtForDocument:_documentAttachment messageId:self.item.messageId thumbnail:true] catch:^SSignal *(__unused id error)
+        {
+            return [SSignal single:[UIImage imageNamed:@"MusicPlayerSmallAlbumArtPlaceholder"]];
+        }];
+    }
+    else
+    {
+        return [TGSharedFileSignals squareFileThumbnail:_documentAttachment ofSize:![TGViewController isWidescreen] ? CGSizeMake(70.0f, 70.0f) : CGSizeMake(90.0f, 90.0f) threadPool:[TGSharedMediaUtils sharedMediaImageProcessingThreadPool] memoryCache:[TGSharedMediaUtils sharedMediaMemoryImageCache] pixelProcessingBlock:nil];
+    }
 }
 
 - (void)setHighlighted:(BOOL)highlighted
@@ -472,7 +509,7 @@
 {
     [super layoutSubviews];
     
-    CGFloat separatorHeight = TGIsRetina() ? 0.5f : 1.0f;
+    CGFloat separatorHeight = TGScreenPixel;
     UIEdgeInsets insets = UIEdgeInsetsMake(8.0f, self.editing ? [self editingInset] : 65.0f, 6.0f, 10.0f);
     _separatorView.frame = CGRectMake(insets.left, self.frame.size.height - separatorHeight, self.frame.size.width - insets.left, separatorHeight);
     

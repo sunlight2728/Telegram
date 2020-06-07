@@ -1,14 +1,10 @@
-/*
- * This is the source code of Telegram for iOS v. 1.1
- * It is licensed under GNU GPL v. 2 or later.
- * You should have received a copy of the license in this archive (see LICENSE).
- *
- * Copyright Peter Iakovlev, 2013.
- */
-
 #import "TGWallpaperListController.h"
 
-#import "ActionStage.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/ActionStage.h>
+
+#import "TGAppDelegate.h"
 
 #import "TGWallpaperListLayout.h"
 #import "TGWallpaperItemCell.h"
@@ -16,27 +12,30 @@
 #import "TGCollectionItemView.h"
 #import "TGDisclosureActionCollectionItem.h"
 
-#import "TGImageUtils.h"
-
 #import "TGWallpaperManager.h"
-#import "TGWallpaperInfo.h"
-#import "TGCustomImageWallpaperInfo.h"
-#import "TGRemoteWallpaperInfo.h"
+#import <LegacyComponents/TGWallpaperInfo.h>
+#import <LegacyComponents/TGCustomImageWallpaperInfo.h>
+#import <LegacyComponents/TGRemoteWallpaperInfo.h>
+#import <LegacyComponents/TGColorWallpaperInfo.h>
 #import "TGModernRemoteWallpaperListActor.h"
 
-#import "TGWallpaperController.h"
+#import "TGLegacyWallpaperController.h"
 
-#import "TGOverlayFormsheetWindow.h"
-#import "TGOverlayFormsheetController.h"
+#import <LegacyComponents/TGOverlayFormsheetWindow.h>
+#import <LegacyComponents/TGOverlayFormsheetController.h>
 
-#import "TGAccessChecker.h"
-#import "TGNavigationController.h"
-#import "TGMediaAssetsController.h"
-#import "TGLegacyCameraController.h"
-#import "TGImagePickerController.h"
-#import "TGNavigationBar.h"
+#import <LegacyComponents/TGMediaAssetsController.h>
+#import <LegacyComponents/TGLegacyCameraController.h>
+#import <LegacyComponents/TGImagePickerController.h>
 
-@interface TGWallpaperListController () <UICollectionViewDelegateFlowLayout, UICollectionViewDataSource, TGWallpaperControllerDelegate, TGLegacyCameraControllerDelegate, TGImagePickerControllerDelegate>
+#import "TGLegacyComponentsContext.h"
+
+#import "TGAppearanceController.h"
+
+#import "TGPresentation.h"
+#import "TGDefaultPresentationPallete.h"
+
+@interface TGWallpaperListController () <UICollectionViewDelegateFlowLayout, UICollectionViewDataSource, TGLegacyWallpaperControllerDelegate, TGLegacyCameraControllerDelegate, TGImagePickerControllerDelegate>
 {
     UICollectionView *_collectionView;
     TGWallpaperListLayout *_collectionLayout;
@@ -66,7 +65,10 @@
         _photoLibraryItem = [[TGDisclosureActionCollectionItem alloc] initWithTitle:TGLocalized(@"Wallpaper.PhotoLibrary") action:@selector(photoLibraryPressed)];
         _photoLibraryItem.deselectAutomatically = TGIsPad();
         
+        TGPresentation *presentation = TGPresentation.current;
         NSMutableArray *wallpaperItems = [[NSMutableArray alloc] init];
+        if (![presentation.pallete isMemberOfClass:[TGDefaultPresentationPallete class]])
+            [wallpaperItems addObject:[[TGColorWallpaperInfo alloc] initWithColor:TGColorHexCode(presentation.pallete.backgroundColor)]];
         [wallpaperItems addObjectsFromArray:[[TGWallpaperManager instance] builtinWallpaperList]];
         [wallpaperItems addObjectsFromArray:[TGModernRemoteWallpaperListActor cachedList]];
         _wallpaperItems = wallpaperItems;
@@ -85,17 +87,26 @@
     [ActionStageInstance() removeWatcher:self];
 }
 
+- (void)setPresentation:(TGPresentation *)presentation
+{
+    _presentation = presentation;
+    _photoLibraryItem.presentation = presentation;
+}
+
 - (void)loadView
 {
     [super loadView];
     
-    self.view.backgroundColor = UIColorRGB(0xefeff4);
+    self.view.backgroundColor = _presentation.pallete.collectionMenuBackgroundColor;
     
     _currentLayoutWidth = self.view.frame.size.width;
     _collectionRegisteredItemIdentifiers = [[NSMutableSet alloc] init];
     
     _collectionLayout = [[TGWallpaperListLayout alloc] init];
+    _collectionLayout.presentation = self.presentation;
     _collectionView = [[UICollectionView alloc] initWithFrame:self.view.bounds collectionViewLayout:_collectionLayout];
+    if (iosMajorVersion() >= 11)
+        _collectionView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
     _collectionView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     _collectionView.backgroundColor = nil;
     _collectionView.opaque = false;
@@ -106,7 +117,7 @@
     [_collectionView registerClass:[TGWallpaperItemCell class] forCellWithReuseIdentifier:@"_wallpaper"];
     [self.view addSubview:_collectionView];
     
-    [self setExplicitTableInset:UIEdgeInsetsMake(-(TGIsRetina() ? 0.5f : 1.0f), 0, 0, 0)];
+    [self setExplicitTableInset:UIEdgeInsetsMake(-(TGScreenPixel), 0, 0, 0)];
     if (![self _updateControllerInset:false])
         [self controllerInsetUpdated:UIEdgeInsetsZero];
 }
@@ -138,6 +149,21 @@
     [super willRotateToInterfaceOrientation:toInterfaceOrientation duration:duration];
 }
 
+- (void)controllerInsetUpdated:(UIEdgeInsets)previousInset
+{
+    [super controllerInsetUpdated:previousInset];
+    
+    if ([self isViewLoaded]) {
+        for (TGCollectionItemView *itemView in [_collectionView visibleCells])
+        {
+            if (![itemView isKindOfClass:[TGCollectionItemView class]])
+                continue;
+            
+            itemView.safeAreaInset = self.controllerSafeAreaInset;
+        }
+    }
+}
+
 #pragma mark -
 
 - (CGSize)collectionView:(UICollectionView *)collectionView layout:(UICollectionViewLayout *)__unused collectionViewLayout sizeForItemAtIndexPath:(NSIndexPath *)indexPath
@@ -166,7 +192,11 @@
             
             if ([UIScreen mainScreen].scale >= 2.0f - FLT_EPSILON)
             {
-                if (widescreenWidth >= 736.0f - FLT_EPSILON)
+                if (widescreenWidth >= 812.0f - FLT_EPSILON)
+                {
+                    return CGSizeMake(108.0f, 163.0f);
+                }
+                else if (widescreenWidth >= 736.0f - FLT_EPSILON)
                 {
                     return CGSizeMake(122.0f, 216.0f);
                 }
@@ -194,7 +224,12 @@
     if (section == 0)
         return UIEdgeInsetsMake(32.0f, 0.0f, 0.0f, 0.0f);
     
-    return UIEdgeInsetsMake(32.0f + 15.0f, 15.0f, 15.0f + 32.0f, 15.0f);
+    UIInterfaceOrientation orientation = UIInterfaceOrientationPortrait;
+    if (collectionView.frame.size.width > collectionView.frame.size.height)
+        orientation = UIInterfaceOrientationLandscapeLeft;
+    
+    UIEdgeInsets safeAreaInset = [self calculatedSafeAreaInset];
+    return UIEdgeInsetsMake(32.0f + 15.0f, 15.0f + safeAreaInset.left, 15.0f + 32.0f, 15.0f + safeAreaInset.left);
 }
 
 - (CGFloat)collectionView:(UICollectionView *)__unused collectionView layout:(UICollectionViewLayout *)__unused collectionViewLayout minimumLineSpacingForSectionAtIndex:(NSInteger)section
@@ -246,6 +281,7 @@
     {
         TGCollectionItemView *itemView = [_photoLibraryItem dequeueItemView:collectionView registeredIdentifiers:_collectionRegisteredItemIdentifiers forIndexPath:indexPath];
         [itemView setItemPosition:TGCollectionItemViewPositionFirstInBlock | TGCollectionItemViewPositionLastInBlock];
+        itemView.safeAreaInset = self.controllerSafeAreaInset;
         [_photoLibraryItem bindView:itemView];
         
         return itemView;
@@ -253,6 +289,7 @@
     else if (indexPath.item < (NSInteger)_wallpaperItems.count)
     {
         TGWallpaperItemCell *wallpaperCell = (TGWallpaperItemCell *)[collectionView dequeueReusableCellWithReuseIdentifier:@"_wallpaper" forIndexPath:indexPath];
+        wallpaperCell.presentation = self.presentation;
         TGWallpaperInfo *wallpaperInfo = _wallpaperItems[indexPath.item];
         [wallpaperCell setWallpaperInfo:wallpaperInfo];
         [wallpaperCell setIsSelected:[wallpaperInfo isEqual:[[TGWallpaperManager instance] currentWallpaperInfo]]];
@@ -285,22 +322,26 @@
         UIImage *currentImage = [wallpaperCell currentImage];
         if (currentImage)
         {
-            TGWallpaperController *wallpaperController = [[TGWallpaperController alloc] initWithWallpaperInfo:_wallpaperItems[indexPath.item] thumbnailImage:currentImage];
+            TGLegacyWallpaperController *wallpaperController = [[TGLegacyWallpaperController alloc] initWithWallpaperInfo:_wallpaperItems[indexPath.item] thumbnailImage:currentImage];
             wallpaperController.delegate = self;
+            wallpaperController.presentation = self.presentation;
             
             if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad)
                 wallpaperController.modalPresentationStyle = UIModalPresentationFormSheet;
             
-            [self presentViewController:wallpaperController animated:true completion:nil];
+            [TGAppDelegateInstance.rootController presentViewController:wallpaperController animated:true completion:nil];
         }
     }
 }
 
-- (void)wallpaperController:(TGWallpaperController *)__unused wallpaperController didSelectWallpaperWithInfo:(TGWallpaperInfo *)wallpaperInfo
+- (void)wallpaperController:(TGLegacyWallpaperController *)__unused wallpaperController didSelectWallpaperWithInfo:(TGWallpaperInfo *)wallpaperInfo
 {
     if (wallpaperInfo != nil)
     {
+        bool shouldReset = [TGPresentationPallete hasWallpaper] == [wallpaperInfo isKindOfClass:[TGColorWallpaperInfo class]];
         [[TGWallpaperManager instance] setCurrentWallpaperWithInfo:wallpaperInfo];
+        if (shouldReset)
+            [self.presentation.images resetBubbleBackgrounds];
         
         for (id cell in [_collectionView visibleCells])
         {
@@ -312,27 +353,24 @@
         
         [self _dismissPhotoLibrary];
     }
+    
+    for (TGViewController *controller in self.navigationController.viewControllers)
+    {
+        if ([controller isKindOfClass:[TGAppearanceController class]])
+        {
+            [self.navigationController popToViewController:controller animated:false];
+            break;
+        }
+    }
 }
 
 - (void)photoLibraryPressed
 {
-    TGLegacyCameraController *imagePickerController = [[TGLegacyCameraController alloc] init];
+    TGLegacyCameraController *imagePickerController = [[TGLegacyCameraController alloc] initWithContext:[TGLegacyComponentsContext shared]];
     imagePickerController.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
     imagePickerController.completionDelegate = self;
     
-    if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad)
-    {
-        imagePickerController.modalPresentationStyle = UIModalPresentationFormSheet;
-    
-        TGOverlayFormsheetWindow *formSheetWindow = [[TGOverlayFormsheetWindow alloc] initWithParentController:self contentController:imagePickerController];
-        [formSheetWindow showAnimated:true];
-        
-        _photoLibraryWindow = formSheetWindow;
-    }
-    else
-    {
-        [self presentViewController:imagePickerController animated:true completion:nil];
-    }
+    [self presentViewController:imagePickerController animated:true completion:nil];
 }
 
 - (void)_dismissPhotoLibrary
@@ -358,7 +396,8 @@
     {
         UIImage *wallpaperImage = assets[0];
         
-        TGWallpaperController *wallpaperController = [[TGWallpaperController alloc] initWithWallpaperInfo:[[TGCustomImageWallpaperInfo alloc] initWithImage:wallpaperImage] thumbnailImage:nil];
+        TGLegacyWallpaperController *wallpaperController = [[TGLegacyWallpaperController alloc] initWithWallpaperInfo:[[TGCustomImageWallpaperInfo alloc] initWithImage:wallpaperImage] thumbnailImage:nil];
+        wallpaperController.presentation = self.presentation;
         wallpaperController.delegate = self;
         wallpaperController.enableWallpaperAdjustment = true;
         wallpaperController.doNotFlipIfRTL = true;

@@ -1,19 +1,19 @@
 #import "TGMediaListPhotoDataSource.h"
 
-#import "ASQueue.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/ASQueue.h>
 
 #import "TGWorkerPool.h"
 #import "TGWorkerTask.h"
 #import "TGMediaPreviewTask.h"
 
-#import "TGMemoryImageCache.h"
+#import <LegacyComponents/TGMemoryImageCache.h>
 
-#import "TGImageUtils.h"
-#import "TGStringUtils.h"
-#import "TGRemoteImageView.h"
+#import <LegacyComponents/TGRemoteImageView.h>
 
-#import "TGImageBlur.h"
-#import "UIImage+TG.h"
+#import <LegacyComponents/TGImageBlur.h>
+#import <LegacyComponents/UIImage+TG.h>
 
 #import "TGMediaStoreContext.h"
 
@@ -120,7 +120,7 @@ static ASQueue *taskManagementQueue()
                 
                 NSString *temporaryThumbnailImagePath = [photoDirectory stringByAppendingPathComponent:@"image-thumb.jpg"];
                 
-                [previewTask executeWithTargetFilePath:temporaryThumbnailImagePath uri:args[@"legacy-thumbnail-cache-url"] completion:^(bool success)
+                [previewTask executeWithTargetFilePath:temporaryThumbnailImagePath uri:args[@"legacy-thumbnail-cache-url"] options:nil completion:^(bool success)
                 {
                     if (success)
                         [previewTask executeWithWorkerTask:workerTask workerPool:workerPool()];
@@ -361,7 +361,7 @@ static ASQueue *taskManagementQueue()
             if (thumbnailSourceImage != nil && !lowQualityThumbnail)
             {
                 NSData *thumbnailSourceData = UIImageJPEGRepresentation(thumbnailSourceImage, 0.8f);
-                [thumbnailSourceData writeToFile:thumbnailPath atomically:false];
+                [thumbnailSourceData writeToFile:thumbnailPath atomically:true];
             }
         }
     }

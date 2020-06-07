@@ -6,11 +6,11 @@
 
 - (instancetype)initWithImageId:(int64_t)imageId accessHash:(int64_t)accessHash legacyThumbnailUrl:(NSString *)legacyThumbnailUrl legacyUrl:(NSString *)legacyUrl imageSize:(CGSize)imageSize isCurrent:(bool)isCurrent
 {
-    self = [super initWithLegacyThumbnailUrl:legacyThumbnailUrl legacyUrl:legacyUrl imageSize:imageSize isCurrent:isCurrent];
+    self = [super initWithLegacyThumbnailUrl:legacyThumbnailUrl legacyUrl:legacyUrl imageId:imageId imageSize:imageSize isCurrent:isCurrent];
     if (self != nil)
     {
-        _imageId = imageId;
-        _accessHash = accessHash;
+        self.imageId = imageId;
+        self.accessHash = accessHash;
     }
     return self;
 }

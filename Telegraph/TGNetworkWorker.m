@@ -8,8 +8,8 @@
 
 #import "TGNetworkWorker.h"
 
-#import "ASQueue.h"
-#import "ActionStage.h"
+#import <LegacyComponents/ASQueue.h>
+#import <LegacyComponents/ActionStage.h>
 
 #import "TGTelegraph.h"
 
@@ -18,7 +18,9 @@
 #import <MTProtoKit/MTContext.h>
 #import <MTProtoKit/MTProto.h>
 #import <MTProtoKit/MTRequestMessageService.h>
-#import <MTProtoKit/MTRequest.h>
+#import <MTProtoKit/MtProtoKit.h>
+
+#import "TGTelegramNetworking.h"
 
 static int workerCount = 0;
 
@@ -38,20 +40,24 @@ static int workerCount = 0;
 
 @implementation TGNetworkWorker
 
-- (instancetype)initWithContext:(MTContext *)context datacenterId:(NSInteger)datacenterId masterDatacenterId:(NSInteger)masterDatacenterId
+- (instancetype)initWithContext:(MTContext *)context datacenterId:(NSInteger)datacenterId masterDatacenterId:(NSInteger)masterDatacenterId isCdn:(bool)isCdn
 {
     self = [super init];
     if (self != nil)
     {
+        _isCdn = isCdn;
         workerCount++;
         TGLog(@"[TGNetworkWorker#%x/%d start (%d)]", (int)self, (int)datacenterId, workerCount);
         
         _context = context;
         _datacenterId = datacenterId;
         
-        _mtProto = [[MTProto alloc] initWithContext:_context datacenterId:_datacenterId];
-        _mtProto.requiredAuthToken = @(TGTelegraphInstance.clientUserId);
-        _mtProto.authTokenMasterDatacenterId = masterDatacenterId;
+        _mtProto = [[MTProto alloc] initWithContext:_context datacenterId:_datacenterId usageCalculationInfo:[[TGTelegramNetworking instance] mediaUsageInfoForType:TGNetworkMediaTypeTagGeneric]];
+        _mtProto.cdn = isCdn;
+        if (!isCdn) {
+            _mtProto.requiredAuthToken = @(TGTelegraphInstance.clientUserId);
+            _mtProto.authTokenMasterDatacenterId = masterDatacenterId;
+        }
         
         _requestService = [[MTRequestMessageService alloc] initWithContext:_context];
         _requestService.delegate = self;
@@ -75,6 +81,11 @@ static int workerCount = 0;
     
     [_mtProto stop];
     _requestService.delegate = nil;
+}
+
+- (void)setUsageCalculationInfo:(MTNetworkUsageCalculationInfo *)usageCalculationInfo {
+    _usageCalculationInfo = usageCalculationInfo;
+    [_mtProto setUsageCalculationInfo:usageCalculationInfo];
 }
 
 - (void)startTimer

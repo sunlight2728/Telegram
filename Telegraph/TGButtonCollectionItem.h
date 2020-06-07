@@ -17,8 +17,10 @@
 @property (nonatomic) CGFloat leftInset;
 @property (nonatomic) CGFloat additionalSeparatorInset;
 @property (nonatomic, strong) UIImage *icon;
+@property (nonatomic) CGPoint iconOffset;
 
 @property (nonatomic) SEL action;
+@property (nonatomic) NSInteger tag;
 
 - (instancetype)initWithTitle:(NSString *)title action:(SEL)action;
 

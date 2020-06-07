@@ -1,8 +1,8 @@
 #import "TGShareSheetSharePeersItemView.h"
 
-#import "TGModernButton.h"
-#import "TGFont.h"
-#import "TGImageUtils.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/TGModernButton.h>
 
 #import "TGShareSheetSharePeersLayout.h"
 #import "TGModernMediaCollectionView.h"
@@ -13,13 +13,11 @@
 
 #import "TGDatabase.h"
 
-#import "TGSearchBar.h"
+#import <LegacyComponents/TGSearchBar.h>
 
 #import "TGGlobalMessageSearchSignals.h"
 #import "TGChatSearchController.h"
 #import "TGTelegraph.h"
-
-#import "TGPeerIdAdapter.h"
 
 #import "TGShareSheetView.h"
 
@@ -53,6 +51,8 @@
         _layout.scrollDirection = UICollectionViewScrollDirectionVertical;
         
         _collectionView = [[TGModernMediaCollectionView alloc] initWithFrame:CGRectZero collectionViewLayout:_layout];
+        if (iosMajorVersion() >= 11)
+            _collectionView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
         _collectionView.backgroundColor = nil;
         _collectionView.opaque = false;
         _collectionView.showsHorizontalScrollIndicator = false;
@@ -75,7 +75,7 @@
         [_button setTitleColor:UIColorRGB(0x8e8e93) forState:UIControlStateDisabled];
         _button.titleLabel.font = TGSystemFontOfSize(20.0f + TGRetinaPixel);
         [_button addTarget:self action:@selector(_buttonPressed) forControlEvents:UIControlEventTouchUpInside];
-        [_button setHighlightImage:[TGShareSheetView selectionBackgroundWithFirst:false last:true]];
+        //[_button setHighlightImage:[TGShareSheetView selectionBackgroundWithFirst:false last:true]];
         _button.stretchHighlightImage = true;
         _button.highlighted = false;
         [self addSubview:_button];
@@ -209,7 +209,7 @@
 }
 
 - (void)layoutSubviews {
-    CGFloat separatorHeight = TGIsRetina() ? 0.5f : 1.0f;
+    CGFloat separatorHeight = TGScreenPixel;
     _buttonSeparator.frame = CGRectMake(0.0f, self.frame.size.height - 57.5f, self.frame.size.width, separatorHeight);
     _button.frame = CGRectMake(0.0f, self.frame.size.height - 57.5f, self.bounds.size.width, 57.5f);
     

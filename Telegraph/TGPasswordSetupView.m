@@ -1,8 +1,10 @@
 #import "TGPasswordSetupView.h"
 
-#import "TGTextField.h"
-#import "TGFont.h"
-#import "TGImageUtils.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/TGTextField.h>
+
+#import "TGPresentation.h"
 
 @interface TGPasswordSetupView () <UITextFieldDelegate>
 {
@@ -55,6 +57,19 @@
     return self;
 }
 
+- (void)setPresentation:(TGPresentation *)presentation
+{
+    _presentation = presentation;
+    
+    _topSeparator.backgroundColor = presentation.pallete.collectionMenuSeparatorColor;
+    _bottomSeparator.backgroundColor = presentation.pallete.collectionMenuSeparatorColor;
+    
+    _textFieldBackground.backgroundColor = presentation.pallete.collectionMenuCellBackgroundColor;
+    _textField.textColor = presentation.pallete.collectionMenuTextColor;
+    _textField.keyboardAppearance = presentation.pallete.isDark ? UIKeyboardAppearanceAlert : UIKeyboardAppearanceDefault;
+    _titleLabel.textColor = presentation.pallete.collectionMenuCommentColor;
+}
+
 - (void)setSecureEntry:(bool)secureEntry
 {
     _secureEntry = secureEntry;
@@ -81,7 +96,7 @@
 - (void)setText:(NSString *)text
 {
     _textField.text = text;
-    if (_passwordChanged)
+    if (_passwordChanged != nil)
         _passwordChanged(text);
 }
 
@@ -92,8 +107,16 @@
 
 - (void)textFieldChanged
 {
-    if (_passwordChanged)
+    if (_passwordChanged != nil)
         _passwordChanged(_textField.text);
+}
+
+- (BOOL)textFieldShouldReturn:(UITextField *)__unused textField
+{
+    if (_returnPressed != nil)
+        _returnPressed(_textField.text);
+    
+    return false;
 }
 
 - (NSString *)password
@@ -110,7 +133,7 @@
     
     _textField.frame = _textFieldBackground.frame;
     
-    CGFloat separatorHeight = TGIsRetina() ? 0.5f : 1.0f;
+    CGFloat separatorHeight = TGScreenPixel;
     _topSeparator.frame = CGRectMake(0.0f, 0.0f, _textFieldBackground.frame.size.width, separatorHeight);
     _bottomSeparator.frame = CGRectMake(0.0f, _textFieldBackground.frame.size.height - separatorHeight, _textFieldBackground.frame.size.width, separatorHeight);
     

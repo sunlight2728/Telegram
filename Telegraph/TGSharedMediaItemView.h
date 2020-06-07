@@ -3,6 +3,7 @@
 #import "TGSharedMediaItem.h"
 
 @class TGSharedMediaImageViewQueue;
+@class TGPresentation;
 
 @interface TGSharedMediaItemView : UICollectionViewCell
 
@@ -11,7 +12,9 @@
 @property (nonatomic, copy) bool (^isItemHidden)(id<TGSharedMediaItem>);
 @property (nonatomic, copy) bool (^isItemSelected)(id<TGSharedMediaItem>);
 @property (nonatomic, copy) void (^toggleItemSelection)(id<TGSharedMediaItem>);
+@property (nonatomic, copy) void (^itemLongPressed)(id<TGSharedMediaItem>);
 @property (nonatomic) bool editing;
+@property (nonatomic, strong) TGPresentation *presentation;
 
 - (void)enqueueImageViewWithUri;
 - (UIView *)transitionView;

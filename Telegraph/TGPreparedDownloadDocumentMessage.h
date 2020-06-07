@@ -1,6 +1,6 @@
 #import "TGPreparedMessage.h"
 
-#import "PSCoding.h"
+#import <LegacyComponents/LegacyComponents.h>
 
 @class TGImageInfo;
 
@@ -14,7 +14,7 @@
 @property (nonatomic) int64_t localDocumentId;
 @property (nonatomic, strong) NSArray *attributes;
 
-- (instancetype)initWithGiphyId:(NSString *)giphyId documentUrl:(NSString *)documentUrl localDocumentId:(int64_t)localDocumentId mimeType:(NSString *)mimeType size:(int)size thumbnailInfo:(TGImageInfo *)thumbnailInfo attributes:(NSArray *)attributes replyMessage:(TGMessage *)replyMessage;
+- (instancetype)initWithGiphyId:(NSString *)giphyId documentUrl:(NSString *)documentUrl localDocumentId:(int64_t)localDocumentId mimeType:(NSString *)mimeType size:(int)size thumbnailInfo:(TGImageInfo *)thumbnailInfo attributes:(NSArray *)attributes replyMessage:(TGMessage *)replyMessage replyMarkup:(TGReplyMarkupAttachment *)replyMarkup;;
 
 @end
 

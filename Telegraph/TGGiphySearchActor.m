@@ -1,9 +1,10 @@
 #import "TGGiphySearchActor.h"
 
-#import "ActionStage.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/ActionStage.h>
 
 #import "TGTelegraph.h"
-#import "TGStringUtils.h"
 
 #import "TGGiphySearchResultItem.h"
 
@@ -18,6 +19,7 @@
 #import "TLWebPage_manual.h"
 
 #import "TGImageMediaAttachment+Telegraph.h"
+#import "TGMediaOriginInfo+Telegraph.h"
 
 @interface TGGiphySearchActor () <TGRawHttpActor>
 {
@@ -54,7 +56,9 @@
             if ([gif isKindOfClass:[TLFoundGif$foundGifCached class]]) {
                 TLFoundGif$foundGifCached *concreteGif = (TLFoundGif$foundGifCached *)gif;
                 TGDocumentMediaAttachment *document = [[TGDocumentMediaAttachment alloc] initWithTelegraphDocumentDesc:concreteGif.document];
+                document.originInfo = [TGMediaOriginInfo mediaOriginInfoForDocument:concreteGif.document];
                 TGImageMediaAttachment *image = [[TGImageMediaAttachment alloc] initWithTelegraphDesc:concreteGif.photo];
+                image.originInfo = [TGMediaOriginInfo mediaOriginInfoForPhoto:concreteGif.photo];
                 if (document.documentId != 0) {
                     TGInternalGifSearchResult *item = [[TGInternalGifSearchResult alloc] initWithUrl:concreteGif.url document:document photo:image.imageId == 0 ? nil : image];
                     if (![processedItems containsObject:item]) {
@@ -78,12 +82,6 @@
     } error:^(__unused id error) {
         [ActionStageInstance() actionFailed:self.path reason:-1];
     } completed:nil];
-    
-    return;
-    
-    _currentItems = options[@"currentItems"];
-    NSString *url = [[NSString alloc] initWithFormat:@"https://api.giphy.com/v1/gifs/search?q=%@&offset=%d&limit=60&api_key=141Wa2KDAfNfxu", [TGStringUtils stringByEscapingForURL:options[@"query"]], (int)_currentItems.count];
-    self.cancelToken = [TGTelegraphInstance doRequestRawHttp:url maxRetryCount:0 acceptCodes:@[@200] actor:self];
 }
 
 - (id)objectAtDictionaryPath:(NSString *)path dictionary:(NSDictionary *)dictionary

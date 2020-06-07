@@ -7,7 +7,6 @@
 #import "TGBridgeClient.h"
 #import "TGFileCache.h"
 
-#import "TGImageUtils.h"
 #import "TGGeometry.h"
 
 #import "TGExtensionDelegate.h"
@@ -34,6 +33,9 @@
 
 - (void)addUrl:(NSString *)url
 {
+    if (url == nil)
+        return;
+    
     OSSpinLockLock(&_pendingUrlsLock);
     [_pendingUrls addObject:url];
     OSSpinLockUnlock(&_pendingUrlsLock);
@@ -41,6 +43,9 @@
 
 - (void)removeUrl:(NSString *)url
 {
+    if (url == nil)
+        return;
+    
     OSSpinLockLock(&_pendingUrlsLock);
     [_pendingUrls removeObject:url];
     OSSpinLockUnlock(&_pendingUrlsLock);
@@ -48,6 +53,9 @@
 
 - (bool)hasUrl:(NSString *)url
 {
+    if (url == nil)
+        return false;
+    
     OSSpinLockLock(&_pendingUrlsLock);
     bool contains = [_pendingUrls containsObject:url];
     OSSpinLockUnlock(&_pendingUrlsLock);

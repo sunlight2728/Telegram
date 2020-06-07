@@ -7,8 +7,8 @@
 #import "TGNetworkWorker.h"
 #import <MTProtoKit/MTRequest.h>
 
-#import "ActionStage.h"
-#import "SGraphObjectNode.h"
+#import <LegacyComponents/ActionStage.h>
+#import <LegacyComponents/SGraphObjectNode.h>
 
 #import "TGLiveUploadActor.h"
 
@@ -39,6 +39,9 @@ struct FilePart
 @interface TGFileUploadActor () <TGFileUploadActor, ASWatcher>
 {
     std::vector<FilePart> _partsToUpload;
+    
+    bool _secure;
+    NSData *_secureFileHash;
     
     bool _isEncrypted;
     NSData *_encryptionKey;
@@ -126,6 +129,9 @@ struct FilePart
 
 - (void)execute:(NSDictionary *)options
 {
+    _secure = [options[@"secure"] boolValue];
+    _secureFileHash = options[@"secureFileHash"];
+    
     _isEncrypted = [options[@"encrypt"] boolValue];
     _thumbnail = options[@"thumbnail"];
     
@@ -135,15 +141,15 @@ struct FilePart
     _height = [options[@"height"] intValue];
     _fileSize = [options[@"fileSize"] intValue];
     
-    SecRandomCopyBytes(kSecRandomDefault, 8, (uint8_t *)&_fileId);
+    __unused int result = SecRandomCopyBytes(kSecRandomDefault, 8, (uint8_t *)&_fileId);
     
     if (_isEncrypted)
     {
         uint8_t rawKey[32];
-        SecRandomCopyBytes(kSecRandomDefault, 32, rawKey);
+        result = SecRandomCopyBytes(kSecRandomDefault, 32, rawKey);
         _encryptionKey = [[NSData alloc] initWithBytes:rawKey length:32];
         uint8_t rawIv[32];
-        SecRandomCopyBytes(kSecRandomDefault, 32, rawIv);
+        result = SecRandomCopyBytes(kSecRandomDefault, 32, rawIv);
         _encryptionIv = [[NSData alloc] initWithBytes:rawIv length:32];
         _encryptionRunningIv = [[NSMutableData alloc] initWithData:_encryptionIv];
     }
@@ -209,8 +215,9 @@ struct FilePart
             [_is open];
             
 #if TGUseModernNetworking
+            TGNetworkMediaTypeTag mediaTypeTag = (TGNetworkMediaTypeTag)[options[@"mediaTypeTag"] intValue];
             __weak TGFileUploadActor *weakSelf = self;
-            _workerToken = [[TGTelegramNetworking instance] requestDownloadWorkerForDatacenterId:[[TGTelegramNetworking instance] masterDatacenterId] completion:^(TGNetworkWorkerGuard *worker)
+            _workerToken = [[TGTelegramNetworking instance] requestDownloadWorkerForDatacenterId:[[TGTelegramNetworking instance] masterDatacenterId] type:mediaTypeTag completion:^(TGNetworkWorkerGuard *worker)
             {
                 [ActionStageInstance() dispatchOnStageQueue:^
                 {
@@ -300,8 +307,9 @@ struct FilePart
                     [self beginWithWorker:nil];
                 else
                 {
+                    TGNetworkMediaTypeTag mediaTypeTag = (TGNetworkMediaTypeTag)([options[@"mediaTypeTag"] intValue]);
                     __weak TGFileUploadActor *weakSelf = self;
-                    _workerToken = [[TGTelegramNetworking instance] requestDownloadWorkerForDatacenterId:[[TGTelegramNetworking instance] masterDatacenterId] completion:^(TGNetworkWorkerGuard *worker)
+                    _workerToken = [[TGTelegramNetworking instance] requestDownloadWorkerForDatacenterId:[[TGTelegramNetworking instance] masterDatacenterId] type:mediaTypeTag completion:^(TGNetworkWorkerGuard *worker)
                     {
                         __strong TGFileUploadActor *strongSelf = weakSelf;
                         [strongSelf beginWithWorker:worker];
@@ -333,7 +341,17 @@ struct FilePart
     
     if (_partsToUpload.empty())
     {
-        if (_isEncrypted)
+        if (_secure)
+        {
+            NSString *hash = nil;
+            unsigned char md5Buffer[16];
+            CC_MD5_Final(md5Buffer, &_md5);
+            hash = [[NSString alloc] initWithFormat:@"%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x", md5Buffer[0], md5Buffer[1], md5Buffer[2], md5Buffer[3], md5Buffer[4], md5Buffer[5], md5Buffer[6], md5Buffer[7], md5Buffer[8], md5Buffer[9], md5Buffer[10], md5Buffer[11], md5Buffer[12], md5Buffer[13], md5Buffer[14], md5Buffer[15]];
+
+            [ActionStageInstance() nodeRetrieveProgress:self.path progress:1.0f];
+            [ActionStageInstance() actionCompleted:self.path result:@{ @"passportFile": @{ @"parts": @(_partCount), @"md5Checksum": hash, @"fileId": @(_fileId) } }];
+        }
+        else if (_isEncrypted)
         {
             NSString *hash = nil;
             unsigned char md5Buffer[16];

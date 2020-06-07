@@ -49,6 +49,19 @@
 {
     [super setBounds:bounds];
     
+    if (isnan(bounds.origin.x)) {
+        bounds.origin.x = 0.0f;
+    }
+    if (isnan(bounds.origin.y)) {
+        bounds.origin.y = 0.0f;
+    }
+    if (isnan(bounds.size.width)) {
+        bounds.size.width = 0.0f;
+    }
+    if (isnan(bounds.size.height)) {
+        bounds.size.height = 0.0f;
+    }
+    
     if (!CGSizeEqualToSize(_validSize, bounds.size)) {
         _validSize = bounds.size;
         if (_layoutForSize) {
@@ -273,11 +286,15 @@
 
 - (void)setContentOffset:(CGPoint)contentOffset
 {
+    if (self.blockScrolling && fabs(-contentOffset.y - self.contentInset.top) > 1.0f)
+        return;
     [super setContentOffset:contentOffset];
 }
 
 - (void)setContentOffset:(CGPoint)contentOffset animated:(BOOL)animated
 {
+    if (self.blockScrolling && fabs(-contentOffset.y - self.contentInset.top) > 1.0f)
+        return;
     [super setContentOffset:contentOffset animated:animated];
 }
 

@@ -14,6 +14,7 @@
 @class MTRequestMessageService;
 @class MTRequest;
 @class TGNetworkWorkerGuard;
+@class MTNetworkUsageCalculationInfo;
 
 @protocol TGNetworkWorkerDelegate <NSObject>
 
@@ -30,7 +31,11 @@
 
 @property (nonatomic, readonly) NSInteger datacenterId;
 
-- (instancetype)initWithContext:(MTContext *)context datacenterId:(NSInteger)datacenterId masterDatacenterId:(NSInteger)masterDatacenterId;
+@property (nonatomic, strong) MTNetworkUsageCalculationInfo *usageCalculationInfo;
+    
+@property (nonatomic, readonly) bool isCdn;
+
+- (instancetype)initWithContext:(MTContext *)context datacenterId:(NSInteger)datacenterId masterDatacenterId:(NSInteger)masterDatacenterId isCdn:(bool)isCdn;
 
 - (bool)isBusy;
 - (void)setIsBusy:(bool)isBusy;

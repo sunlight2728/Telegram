@@ -1,26 +1,28 @@
 #import "TGGalleryPhotoDataSource.h"
 
-#import "ASQueue.h"
-#import "ActionStage.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/ASQueue.h>
+#import <LegacyComponents/ActionStage.h>
 
 #import "TGWorkerPool.h"
 #import "TGWorkerTask.h"
 #import "TGMediaPreviewTask.h"
 
-#import "TGMemoryImageCache.h"
+#import <LegacyComponents/TGMemoryImageCache.h>
 
-#import "TGImageUtils.h"
-#import "TGStringUtils.h"
-#import "TGRemoteImageView.h"
+#import <LegacyComponents/TGRemoteImageView.h>
 
-#import "TGImageBlur.h"
-#import "UIImage+TG.h"
+#import <LegacyComponents/TGImageBlur.h>
+#import <LegacyComponents/UIImage+TG.h>
 
 #import "TGMediaStoreContext.h"
 
 #import "TGDatabase.h"
 
 #import "TGAppDelegate.h"
+
+#import "TGSharedMediaUtils.h"
 
 @interface TGGalleryPhotoDataSource () <ASWatcher>
 
@@ -103,7 +105,7 @@
             
             if (args[@"id"] != nil && args[@"messageId"] != nil && args[@"conversationId"] != nil && args[@"legacy-cache-url"] && args[@"legacy-thumbnail-cache-url"])
             {
-                [ActionStageInstance() requestActor:path options:@{
+                NSMutableDictionary *options = [[NSMutableDictionary alloc] initWithDictionary:@{
                     @"mediaId": args[@"id"],
                     @"messageId": args[@"messageId"],
                     @"conversationId": args[@"conversationId"],
@@ -128,7 +130,12 @@
                         if (progress)
                             progress(value);
                     }
-                } watcher:self];
+                }];
+                
+                if (args[@"origin_info"] != nil)
+                    options[@"originInfo"] = args[@"origin_info"];
+                
+                [ActionStageInstance() requestActor:path options:options watcher:self];
             }
         }
         else
@@ -222,6 +229,11 @@
 {
     NSDictionary *args = [TGStringUtils argumentDictionaryInUrlString:[uri substringFromIndex:[[NSString alloc] initWithFormat:@"%@://?", [TGGalleryPhotoDataSource uriPrefix]].length]];
     
+    NSString *legacyCacheUrl = args[@"legacy-cache-url"];
+    if ([legacyCacheUrl hasPrefix:@"webdoc"]) {
+        return true;
+    }
+    
     if ((![args[@"id"] respondsToSelector:@selector(longLongValue)] && ![args[@"local-id"] respondsToSelector:@selector(longLongValue)]))
     {
         return false;
@@ -302,6 +314,15 @@
     }
     
     NSDictionary *args = [TGStringUtils argumentDictionaryInUrlString:[uri substringFromIndex:[[NSString alloc] initWithFormat:@"%@://?", [TGGalleryPhotoDataSource uriPrefix]].length]];
+    
+    NSString *legacyCacheUrl = args[@"legacy-cache-url"];
+    if ([legacyCacheUrl hasPrefix:@"webdoc"]) {
+        NSData *data = [[TGSharedMediaUtils sharedMediaTemporaryPersistentCache] getValueForKey:[legacyCacheUrl dataUsingEncoding:NSUTF8StringEncoding]];
+        if (data != nil) {
+            return [[TGDataResource alloc] initWithImage:[UIImage imageWithData:data] decoded:false];
+        }
+        return nil;
+    }
     
     if ((![args[@"id"] respondsToSelector:@selector(longLongValue)] && ![args[@"local-id"] respondsToSelector:@selector(longLongValue)]) || ![args[@"width"] respondsToSelector:@selector(intValue)] || ![args[@"height"] respondsToSelector:@selector(intValue)])
     {
@@ -417,7 +438,7 @@
                 if (thumbnailSourceImage != nil && !lowQualityThumbnail)
                 {
                     NSData *thumbnailSourceData = UIImageJPEGRepresentation(thumbnailSourceImage, 0.8f);
-                    [thumbnailSourceData writeToFile:thumbnailPath atomically:false];
+                    [thumbnailSourceData writeToFile:thumbnailPath atomically:true];
                 }
             }
         }

@@ -1,6 +1,6 @@
 #import "TGConversationHistoryAsyncRequestActor.h"
 
-#import "ActionStage.h"
+#import <LegacyComponents/ActionStage.h>
 
 #import "TGSchema.h"
 
@@ -122,11 +122,7 @@
     
     dispatch_block_t continueBlock = ^
     {
-        [[TGDatabase instance] addMessagesToConversation:messageItems conversationId:conversationId updateConversation:conversation dispatch:true countUnread:false];
-        
-        if (otherConversations.count != 0) {
-            [[[TGConversationAddMessagesActor alloc] initWithPath:[NSString stringWithFormat:@"/tg/addmessage/(%dcf)", 0]] execute:[NSDictionary dictionaryWithObjectsAndKeys:otherConversations, @"chats", nil]];
-        }
+        [TGDatabaseInstance() transactionAddMessages:messageItems updateConversationDatas:otherConversations notifyAdded:false];
         
         if (_down && maxRemoteMid >= _fromMid)
         {

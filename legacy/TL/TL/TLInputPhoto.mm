@@ -19,7 +19,7 @@
     return 0;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)__unused metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)__unused metaObject
 {
     TGLog(@"TLbuildFromMetaObject is not implemented for base type");
     return nil;
@@ -46,7 +46,7 @@
     return (int32_t)0x4ceb7e2f;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)__unused metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)__unused metaObject
 {
     TLInputPhoto$inputPhotoEmpty *object = [[TLInputPhoto$inputPhotoEmpty alloc] init];
     return object;
@@ -64,7 +64,7 @@
 
 - (int32_t)TLconstructorSignature
 {
-    return (int32_t)0xfb95c6c4;
+    return (int32_t)0x3bb3b94a;
 }
 
 - (int32_t)TLconstructorName
@@ -72,11 +72,12 @@
     return (int32_t)0x6af6515a;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)metaObject
 {
     TLInputPhoto$inputPhoto *object = [[TLInputPhoto$inputPhoto alloc] init];
     object.n_id = metaObject->getInt64((int32_t)0x7a5601fb);
     object.access_hash = metaObject->getInt64((int32_t)0x8f305224);
+    object.file_reference = metaObject->getBytes((int32_t)0x8bad663c);
     return object;
 }
 
@@ -93,6 +94,12 @@
         value.type = TLConstructedValueTypePrimitiveInt64;
         value.primitive.int64Value = self.access_hash;
         values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0x8f305224, value));
+    }
+    {
+        TLConstructedValue value;
+        value.type = TLConstructedValueTypeBytes;
+        value.nativeObject = self.file_reference;
+        values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0x8bad663c, value));
     }
 }
 

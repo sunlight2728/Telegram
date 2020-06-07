@@ -4,8 +4,8 @@
 #import "TGMessage+Telegraph.h"
 #import "TGConversation+Telegraph.h"
 
-#import "ActionStage.h"
-#import "SGraphObjectNode.h"
+#import <LegacyComponents/ActionStage.h>
+#import <LegacyComponents/SGraphObjectNode.h>
 
 #import "TGTelegraph.h"
 #import "TGTelegramNetworking.h"
@@ -96,8 +96,7 @@
             }
         }
         
-        static int actionId = 0;
-        [[[TGConversationAddMessagesActor alloc] initWithPath:[[NSString alloc] initWithFormat:@"/tg/addmessage/(addMember%d)", actionId++] ] execute:[[NSDictionary alloc] initWithObjectsAndKeys:chats, @"chats", message == nil ? @[] : @[message], @"messages", nil]];
+        [TGDatabaseInstance() transactionAddMessages:message == nil ? nil : @[message] updateConversationDatas:chats notifyAdded:true];
     }
     
     [[TGTelegramNetworking instance] addUpdates:updates];

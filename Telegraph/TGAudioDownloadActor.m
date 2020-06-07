@@ -1,22 +1,16 @@
-/*
- * This is the source code of Telegram for iOS v. 1.1
- * It is licensed under GNU GPL v. 2 or later.
- * You should have received a copy of the license in this archive (see LICENSE).
- *
- * Copyright Peter Iakovlev, 2013.
- */
-
 #import "TGAudioDownloadActor.h"
 
-#import "ActionStage.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/ActionStage.h>
 
 #import "TL/TLMetaScheme.h"
 
-#import "TGAudioMediaAttachment.h"
-
-#import "TGStringUtils.h"
-
 #import <CommonCrypto/CommonDigest.h>
+
+#import "TGTelegramNetworking.h"
+
+#import "TGAudioMediaAttachment+Telegraph.h"
 
 @implementation TGAudioDownloadActor
 
@@ -127,6 +121,7 @@
             TLInputFileLocation$inputDocumentFileLocation *inputDocumentLocation = [[TLInputFileLocation$inputDocumentFileLocation alloc] init];
             inputDocumentLocation.n_id = audioAttachment.audioId;
             inputDocumentLocation.access_hash = audioAttachment.accessHash;
+            //inputDocumentLocation.file_reference = [audioAttachment.or]
             inputFileLocation = inputDocumentLocation;
             
             datacenterId = audioAttachment.datacenterId;
@@ -140,7 +135,8 @@
                 @"decryptedSize": @(decryptedSize),
                 @"storeFilePath": audioFilePath,
                 @"datacenterId": @(datacenterId),
-                @"encryptionArgs": encryptionArgs
+                @"encryptionArgs": encryptionArgs,
+                @"mediaTypeTag": @(TGNetworkMediaTypeTagAudio)
             } watcher:self];
         }
         else

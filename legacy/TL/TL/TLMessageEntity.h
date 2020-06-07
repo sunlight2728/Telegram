@@ -3,6 +3,7 @@
 #import "TLObject.h"
 #import "TLMetaRpc.h"
 
+@class TLInputUser;
 
 @interface TLMessageEntity : NSObject <TLObject>
 
@@ -68,3 +69,24 @@
 
 @end
 
+@interface TLMessageEntity$messageEntityMentionName : TLMessageEntity
+
+@property (nonatomic) int32_t user_id;
+
+@end
+
+@interface TLMessageEntity$inputMessageEntityMentionName : TLMessageEntity
+
+@property (nonatomic, retain) TLInputUser *user_id;
+
+@end
+
+@interface TLMessageEntity$messageEntityPhone : TLMessageEntity
+
+
+@end
+
+@interface TLMessageEntity$messageEntityCashtag : TLMessageEntity
+
+
+@end

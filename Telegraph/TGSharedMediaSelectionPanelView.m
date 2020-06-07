@@ -1,15 +1,17 @@
 #import "TGSharedMediaSelectionPanelView.h"
 
-#import "TGFont.h"
-#import "TGImageUtils.h"
-#import "TGModernButton.h"
-#import "TGStringUtils.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/TGModernButton.h>
+
+#import "TGPresentation.h"
 
 @interface TGSharedMediaSelectionPanelView ()
 {
     UIView *_separatorView;
-    TGModernButton *_shareButton;
+    TGModernButton *_forwardButton;
     TGModernButton *_deleteButton;
+    TGModernButton *_shareButton;
     UILabel *_label;
 }
 
@@ -27,32 +29,32 @@
         _separatorView.backgroundColor = UIColorRGB(0xb2b2b2);
         [self addSubview:_separatorView];
         
-        _shareButton = [[TGModernButton alloc] init];
-        _shareButton.modernHighlight = true;
-        [_shareButton addTarget:self action:@selector(shareButtonPressed) forControlEvents:UIControlEventTouchUpInside];
-        [self addSubview:_shareButton];
+        _forwardButton = [[TGModernButton alloc] init];
+        _forwardButton.modernHighlight = true;
+        _forwardButton.enabled = false;
+        [_forwardButton addTarget:self action:@selector(forwardButtonPressed) forControlEvents:UIControlEventTouchUpInside];
+        [self addSubview:_forwardButton];
         
         _deleteButton = [[TGModernButton alloc] init];
         _deleteButton.modernHighlight = true;
+        _deleteButton.enabled = false;
         [_deleteButton addTarget:self action:@selector(deleteButtonPressed) forControlEvents:UIControlEventTouchUpInside];
         [self addSubview:_deleteButton];
         
-        _label = [[UILabel alloc] init];
-        _label.backgroundColor = [UIColor clearColor];
-        _label.textColor = TGAccentColor();
-        _label.font = TGSystemFontOfSize(17.0f);
-        [self addSubview:_label];
-        
-        [self _updateButtonImages];
+        _shareButton = [[TGModernButton alloc] init];
+        _shareButton.modernHighlight = true;
+        _shareButton.enabled = false;
+        [_shareButton addTarget:self action:@selector(shareButtonPressed) forControlEvents:UIControlEventTouchUpInside];
+        [self addSubview:_shareButton];
     }
     return self;
 }
 
-- (void)setShareEnabled:(bool)shareEnabled
+- (void)setForwardEnabled:(bool)forwardEnabled
 {
-    _shareEnabled = shareEnabled;
+    _forwardEnabled = forwardEnabled;
     
-    _shareButton.hidden = !_shareEnabled;
+    _forwardButton.hidden = !_forwardEnabled;
 }
 
 - (void)setDeleteEnabled:(bool)deleteEnabled {
@@ -61,14 +63,19 @@
     _deleteButton.hidden = !_deleteEnabled;
 }
 
+- (void)setShareEnabled:(bool)shareEnabled {
+    _shareEnabled = shareEnabled;
+    
+    _shareButton.hidden = !_shareEnabled;
+}
+
 - (void)setSelecterItemCount:(NSUInteger)selecterItemCount
 {
-    bool updateImages = (_selecterItemCount == 0) != (selecterItemCount == 0);
     _selecterItemCount = selecterItemCount;
-    if (updateImages)
-        [self _updateButtonImages];
-    _shareButton.userInteractionEnabled = _selecterItemCount != 0;
-    _deleteButton.userInteractionEnabled = _selecterItemCount != 0;
+
+    _forwardButton.enabled = _selecterItemCount != 0;
+    _deleteButton.enabled = _selecterItemCount != 0;
+    _shareButton.enabled = _selecterItemCount != 0;
     
     if (_selecterItemCount == 0)
         _label.text = @"";
@@ -80,19 +87,26 @@
     [self layoutLabel];
 }
 
-- (void)_updateButtonImages
+- (void)setPresentation:(TGPresentation *)presentation
 {
-    UIImage *shareImage = _selecterItemCount == 0 ? [UIImage imageNamed:@"ModernConversationActionForward_Disabled.png"] : [UIImage imageNamed:@"ModernConversationActionForward.png"];
-    [_shareButton setImage:shareImage forState:UIControlStateNormal];
+    _presentation = presentation;
+    self.backgroundColor = presentation.pallete.barBackgroundColor;
+    _separatorView.backgroundColor = presentation.pallete.barSeparatorColor;
     
-    UIImage *deleteImage = _selecterItemCount == 0 ? [UIImage imageNamed:@"ModernConversationActionDelete_Disabled.png"] : [UIImage imageNamed:@"ModernConversationActionDelete.png"];
-    [_deleteButton setImage:deleteImage forState:UIControlStateNormal];
+    [_deleteButton setImage:presentation.images.chatEditDeleteIcon forState:UIControlStateNormal];
+    [_deleteButton setImage:presentation.images.chatEditDeleteDisabledIcon forState:UIControlStateDisabled];
+    
+    [_forwardButton setImage:presentation.images.chatEditForwardIcon forState:UIControlStateNormal];
+    [_forwardButton setImage:presentation.images.chatEditForwardDisabledIcon forState:UIControlStateDisabled];
+    
+    [_shareButton setImage:presentation.images.chatEditShareIcon forState:UIControlStateNormal];
+    [_shareButton setImage:presentation.images.chatEditShareDisabledIcon forState:UIControlStateDisabled];
 }
 
-- (void)shareButtonPressed
+- (void)forwardButtonPressed
 {
-    if (_shareSelectedItems)
-        _shareSelectedItems();
+    if (_forwardSelectedItems)
+        _forwardSelectedItems();
 }
 
 - (void)deleteButtonPressed
@@ -101,9 +115,21 @@
         _deleteSelectedItems();
 }
 
+- (void)shareButtonPressed
+{
+    if (_shareSelectedItems)
+        _shareSelectedItems();
+}
+
 - (void)layoutLabel
 {
-    _label.frame = CGRectMake(CGFloor((self.frame.size.width - _label.frame.size.width) / 2.0f), CGFloor((self.frame.size.height - _label.frame.size.height) / 2.0f) + 1.0f, _label.frame.size.width, _label.frame.size.height);
+    _label.frame = CGRectMake(CGFloor((self.frame.size.width - _label.frame.size.width) / 2.0f), CGFloor((45.0f - _label.frame.size.height) / 2.0f) + 1.0f, _label.frame.size.width, _label.frame.size.height);
+}
+
+- (void)setSafeAreaInset:(UIEdgeInsets)safeAreaInset
+{
+    _safeAreaInset = safeAreaInset;
+    [self setNeedsLayout];
 }
 
 - (void)layoutSubviews
@@ -112,9 +138,10 @@
     
     CGRect frame = self.frame;
     
-    _separatorView.frame = CGRectMake(0.0f, 0.0f, frame.size.width, TGIsRetina() ? 0.5f : 1.0f);
-    _shareButton.frame = CGRectMake(frame.size.width - 56.0f, TGRetinaPixel, 56.0f, 44.0f);
-    _deleteButton.frame = CGRectMake(0.0f, TGRetinaPixel, 52.0f, 44.0f);
+    _separatorView.frame = CGRectMake(0.0f, 0.0f, frame.size.width, TGScreenPixel);
+    _forwardButton.frame = CGRectMake(frame.size.width - 56.0f - _safeAreaInset.right, TGScreenPixel, 56.0f, 44.0f);
+    _deleteButton.frame = CGRectMake(_safeAreaInset.left, TGScreenPixel, 52.0f, 44.0f);
+    _shareButton.frame = CGRectMake(floor((self.frame.size.width - 56.0f) / 2.0f), 0.0f, 56.0f, 44.0f);
     
     [self layoutLabel];
 }

@@ -1,21 +1,24 @@
-/*
- * This is the source code of Telegram for iOS v. 1.1
- * It is licensed under GNU GPL v. 2 or later.
- * You should have received a copy of the license in this archive (see LICENSE).
- *
- * Copyright Peter Iakovlev, 2013.
- */
+#import <LegacyComponents/LegacyComponents.h>
 
-#import "TGViewController.h"
+#import <LegacyComponents/ASWatcher.h>
 
-#import "ASWatcher.h"
+@class TGPresentation;
 
 @interface TGLoginCountriesController : TGViewController
 
 @property (nonatomic, strong) ASHandle *watcherHandle;
-@property (nonatomic, copy) void (^countrySelected)(int code, NSString *name);
+@property (nonatomic, copy) void (^countrySelected)(int code, NSString *name, NSString *countryId);
+@property (nonatomic, strong) TGPresentation *presentation;
 
+- (id)initWithCodes:(bool)displayCodes;
+
++ (NSString *)countryCodeByMRZCode:(NSString *)code;
 + (NSString *)countryNameByCode:(int)code;
++ (NSString *)countryIdByCode:(int)code;
 + (NSString *)countryNameByCountryId:(NSString *)countryId code:(int *)code;
+
++ (NSString *)localizedCountryNameByCode:(int)code;
++ (NSString *)localizedCountryNameByCountryId:(NSString *)countryId;
++ (NSString *)localizedCountryNameByCountryId:(NSString *)countryId code:(int *)code;
 
 @end

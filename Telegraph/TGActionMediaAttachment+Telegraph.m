@@ -2,6 +2,10 @@
 
 #import "TGImageMediaAttachment+Telegraph.h"
 
+#import "TGCallDiscardReason.h"
+
+#import "TLMessageAction$messageActionPhoneCall.h"
+
 @implementation TGActionMediaAttachment (Telegraph)
 
 - (id)initWithTelegraphActionDesc:(TLMessageAction *)actionDesc
@@ -88,6 +92,68 @@
         } else if ([actionDesc isKindOfClass:[TLMessageAction$messageActionChannelMigrateFrom class]]) {
             self.actionType = TGMessageActionChannelMigratedFrom;
             self.actionData = @{@"groupId": @(((TLMessageAction$messageActionChannelMigrateFrom *)actionDesc).chat_id), @"title": ((TLMessageAction$messageActionChannelMigrateFrom *)actionDesc).title};
+        } else if ([actionDesc isKindOfClass:[TLMessageAction$messageActionPinMessage class]]) {
+            self.actionType = TGMessageActionPinnedMessage;
+        } else if ([actionDesc isKindOfClass:[TLMessageAction$messageActionHistoryClear class]]) {
+            self.actionType = TGMessageActionClearChat;
+        } else if ([actionDesc isKindOfClass:[TLMessageAction$messageActionGameScore class]]) {
+            self.actionType = TGMessageActionGameScore;
+            self.actionData = @{@"gameId": @(((TLMessageAction$messageActionGameScore *)actionDesc).game_id), @"score": @(((TLMessageAction$messageActionGameScore *)actionDesc).score)};
+        } else if ([actionDesc isKindOfClass:[TLMessageAction$messageActionPhoneCall class]]) {
+            self.actionType = TGMessageActionPhoneCall;
+            self.actionData = @{@"callId": @(((TLMessageAction$messageActionPhoneCall *)actionDesc).call_id), @"reason": @([TGCallDiscardReasonAdapter reasonForTLObject:((TLMessageAction$messageActionPhoneCall *)actionDesc).reason]), @"duration": @(((TLMessageAction$messageActionPhoneCall *)actionDesc).duration), };
+        } else if ([actionDesc isKindOfClass:[TLMessageAction$messageActionPaymentSent class]]) {
+            TLMessageAction$messageActionPaymentSent *action = (TLMessageAction$messageActionPaymentSent *)actionDesc;
+            self.actionType = TGMessageActionPaymentSent;
+            self.actionData = @{@"currency": action.currency, @"totalAmount": @(action.total_amount)};
+        } else if ([actionDesc isKindOfClass:[TLMessageAction$messageActionScreenshotTaken class]]) {
+            self.actionType = TGMessageActionEncryptedChatMessageScreenshot;
+            self.actionData = @{};
+        } else if ([actionDesc isKindOfClass:[TLMessageAction$messageActionCustomAction class]]) {
+            self.actionType = TGMessageActionText;
+            self.actionData = @{@"text": ((TLMessageAction$messageActionCustomAction *)actionDesc).message};
+        } else if ([actionDesc isKindOfClass:[TLMessageAction$messageActionBotAllowed class]]) {
+            self.actionType = TGMessageActionBotAllowed;
+            self.actionData = @{@"domain": ((TLMessageAction$messageActionBotAllowed *)actionDesc).domain};
+        } else if ([actionDesc isKindOfClass:[TLMessageAction$messageActionSecureValuesSent class]]) {
+            self.actionType = TGMessageActionSecureValuesSent;
+            NSString *values = @"";
+            for (TLSecureValueType *type in ((TLMessageAction$messageActionSecureValuesSent *)actionDesc).types)
+            {
+                NSString *stringType = @"";
+                if ([type isKindOfClass:[TLSecureValueType$secureValueTypePersonalDetails class]])
+                    stringType = @"personal_details";
+                else if ([type isKindOfClass:[TLSecureValueType$secureValueTypePassport class]])
+                    stringType = @"passport";
+                else if ([type isKindOfClass:[TLSecureValueType$secureValueTypeDriverLicense class]])
+                    stringType = @"driver_license";
+                else if ([type isKindOfClass:[TLSecureValueType$secureValueTypeIdentityCard class]])
+                    stringType = @"identity_card";
+                else if ([type isKindOfClass:[TLSecureValueType$secureValueTypeInternalPassport class]])
+                    stringType = @"internal_passport";
+                else if ([type isKindOfClass:[TLSecureValueType$secureValueTypeAddress class]])
+                    stringType = @"address";
+                else if ([type isKindOfClass:[TLSecureValueType$secureValueTypeUtilityBill class]])
+                    stringType = @"utility_bill";
+                else if ([type isKindOfClass:[TLSecureValueType$secureValueTypeBankStatement class]])
+                    stringType = @"bank_statement";
+                else if ([type isKindOfClass:[TLSecureValueType$secureValueTypeRentalAgreement class]])
+                    stringType = @"rental_agreement";
+                else if ([type isKindOfClass:[TLSecureValueType$secureValueTypePassportRegistration class]])
+                    stringType = @"passport_registration";
+                else if ([type isKindOfClass:[TLSecureValueType$secureValueTypeTemporaryRegistration class]])
+                    stringType = @"temporary_registration";
+                else if ([type isKindOfClass:[TLSecureValueType$secureValueTypePhone class]])
+                    stringType = @"phone";
+                else if ([type isKindOfClass:[TLSecureValueType$secureValueTypeEmail class]])
+                    stringType = @"email";
+                
+                if (values.length == 0)
+                    values = stringType;
+                else
+                    values = [values stringByAppendingFormat:@",%@", stringType];
+            }
+            self.actionData = @{@"values":values};
         }
     }
     return self;

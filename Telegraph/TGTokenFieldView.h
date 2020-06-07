@@ -9,6 +9,7 @@
 #import <UIKit/UIKit.h>
 
 @class TGTokenFieldView;
+@class TGPresentation;
 
 @protocol TGTokenFieldViewDelegate <NSObject>
 
@@ -25,6 +26,9 @@
 
 @property (nonatomic, strong) UIScrollView *scrollView;
 @property (nonatomic, strong) NSString *placeholder;
+
+@property (nonatomic, strong) TGPresentation *presentation;
+@property (nonatomic, assign) UIEdgeInsets safeAreaInset;
 
 - (float)preferredHeight;
 - (void)scrollToTextField:(bool)animated;

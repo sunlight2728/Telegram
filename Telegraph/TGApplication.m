@@ -1,13 +1,13 @@
 #import "TGApplication.h"
 
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGAppDelegate.h"
-#import "TGViewController.h"
-
-#import "TGHacks.h"
-
-#import "TGStringUtils.h"
 
 #import <SafariServices/SafariServices.h>
+#import "TGWebAppController.h"
+#import "TGHashtagOverviewController.h"
+#import "TGRootController.h"
 
 @interface TGApplication ()
 {
@@ -26,28 +26,71 @@
     return self;
 }
 
-- (NSString *)telegramMeLinkFromText:(NSString *)text startPrivatePayload:(__autoreleasing NSString **)startPrivatePayload startGroupPayload:(__autoreleasing NSString **)startGroupPayload
+- (NSMutableDictionary *)gameShareDict {
+    if (_gameShareDict == nil) {
+        _gameShareDict = [[NSMutableDictionary alloc] init];
+    }
+    return _gameShareDict;
+}
+
+- (NSString *)telegramMeLinkFromText:(NSString *)text startPrivatePayload:(__autoreleasing NSString **)startPrivatePayload startGroupPayload:(__autoreleasing NSString **)startGroupPayload gamePayload:(__autoreleasing NSString **)gamePayload groupedSingle:(bool *)groupedSingle
 {
-    NSString *pattern = @"https?:\\/\\/telegram\\.me\\/([a-zA-Z0-9_\\/]+)(\\?.*)?$";
-    NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:NULL];
+    NSString *pattern = @"https?:\\/\\/(telegram\\.me|t\\.me|telegram\\.dog)\\/([a-zA-Z0-9_\\/]+)(\\?.*)?$";
+    NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:NSRegularExpressionCaseInsensitive error:NULL];
     NSTextCheckingResult *match = [regex firstMatchInString:text options:0 range:NSMakeRange(0, [text length])];
     if (match != nil)
     {
-        NSString *arguments = ([match numberOfRanges] >= 2 && [match rangeAtIndex:2].location != NSNotFound) ? [[text substringWithRange:[match rangeAtIndex:2]] substringFromIndex:1] : nil;
+        NSString *arguments = ([match numberOfRanges] >= 3 && [match rangeAtIndex:3].location != NSNotFound) ? [[text substringWithRange:[match rangeAtIndex:3]] substringFromIndex:1] : nil;
         if (arguments.length != 0)
         {
-            NSDictionary *dict = [TGStringUtils argumentDictionaryInUrlString:arguments];
-            if (dict.count == 1 && (dict[@"start"] != nil || dict[@"startgroup"]))
+            if ([arguments isEqualToString:@"single"])
             {
-                if (startPrivatePayload)
-                    *startPrivatePayload = dict[@"start"];
-                if (startGroupPayload)
-                    *startGroupPayload = dict[@"startgroup"];
+                if (groupedSingle)
+                    *groupedSingle = true;
             }
             else
-                return nil;
+            {
+                NSDictionary *dict = [TGStringUtils argumentDictionaryInUrlString:arguments];
+                if (dict.count == 1 && (dict[@"start"] != nil || dict[@"startgroup"] || dict[@"game"]))
+                {
+                    if (startPrivatePayload)
+                        *startPrivatePayload = dict[@"start"];
+                    if (startGroupPayload)
+                        *startGroupPayload = dict[@"startgroup"];
+                    if (gamePayload)
+                        *gamePayload = dict[@"game"];
+                }
+                else
+                    return nil;
+            }
         }
-        return [text substringWithRange:[match rangeAtIndex:1]];
+        return [text substringWithRange:[match rangeAtIndex:2]];
+    }
+    
+    {
+        NSString *pattern = @"https?:\\/\\/t\\.me\\/([a-zA-Z0-9_\\/]+)(\\?.*)?$";
+        NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:NSRegularExpressionCaseInsensitive error:NULL];
+        NSTextCheckingResult *match = [regex firstMatchInString:text options:0 range:NSMakeRange(0, [text length])];
+        if (match != nil)
+        {
+            NSString *arguments = ([match numberOfRanges] >= 2 && [match rangeAtIndex:2].location != NSNotFound) ? [[text substringWithRange:[match rangeAtIndex:2]] substringFromIndex:1] : nil;
+            if (arguments.length != 0)
+            {
+                NSDictionary *dict = [TGStringUtils argumentDictionaryInUrlString:arguments];
+                if (dict.count == 1 && (dict[@"start"] != nil || dict[@"startgroup"] || dict[@"game"]))
+                {
+                    if (startPrivatePayload)
+                        *startPrivatePayload = dict[@"start"];
+                    if (startGroupPayload)
+                        *startGroupPayload = dict[@"startgroup"];
+                    if (gamePayload)
+                        *gamePayload = dict[@"game"];
+                }
+                else
+                    return nil;
+            }
+            return [text substringWithRange:[match rangeAtIndex:1]];
+        }
     }
     return nil;
 }
@@ -64,11 +107,61 @@
         }
         return [text substringWithRange:[match rangeAtIndex:1]];
     }
+    
+    {
+        NSString *pattern = @"https?:\\/\\/t\\.me\\/share\\/url\\?(.*)$";
+        NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:NULL];
+        NSTextCheckingResult *match = [regex firstMatchInString:text options:0 range:NSMakeRange(0, [text length])];
+        if (match != nil) {
+            NSString *arguments = ([match numberOfRanges] >= 1 && [match rangeAtIndex:1].location != NSNotFound) ? [text substringWithRange:[match rangeAtIndex:1]] : nil;
+            if (arguments.length != 0)
+            {
+                return arguments;
+            }
+            return [text substringWithRange:[match rangeAtIndex:1]];
+        }
+    }
+    
     return nil;
 }
 
-- (BOOL)openURL:(NSURL *)url forceNative:(BOOL)__unused forceNative
+- (NSString *)proxyLinkFromText:(NSString *)text {
+    NSString *pattern = @"(https|http)?:\\/\\/(telegram|t)\\.me\\/proxy\\?(.*)$";
+    NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:NULL];
+    NSTextCheckingResult *match = [regex firstMatchInString:text options:0 range:NSMakeRange(0, [text length])];
+    if (match != nil) {
+        NSString *arguments = ([match numberOfRanges] >= 3 && [match rangeAtIndex:3].location != NSNotFound) ? [text substringWithRange:[match rangeAtIndex:3]] : nil;
+        if (arguments.length != 0) {
+            return arguments;
+        }
+    }
+    
+    return nil;
+}
+
+- (NSString *)socksLinkFromText:(NSString *)text {
+    NSString *pattern = @"(https|http)?:\\/\\/(telegram|t)\\.me\\/socks\\?(.*)$";
+    NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:NULL];
+    NSTextCheckingResult *match = [regex firstMatchInString:text options:0 range:NSMakeRange(0, [text length])];
+    if (match != nil) {
+        NSString *arguments = ([match numberOfRanges] >= 3 && [match rangeAtIndex:3].location != NSNotFound) ? [text substringWithRange:[match rangeAtIndex:3]] : nil;
+        if (arguments.length != 0) {
+            return arguments;
+        }
+    }
+    
+    return nil;
+}
+
+- (BOOL)openURL:(NSURL *)url forceNative:(BOOL)forceNative {
+    return [self openURL:url forceNative:forceNative keepStack:false];
+}
+
+- (BOOL)openURL:(NSURL *)url forceNative:(BOOL)__unused forceNative keepStack:(bool)keepStack
 {
+    if (url.absoluteString.length == 0)
+        return true;
+    
     if (url.scheme.length == 0) {
         url = [NSURL URLWithString:[@"http://" stringByAppendingString:[url absoluteString]]];
     }
@@ -78,13 +171,26 @@
     if ([absolutePrefixString hasPrefix:@"tel:"] || [absolutePrefixString hasPrefix:@"facetime:"])
     {
         [TGAppDelegateInstance performPhoneCall:url];
-        
+        return true;
+    }
+    
+    if ([url.scheme isEqualToString:@"tg"] || [url.scheme isEqualToString:@"telegram"])
+    {
+        [(TGAppDelegate *)self.delegate handleOpenDocument:url animated:true];
         return true;
     }
     
     if ([absolutePrefixString hasPrefix:@"http://telegram.me/addstickers/"])
     {
         NSString *stickerPackHash = [rawAbsoluteString substringFromIndex:@"http://telegram.me/addstickers/".length];
+        NSString *internalUrl = [[NSString alloc] initWithFormat:@"tg://addstickers?set=%@", stickerPackHash];
+        [(TGAppDelegate *)self.delegate handleOpenDocument:[NSURL URLWithString:internalUrl] animated:true];
+        return true;
+    }
+    
+    if ([absolutePrefixString hasPrefix:@"http://t.me/addstickers/"])
+    {
+        NSString *stickerPackHash = [rawAbsoluteString substringFromIndex:@"http://t.me/addstickers/".length];
         NSString *internalUrl = [[NSString alloc] initWithFormat:@"tg://addstickers?set=%@", stickerPackHash];
         [(TGAppDelegate *)self.delegate handleOpenDocument:[NSURL URLWithString:internalUrl] animated:true];
         return true;
@@ -98,11 +204,40 @@
         return true;
     }
     
-    if ([absolutePrefixString hasPrefix:@"http://telegram.me/joinchat/"])
+    if ([absolutePrefixString hasPrefix:@"https://t.me/addstickers/"])
     {
-        NSString *groupHash = [rawAbsoluteString substringFromIndex:@"http://telegram.me/joinchat/".length];
-        NSString *internalUrl = [[NSString alloc] initWithFormat:@"tg://join?invite=%@", groupHash];
+        NSString *stickerPackHash = [rawAbsoluteString substringFromIndex:@"https://t.me/addstickers/".length];
+        NSString *internalUrl = [[NSString alloc] initWithFormat:@"tg://addstickers?set=%@", stickerPackHash];
         [(TGAppDelegate *)self.delegate handleOpenDocument:[NSURL URLWithString:internalUrl] animated:true];
+        return true;
+    }
+    
+    if ([absolutePrefixString hasPrefix:@"https://telegram.me/addstickers/"])
+    {
+        NSString *stickerPackHash = [rawAbsoluteString substringFromIndex:@"https://telegram.me/addstickers/".length];
+        NSString *internalUrl = [[NSString alloc] initWithFormat:@"tg://addstickers?set=%@", stickerPackHash];
+        [(TGAppDelegate *)self.delegate handleOpenDocument:[NSURL URLWithString:internalUrl] animated:true];
+        return true;
+    }
+    
+    /*NSString *instantViewPattern = @"https?:\\/\\/(t|telegram)\\.me\\/iv\\?(.*?)$";
+    NSRegularExpression *instantViewRegex = [NSRegularExpression regularExpressionWithPattern:instantViewPattern options:NSRegularExpressionCaseInsensitive error:NULL];
+    NSArray *instantViewMatches = [instantViewRegex matchesInString:rawAbsoluteString options:0 range:NSMakeRange(0, rawAbsoluteString.length)];
+    for (NSTextCheckingResult *match in instantViewMatches) {
+        if ([match rangeAtIndex:2].location != NSNotFound) {
+            [TGStringUtils argumentDictionaryInUrlString:[rawAbsoluteString substringWithRange:[match rangeAtIndex:2]]];
+            [(TGAppDelegate *)self.delegate handleOpenInstantView:];
+            return true;
+        }
+        
+        break;
+    }*/
+    
+    if ([absolutePrefixString hasPrefix:@"http://t.me/joinchat/"])
+    {
+        NSString *groupHash = [rawAbsoluteString substringFromIndex:@"http://t.me/joinchat/".length];
+        NSString *internalUrl = [[NSString alloc] initWithFormat:@"tg://join?invite=%@", groupHash];
+        [(TGAppDelegate *)self.delegate handleOpenDocument:[NSURL URLWithString:internalUrl] animated:true keepStack:keepStack];
         return true;
     }
     
@@ -110,14 +245,64 @@
     {
         NSString *groupHash = [rawAbsoluteString substringFromIndex:@"https://telegram.me/joinchat/".length];
         NSString *internalUrl = [[NSString alloc] initWithFormat:@"tg://join?invite=%@", groupHash];
+        [(TGAppDelegate *)self.delegate handleOpenDocument:[NSURL URLWithString:internalUrl] animated:true keepStack:keepStack];
+        return true;
+    }
+    
+    if ([absolutePrefixString hasPrefix:@"https://t.me/joinchat/"])
+    {
+        NSString *groupHash = [rawAbsoluteString substringFromIndex:@"https://t.me/joinchat/".length];
+        NSString *internalUrl = [[NSString alloc] initWithFormat:@"tg://join?invite=%@", groupHash];
+        [(TGAppDelegate *)self.delegate handleOpenDocument:[NSURL URLWithString:internalUrl] animated:true keepStack:keepStack];
+        return true;
+    }
+    
+    if ([absolutePrefixString hasPrefix:@"t.me/joinchat/"])
+    {
+        NSString *groupHash = [rawAbsoluteString substringFromIndex:@"t.me/joinchat/".length];
+        NSString *internalUrl = [[NSString alloc] initWithFormat:@"tg://join?invite=%@", groupHash];
+        [(TGAppDelegate *)self.delegate handleOpenDocument:[NSURL URLWithString:internalUrl] animated:true keepStack:keepStack];
+        return true;
+    }
+    
+    if ([absolutePrefixString hasPrefix:@"telegram.me/joinchat/"])
+    {
+        NSString *groupHash = [rawAbsoluteString substringFromIndex:@"telegram.me/joinchat/".length];
+        NSString *internalUrl = [[NSString alloc] initWithFormat:@"tg://join?invite=%@", groupHash];
+        [(TGAppDelegate *)self.delegate handleOpenDocument:[NSURL URLWithString:internalUrl] animated:true keepStack:keepStack];
+        return true;
+    }
+    
+    if ([absolutePrefixString hasPrefix:@"http://telegram.me/joinchat/"])
+    {
+        NSString *groupHash = [rawAbsoluteString substringFromIndex:@"http://telegram.me/joinchat/".length];
+        NSString *internalUrl = [[NSString alloc] initWithFormat:@"tg://join?invite=%@", groupHash];
+        [(TGAppDelegate *)self.delegate handleOpenDocument:[NSURL URLWithString:internalUrl] animated:true keepStack:keepStack];
+        return true;
+    }
+    
+    if ([absolutePrefixString hasPrefix:@"https://telegram.me/confirmphone?"])
+    {
+        NSString *arguments = [rawAbsoluteString substringFromIndex:@"https://telegram.me/confirmphone?".length];
+        NSString *internalUrl = [[NSString alloc] initWithFormat:@"tg://confirmphone?%@", arguments];
+        [(TGAppDelegate *)self.delegate handleOpenDocument:[NSURL URLWithString:internalUrl] animated:true];
+        return true;
+    }
+    
+    if ([absolutePrefixString hasPrefix:@"https://t.me/confirmphone?"])
+    {
+        NSString *arguments = [rawAbsoluteString substringFromIndex:@"https://t.me/confirmphone?".length];
+        NSString *internalUrl = [[NSString alloc] initWithFormat:@"tg://confirmphone?%@", arguments];
         [(TGAppDelegate *)self.delegate handleOpenDocument:[NSURL URLWithString:internalUrl] animated:true];
         return true;
     }
     
     NSString *startPrivatePayload = nil;
     NSString *startGroupPayload = nil;
-    NSString *telegramMeLink = [self telegramMeLinkFromText:rawAbsoluteString startPrivatePayload:&startPrivatePayload startGroupPayload:&startGroupPayload];
-    if (telegramMeLink.length != 0)
+    NSString *gamePayload = nil;
+    bool groupedSingle = false;
+    NSString *telegramMeLink = [self telegramMeLinkFromText:rawAbsoluteString startPrivatePayload:&startPrivatePayload startGroupPayload:&startGroupPayload gamePayload:&gamePayload groupedSingle:&groupedSingle];
+    if (telegramMeLink.length != 0 && ![telegramMeLink isEqualToString:@"iv"])
     {
         NSString *domainName = telegramMeLink;
         NSString *postId = nil;
@@ -133,14 +318,19 @@
             internalUrl = [[NSMutableString alloc] initWithFormat:@"tg://resolve?domain=%@&post=%@", domainName, postId];
         }
         
-        if (startPrivatePayload.length != 0 || startGroupPayload.length != 0)
+        if (groupedSingle)
+             [internalUrl appendString:@"&single"];
+        
+        if (startPrivatePayload.length != 0 || startGroupPayload.length != 0 || gamePayload != nil)
         {
             if (startPrivatePayload.length != 0)
                 [internalUrl appendFormat:@"&start=%@", startPrivatePayload];
             if (startGroupPayload.length != 0)
                 [internalUrl appendFormat:@"&startgroup=%@", startGroupPayload];
+            if (gamePayload.length != 0)
+                [internalUrl appendFormat:@"&game=%@", gamePayload];
         }
-        [(TGAppDelegate *)self.delegate handleOpenDocument:[NSURL URLWithString:internalUrl] animated:true];
+        [(TGAppDelegate *)self.delegate handleOpenDocument:[NSURL URLWithString:internalUrl] animated:true keepStack:keepStack];
         return true;
     }
     
@@ -151,15 +341,36 @@
         return true;
     }
     
+    NSString *socksLink = [self socksLinkFromText:rawAbsoluteString];
+    if (socksLink.length != 0) {
+        NSMutableString *internalUrl = [[NSMutableString alloc] initWithFormat:@"tg://socks?%@", socksLink];
+        [(TGAppDelegate *)self.delegate handleOpenDocument:[NSURL URLWithString:internalUrl] animated:true];
+        return true;
+    }
+    
+    NSString *proxyLink = [self proxyLinkFromText:rawAbsoluteString];
+    if (proxyLink.length != 0) {
+        NSMutableString *internalUrl = [[NSMutableString alloc] initWithFormat:@"tg://proxy?%@", proxyLink];
+        [(TGAppDelegate *)self.delegate handleOpenDocument:[NSURL URLWithString:internalUrl] animated:true];
+        return true;
+    }
+    
     if ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPhone && iosMajorVersion() >= 9 && ([url.scheme isEqual:@"http"] || [url.scheme isEqual:@"https"])) {
+        
+        UIViewController *parentController = TGAppDelegateInstance.window.rootViewController;
+        if ([parentController.presentedViewController isKindOfClass:[TGHashtagOverviewController class]])
+        {
+            parentController = parentController.presentedViewController;
+        }
+        
         if ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 SFSafariViewController *controller = [[SFSafariViewController alloc] initWithURL:url entersReaderIfAvailable:false];
-                [TGAppDelegateInstance.window.rootViewController presentViewController:controller animated:true completion:nil];
+                [parentController presentViewController:controller animated:true completion:nil];
             });
         } else {
             SFSafariViewController *controller = [[SFSafariViewController alloc] initWithURL:url entersReaderIfAvailable:false];
-            [TGAppDelegateInstance.window.rootViewController presentViewController:controller animated:true completion:nil];
+            [parentController presentViewController:controller animated:true completion:nil];
         }
         return true;
     }
@@ -170,6 +381,11 @@
 - (BOOL)openURL:(NSURL *)url
 {
     return [self openURL:url forceNative:false];
+}
+
+- (BOOL)nativeOpenURL:(NSURL *)url
+{
+    return [super openURL:url];
 }
 
 - (void)setStatusBarStyle:(UIStatusBarStyle)statusBarStyle

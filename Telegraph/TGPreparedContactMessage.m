@@ -1,18 +1,10 @@
-/*
- * This is the source code of Telegram for iOS v. 1.1
- * It is licensed under GNU GPL v. 2 or later.
- * You should have received a copy of the license in this archive (see LICENSE).
- *
- * Copyright Peter Iakovlev, 2013.
- */
-
 #import "TGPreparedContactMessage.h"
 
-#import "TGMessage.h"
+#import <LegacyComponents/LegacyComponents.h>
 
 @implementation TGPreparedContactMessage
 
-- (instancetype)initWithUid:(int32_t)uid firstName:(NSString *)firstName lastName:(NSString *)lastName phoneNumber:(NSString *)phoneNumber replyMessage:(TGMessage *)replyMessage
+- (instancetype)initWithUid:(int32_t)uid firstName:(NSString *)firstName lastName:(NSString *)lastName phoneNumber:(NSString *)phoneNumber vcard:(NSString *)vcard replyMessage:(TGMessage *)replyMessage replyMarkup:(TGReplyMarkupAttachment *)replyMarkup
 {
     self = [super init];
     if (self != nil)
@@ -21,14 +13,16 @@
         _firstName = firstName;
         _lastName = lastName;
         _phoneNumber = phoneNumber;
+        _vcard = vcard;
         self.replyMessage = replyMessage;
+        self.replyMarkup = replyMarkup;
     }
     return self;
 }
 
-- (instancetype)initWithFirstName:(NSString *)firstName lastName:(NSString *)lastName phoneNumber:(NSString *)phoneNumber replyMessage:(TGMessage *)replyMessage
+- (instancetype)initWithFirstName:(NSString *)firstName lastName:(NSString *)lastName phoneNumber:(NSString *)phoneNumber vcard:(NSString *)vcard replyMessage:(TGMessage *)replyMessage replyMarkup:(TGReplyMarkupAttachment *)replyMarkup
 {
-    return [self initWithUid:0 firstName:firstName lastName:lastName phoneNumber:phoneNumber replyMessage:replyMessage];
+    return [self initWithUid:0 firstName:firstName lastName:lastName phoneNumber:phoneNumber vcard:vcard replyMessage:replyMessage replyMarkup:replyMarkup];
 }
 
 - (TGMessage *)message
@@ -46,6 +40,7 @@
     contactAttachment.firstName = _firstName;
     contactAttachment.lastName = _lastName;
     contactAttachment.phoneNumber = _phoneNumber;
+    contactAttachment.vcard = _vcard;
     [attachments addObject:contactAttachment];
     
     if (self.replyMessage != nil)
@@ -54,6 +49,10 @@
         replyMedia.replyMessageId = self.replyMessage.mid;
         replyMedia.replyMessage = self.replyMessage;
         [attachments addObject:replyMedia];
+    }
+    
+    if (self.replyMarkup != nil) {
+        [attachments addObject:self.replyMarkup];
     }
     
     message.mediaAttachments = attachments;

@@ -1,39 +1,26 @@
-/*
- * This is the source code of Telegram for iOS v. 1.1
- * It is licensed under GNU GPL v. 2 or later.
- * You should have received a copy of the license in this archive (see LICENSE).
- *
- * Copyright Peter Iakovlev, 2013.
- */
-
 #import "TGAnimatedImageMessageViewModel.h"
 
-#import "ASQueue.h"
+#import <LegacyComponents/LegacyComponents.h>
 
-#import "TGImageUtils.h"
-#import "TGStringUtils.h"
-#import "TGTimerTarget.h"
+#import <LegacyComponents/ASQueue.h>
 
-#import "TGImageInfo.h"
+#import <LegacyComponents/TGTimerTarget.h>
 
 #import "TGMessageImageViewModel.h"
 #import "TGModernRemoteImageView.h"
 #import "TGModernViewContext.h"
 
-#import "TGMessage.h"
-#import "TGMediaAttachment.h"
-#import "TGDocumentMediaAttachment.h"
 #import "TGPreparedLocalDocumentMessage.h"
 
 #import "TGMessageImageView.h"
 
-#import "TGModernAnimatedImagePlayer.h"
+#import <LegacyComponents/TGModernAnimatedImagePlayer.h>
 
-#import "TGImageBlur.h"
+#import <LegacyComponents/TGImageBlur.h>
 
 #import "TGInlineVideoModel.h"
 
-#import "TGGifConverter.h"
+#import <LegacyComponents/TGGifConverter.h>
 
 #import "TGTelegraph.h"
 
@@ -62,7 +49,7 @@
     return queue;
 }
 
-- (instancetype)initWithMessage:(TGMessage *)message imageInfo:(TGImageInfo *)imageInfo document:(TGDocumentMediaAttachment *)document authorPeer:(id)authorPeer context:(TGModernViewContext *)context forwardPeer:(id)forwardPeer forwardAuthor:(id)forwardAuthor forwardMessageId:(int32_t)forwardMessageId replyHeader:(TGMessage *)replyHeader replyAuthor:(id)replyAuthor viaUser:(TGUser *)viaUser caption:(NSString *)caption textCheckingResults:(NSArray *)textCheckingResults
+- (instancetype)initWithMessage:(TGMessage *)message imageInfo:(TGImageInfo *)imageInfo document:(TGDocumentMediaAttachment *)document authorPeer:(id)authorPeer context:(TGModernViewContext *)context forwardPeer:(id)forwardPeer forwardAuthor:(id)forwardAuthor forwardMessageId:(int32_t)forwardMessageId replyHeader:(TGMessage *)replyHeader replyAuthor:(id)replyAuthor viaUser:(TGUser *)viaUser caption:(NSString *)caption textCheckingResults:(NSArray *)__unused textCheckingResults
 {
     TGImageInfo *previewImageInfo = imageInfo;
     
@@ -78,7 +65,15 @@
         
         NSMutableString *previewUri = [[NSMutableString alloc] initWithString:@"animation-thumbnail://?"];
         if (document.documentId != 0)
+        {
             [previewUri appendFormat:@"id=%" PRId64 "", document.documentId];
+            
+            [previewUri appendFormat:@"&cid=%" PRId64 "", message.cid];
+            [previewUri appendFormat:@"&mid=%" PRId32 "", message.mid];
+            
+            if (document.originInfo != nil)
+                [previewUri appendFormat:@"&origin_info=%@", [document.originInfo stringRepresentation]];
+        }
         else
             [previewUri appendFormat:@"local-id=%" PRId64 "", document.localDocumentId];
         
@@ -101,7 +96,7 @@
         [previewImageInfo addImageWithSize:renderSize url:previewUri];
     }
     
-    self = [super initWithMessage:message imageInfo:previewImageInfo authorPeer:authorPeer context:context forwardPeer:forwardPeer forwardAuthor:forwardAuthor forwardMessageId:forwardMessageId replyHeader:replyHeader replyAuthor:replyAuthor viaUser:viaUser caption:caption textCheckingResults:textCheckingResults];
+    self = [super initWithMessage:message imageInfo:previewImageInfo authorPeer:authorPeer context:context forwardPeer:forwardPeer forwardAuthor:forwardAuthor forwardMessageId:forwardMessageId replyHeader:replyHeader replyAuthor:replyAuthor viaUser:viaUser caption:caption textCheckingResults:message.textCheckingResults];
     if (self != nil)
     {
         _document = document;
@@ -110,12 +105,15 @@
         
         CGFloat scale = [UIScreen mainScreen].scale;
         self.imageModel.inlineVideoSize = CGSizeMake(renderSize.width * scale, renderSize.height * scale);
-        
+        self.imageModel.inlineVideoCornerRadius = 14.0f;
+        self.imageModel.inlineVideoPosition = [self visiblePositionFlags];
         if (_contentModel != nil) {
             self.imageModel.inlineVideoInsets = UIEdgeInsetsZero;
         } else {
             self.imageModel.inlineVideoInsets = UIEdgeInsetsMake(2.0f, 2.0f, 2.0f, 2.0f);
         }
+        
+        self.avatarOffset -= 1.0f;
     }
     return self;
 }
@@ -131,7 +129,7 @@
     
     if (!wasAvailable && mediaIsAvailable && _boundToContainer) {
         if ([self.imageModel boundView] != nil && _context.autoplayAnimations && _mediaIsAvailable) {
-            [self activateMedia];
+            [self activateMediaPlayback];
         }
     }
 }
@@ -159,7 +157,15 @@
         
         NSMutableString *previewUri = [[NSMutableString alloc] initWithString:@"animation-thumbnail://?"];
         if (_document.documentId != 0)
+        {
             [previewUri appendFormat:@"id=%" PRId64 "", _document.documentId];
+            
+            [previewUri appendFormat:@"&cid=%" PRId64 "", message.cid];
+            [previewUri appendFormat:@"&mid=%" PRId32 "", message.mid];
+            
+            if (_document.originInfo != nil)
+                [previewUri appendFormat:@"&origin_info=%@", [_document.originInfo stringRepresentation]];
+        }
         else
             [previewUri appendFormat:@"local-id=%" PRId64 "", _document.localDocumentId];
         
@@ -182,33 +188,46 @@
         
         [previewImageInfo addImageWithSize:renderSize url:previewUri];
         
-        [self updateImageInfo:previewImageInfo];
+        NSString *updatedImageUri = [self updatedImageUriForInfo:previewImageInfo];
+        self.imageModel.uri = updatedImageUri;
     }
     
     _canDownload = _document.documentId != 0 || (_document.documentUri != nil && ![_document.documentUri hasPrefix:@"http"]);
     
     if ([self.imageModel boundView] != nil && _context.autoplayAnimations && _mediaIsAvailable && _activatedMedia && _document.documentId != previousDocumentId) {
-        [self activateMedia];
+        [self activateMediaPlayback];
     }
     
     [self updateImageOverlay:false];
+    
+    if (_backgroundModel != nil) {
+        self.imageModel.inlineVideoInsets = UIEdgeInsetsZero;
+    } else {
+        self.imageModel.inlineVideoInsets = UIEdgeInsetsMake(2.0f, 2.0f, 2.0f, 2.0f);
+    }
 }
 
 - (void)updateAnimationsEnabled
 {
 }
 
-- (void)stopInlineMedia
+- (void)stopInlineMedia:(int32_t)__unused excludeMid
 {
-    [((TGMessageImageViewContainer *)self.imageModel.boundView).imageView setVideoPathSignal:nil];
+    bool wasActivated = _activatedMedia;
     _activatedMedia = false;
+    
+    if (wasActivated)
+    {
+        [((TGMessageImageViewContainer *)self.imageModel.boundView).imageView hideVideo];
+        [((TGMessageImageViewContainer *)self.imageModel.boundView).imageView setVideoPathSignal:nil];
+    }
     
     [self updateImageOverlay:false];
 }
 
 - (void)resumeInlineMedia {
     if (_context.autoplayAnimations && _mediaIsAvailable && !_activatedMedia) {
-        [self activateMedia];
+        [self activateMediaPlayback];
     }
 }
 
@@ -223,7 +242,7 @@
     _boundToContainer = true;
     
     if (_context.autoplayAnimations && _mediaIsAvailable) {
-        [self activateMedia];
+        [self activateMediaPlayback];
     }
 }
 
@@ -245,91 +264,93 @@
     [self updateImageOverlay:false];
 }
 
-- (void)activateMedia
+- (void)activateMedia:(bool)instant
 {
-    if (_activatedMedia && !_context.autoplayAnimations) {
-        [self stopInlineMedia];
+    if (_activatedMedia)
+        [_context.companionHandle requestAction:@"openMediaRequested" options:@{@"mid": @(_mid), @"instant": @(instant), @"peerId": @(_authorPeerId)}];
+    else
+        [self activateMediaPlayback];
+}
+
+- (void)activateMediaPlayback
+{
+    _activatedMedia = true;
+    [self updateImageOverlay:false];
+    
+    NSString *documentDirectory = nil;
+    if (_document.localDocumentId != 0) {
+        documentDirectory = [TGPreparedLocalDocumentMessage localDocumentDirectoryForLocalDocumentId:_document.localDocumentId version:_document.version];
     } else {
-        if (true || !_activatedMedia) {
-            _activatedMedia = true;
-            [self updateImageOverlay:false];
-            
-            NSString *documentDirectory = nil;
-            if (_document.localDocumentId != 0) {
-                documentDirectory = [TGPreparedLocalDocumentMessage localDocumentDirectoryForLocalDocumentId:_document.localDocumentId];
+        documentDirectory = [TGPreparedLocalDocumentMessage localDocumentDirectoryForDocumentId:_document.documentId version:_document.version];
+    }
+    
+    NSString *videoPath = nil;
+    
+    if ([_document.mimeType isEqualToString:@"video/mp4"]) {
+        if (_document.localDocumentId != 0)
+        {
+            videoPath = [[TGPreparedLocalDocumentMessage localDocumentDirectoryForLocalDocumentId:_document.localDocumentId version:_document.version] stringByAppendingPathComponent:[_document safeFileName]];
+        }
+        else
+        {
+            videoPath = [[TGPreparedLocalDocumentMessage localDocumentDirectoryForDocumentId:_document.documentId version:_document.version] stringByAppendingPathComponent:[_document safeFileName]];
+        }
+    }
+    
+    if (videoPath != nil) {
+        [((TGMessageImageViewContainer *)self.imageModel.boundView).imageView setVideoPathSignal:[SSignal single:videoPath]];
+    } else {
+        NSString *filePath = nil;
+        NSString *videoPath = nil;
+        
+        if (_document.localDocumentId != 0)
+        {
+            filePath = [[TGPreparedLocalDocumentMessage localDocumentDirectoryForLocalDocumentId:_document.localDocumentId version:_document.version] stringByAppendingPathComponent:[_document safeFileName]];
+            videoPath = [filePath stringByAppendingString:@".mov"];
+        }
+        else
+        {
+            filePath = [[TGPreparedLocalDocumentMessage localDocumentDirectoryForDocumentId:_document.documentId version:_document.version] stringByAppendingPathComponent:[_document safeFileName]];
+            videoPath = [filePath stringByAppendingString:@".mov"];
+        }
+        
+        NSString *key = [@"gif-video-path:" stringByAppendingString:filePath];
+        
+        SSignal *videoSignal = [[SSignal defer:^SSignal *{
+            if ([[NSFileManager defaultManager] fileExistsAtPath:videoPath isDirectory:NULL]) {
+                return [SSignal single:videoPath];
             } else {
-                documentDirectory = [TGPreparedLocalDocumentMessage localDocumentDirectoryForDocumentId:_document.documentId];
-            }
-            
-            NSString *videoPath = nil;
-            
-            if ([_document.mimeType isEqualToString:@"video/mp4"]) {
-                if (_document.localDocumentId != 0)
-                {
-                    videoPath = [[TGPreparedLocalDocumentMessage localDocumentDirectoryForLocalDocumentId:_document.localDocumentId] stringByAppendingPathComponent:[_document safeFileName]];
-                }
-                else
-                {
-                    videoPath = [[TGPreparedLocalDocumentMessage localDocumentDirectoryForDocumentId:_document.documentId] stringByAppendingPathComponent:[_document safeFileName]];
-                }
-            }
-            
-            if (videoPath != nil) {
-                [((TGMessageImageViewContainer *)self.imageModel.boundView).imageView setVideoPathSignal:[SSignal single:videoPath]];
-            } else {
-                NSString *filePath = nil;
-                NSString *videoPath = nil;
-                
-                if (_document.localDocumentId != 0)
-                {
-                    filePath = [[TGPreparedLocalDocumentMessage localDocumentDirectoryForLocalDocumentId:_document.localDocumentId] stringByAppendingPathComponent:[_document safeFileName]];
-                    videoPath = [filePath stringByAppendingString:@".mov"];
-                }
-                else
-                {
-                    filePath = [[TGPreparedLocalDocumentMessage localDocumentDirectoryForDocumentId:_document.documentId] stringByAppendingPathComponent:[_document safeFileName]];
-                    videoPath = [filePath stringByAppendingString:@".mov"];
-                }
-                
-                NSString *key = [@"gif-video-path:" stringByAppendingString:filePath];
-                
-                SSignal *videoSignal = [[SSignal defer:^SSignal *{
-                    if ([[NSFileManager defaultManager] fileExistsAtPath:videoPath isDirectory:NULL]) {
-                        return [SSignal single:videoPath];
-                    } else {
-                        return [TGTelegraphInstance.genericTasksSignalManager multicastedSignalForKey:key producer:^SSignal *{
-                            SSignal *dataSignal = [[SSignal alloc] initWithGenerator:^id<SDisposable>(SSubscriber *subscriber) {
-                                NSData *data = [NSData dataWithContentsOfFile:filePath options:NSDataReadingMappedIfSafe error:nil];
-                                if (data != nil) {
-                                    [subscriber putNext:data];
-                                    [subscriber putCompletion];
+                return [TGTelegraphInstance.genericTasksSignalManager multicastedSignalForKey:key producer:^SSignal *{
+                    SSignal *dataSignal = [[SSignal alloc] initWithGenerator:^id<SDisposable>(SSubscriber *subscriber) {
+                        NSData *data = [NSData dataWithContentsOfFile:filePath options:NSDataReadingMappedIfSafe error:nil];
+                        if (data != nil) {
+                            [subscriber putNext:data];
+                            [subscriber putCompletion];
+                        } else {
+                            [subscriber putError:nil];
+                        }
+                        return nil;
+                    }];
+                    return [dataSignal mapToSignal:^SSignal *(NSData *data) {
+                        return [[TGGifConverter convertGifToMp4:data] mapToSignal:^SSignal *(NSDictionary *dict) {
+                            return [[SSignal alloc] initWithGenerator:^id<SDisposable>(SSubscriber *subsctiber) {
+                                NSError *error = nil;
+                                [[NSFileManager defaultManager] moveItemAtPath:dict[@"path"] toPath:videoPath error:&error];
+                                if (error != nil) {
+                                    [subsctiber putError:nil];
                                 } else {
-                                    [subscriber putError:nil];
+                                    [subsctiber putNext:videoPath];
+                                    [subsctiber putCompletion];
                                 }
                                 return nil;
                             }];
-                            return [dataSignal mapToSignal:^SSignal *(NSData *data) {
-                                return [[TGGifConverter convertGifToMp4:data] mapToSignal:^SSignal *(NSString *tempPath) {
-                                    return [[SSignal alloc] initWithGenerator:^id<SDisposable>(SSubscriber *subsctiber) {
-                                        NSError *error = nil;
-                                        [[NSFileManager defaultManager] moveItemAtPath:tempPath toPath:videoPath error:&error];
-                                        if (error != nil) {
-                                            [subsctiber putError:nil];
-                                        } else {
-                                            [subsctiber putNext:videoPath];
-                                            [subsctiber putCompletion];
-                                        }
-                                        return nil;
-                                    }];
-                                }];
-                            }];
                         }];
-                    }
-                }] startOn:[SQueue concurrentDefaultQueue]];
-                
-                [((TGMessageImageViewContainer *)self.imageModel.boundView).imageView setVideoPathSignal:videoSignal];
+                    }];
+                }];
             }
-        }
+        }] startOn:[SQueue concurrentDefaultQueue]];
+        
+        [((TGMessageImageViewContainer *)self.imageModel.boundView).imageView setVideoPathSignal:videoSignal];
     }
 }
 
@@ -345,6 +366,14 @@
     } else {
         return !_activatedMedia ? TGMessageImageViewOverlayPlay : TGMessageImageViewOverlayNone;
     }
+}
+
+- (bool)isPreviewableAtPoint:(CGPoint)point
+{
+    if (self.isSecret)
+        return false;
+    
+    return CGRectContainsPoint(self.imageModel.frame, point);
 }
 
 @end

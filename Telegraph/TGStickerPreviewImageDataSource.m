@@ -1,24 +1,19 @@
 #import "TGStickerPreviewImageDataSource.h"
 
-#import "TGStringUtils.h"
+#import <LegacyComponents/LegacyComponents.h>
 
 #import "TGWorkerPool.h"
 #import "TGWorkerTask.h"
 #import "TGMediaPreviewTask.h"
 
-#import "TGImageUtils.h"
-#import "TGStringUtils.h"
-#import "TGRemoteImageView.h"
+#import <LegacyComponents/TGRemoteImageView.h>
 
-#import "TGImageBlur.h"
-#import "UIImage+TG.h"
-#import "NSObject+TGLock.h"
+#import <LegacyComponents/TGImageBlur.h>
+#import <LegacyComponents/UIImage+TG.h>
 
 #import "TGMediaStoreContext.h"
 
 #import "UIImage+WebP.h"
-
-#import "TGDocumentMediaAttachment.h"
 
 #import "TGSharedMediaUtils.h"
 
@@ -116,8 +111,9 @@ static ASQueue *taskManagementQueue()
                  
                  NSString *filePath = [fileDirectory stringByAppendingPathComponent:highQuality ? @"thumbnail-high" :  @"thumbnail"];
                  
+                 int64_t identifier = [args[@"documentId"] longLongValue];
                  __weak TGMediaPreviewTask *weakPreviewTask = previewTask;
-                 [previewTask executeMultipartWithImageUri:args[@"legacyThumbnailUri"] targetFilePath:filePath progress:^(float value)
+                 [previewTask executeMultipartWithImageUri:args[@"legacyThumbnailUri"] identifier:identifier originInfo:[TGMediaOriginInfo mediaOriginInfoWithStringRepresentation:args[@"origin_info"]] targetFilePath:filePath progress:^(float value)
                  {
                      if (progress)
                          progress(value);
@@ -278,10 +274,9 @@ static ASQueue *taskManagementQueue()
         [[TGSharedMediaUtils inMemoryImageCache] setImageDataWithSize:image.size generator:^(uint8_t *memory, NSUInteger bytesPerRow)
         {
             CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-            CGBitmapInfo bitmapInfo = kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Host;
+            CGBitmapInfo bitmapInfo = kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little;
             
             CGContextRef context = CGBitmapContextCreate(memory, contextWidth, contextHeight, 8, bytesPerRow, colorSpace, bitmapInfo);
-            CGColorSpaceRelease(colorSpace);
             
             CGContextTranslateCTM(context, contextWidth / 2.0f, contextHeight / 2.0f);
             CGContextScaleCTM(context, 1.0f, -1.0f);
@@ -292,6 +287,7 @@ static ASQueue *taskManagementQueue()
             [image drawInRect:CGRectMake(0.0f, 0.0f, contextWidth, contextHeight) blendMode:kCGBlendModeCopy alpha:1.0f];
             
             UIGraphicsPopContext();
+            CGColorSpaceRelease(colorSpace);
             CGContextRelease(context);
         } forKey:uri];
         

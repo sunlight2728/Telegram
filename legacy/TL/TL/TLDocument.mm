@@ -20,7 +20,7 @@
     return 0;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)__unused metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)__unused metaObject
 {
     TGLog(@"TLbuildFromMetaObject is not implemented for base type");
     return nil;
@@ -47,7 +47,7 @@
     return (int32_t)0x1f0e5347;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)metaObject
 {
     TLDocument$documentEmpty *object = [[TLDocument$documentEmpty alloc] init];
     object.n_id = metaObject->getInt64((int32_t)0x7a5601fb);
@@ -72,7 +72,7 @@
 
 - (int32_t)TLconstructorSignature
 {
-    return (int32_t)0xf9a39f4f;
+    return (int32_t)0x59534e4c;
 }
 
 - (int32_t)TLconstructorName
@@ -80,11 +80,12 @@
     return (int32_t)0xf1465b5f;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)metaObject
 {
     TLDocument$document *object = [[TLDocument$document alloc] init];
     object.n_id = metaObject->getInt64((int32_t)0x7a5601fb);
     object.access_hash = metaObject->getInt64((int32_t)0x8f305224);
+    object.file_reference = metaObject->getBytes((int32_t)0x8bad663c);
     object.date = metaObject->getInt32((int32_t)0xb76958ba);
     object.mime_type = metaObject->getString((int32_t)0xcd8e470b);
     object.size = metaObject->getInt32((int32_t)0x5a228f5e);
@@ -107,6 +108,12 @@
         value.type = TLConstructedValueTypePrimitiveInt64;
         value.primitive.int64Value = self.access_hash;
         values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0x8f305224, value));
+    }
+    {
+        TLConstructedValue value;
+        value.type = TLConstructedValueTypeBytes;
+        value.nativeObject = self.file_reference;
+        values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0x8bad663c, value));
     }
     {
         TLConstructedValue value;

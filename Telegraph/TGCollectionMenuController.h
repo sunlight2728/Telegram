@@ -1,17 +1,11 @@
-/*
- * This is the source code of Telegram for iOS v. 1.1
- * It is licensed under GNU GPL v. 2 or later.
- * You should have received a copy of the license in this archive (see LICENSE).
- *
- * Copyright Peter Iakovlev, 2013.
- */
-
-#import "TGViewController.h"
+#import <LegacyComponents/LegacyComponents.h>
 
 #import "TGCollectionMenuSectionList.h"
 #import "TGCollectionMenuLayout.h"
 #import "TGCollectionItemView.h"
 #import "TGCollectionMenuView.h"
+
+@class TGPresentation;
 
 @interface TGCollectionMenuController : TGViewController
 
@@ -21,7 +15,12 @@
 @property (nonatomic, strong) TGCollectionMenuLayout *collectionLayout;
 @property (nonatomic) bool enableItemReorderingGestures;
 
+@property (nonatomic) bool disableStopScrolling;
+
+@property (nonatomic, strong) TGPresentation *presentation;
+
 - (void)_resetCollectionView;
+- (void)_ensureBinding;
 - (NSIndexPath *)indexPathForItem:(TGCollectionItem *)item;
 - (NSUInteger)indexForSection:(TGCollectionMenuSection *)section;
 
@@ -36,5 +35,7 @@
 - (void)animateCollectionCrossfade;
 
 - (void)loadMore;
+
+- (void)willDisplayItem:(TGCollectionItem *)item;
 
 @end

@@ -1,7 +1,7 @@
 #import "TGBridgeContextService.h"
 #import "TGChatListSignals.h"
 
-#import "PGCamera.h"
+#import <LegacyComponents/PGCamera.h>
 
 #import "TGBridgeChat+TGConversation.h"
 #import "TGBridgeUser+TGUser.h"
@@ -25,9 +25,10 @@ const NSUInteger TGBridgeContextChatsCount = 4;
     self = [super initWithServer:server];
     if (self != nil)
     {
-        _chatListSignal = [server serviceSignalForKey:@"chatList" producer:^SSignal *
-        {
-            return [TGChatListSignals chatListWithLimit:24];
+        _chatListSignal = [[server server] mapToSignal:^SSignal *(TGBridgeServer *server) {
+            return [server serviceSignalForKey:@"chatList" producer:^SSignal *{
+                return [TGChatListSignals chatListWithLimit:24];
+            }];
         }];
         
         __weak TGBridgeContextService *weakSelf = self;
@@ -78,11 +79,15 @@ const NSUInteger TGBridgeContextChatsCount = 4;
                         bridgeUsers[@(userId)] = bridgeUser;
                 }];
                 
-                [strongSelf.server setStartupData:@{ TGBridgeChatsArrayKey: bridgeChats, TGBridgeUsersDictionaryKey: bridgeUsers } micAccessAllowed:micAccessAllowed];
+                [[[strongSelf.server server] onNext:^(TGBridgeServer *server) {
+                    [server setStartupData:@{ TGBridgeChatsArrayKey: bridgeChats, TGBridgeUsersDictionaryKey: bridgeUsers } micAccessAllowed:micAccessAllowed];
+                }] startWithNext:nil];
             }
             else
             {
-                [strongSelf.server setStartupData:nil micAccessAllowed:micAccessAllowed];
+                [[[strongSelf.server server] onNext:^(TGBridgeServer *server) {
+                    [server setStartupData:nil micAccessAllowed:micAccessAllowed];
+                }] startWithNext:nil];
             }
         }]];
     }

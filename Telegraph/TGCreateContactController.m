@@ -1,16 +1,8 @@
-/*
- * This is the source code of Telegram for iOS v. 1.1
- * It is licensed under GNU GPL v. 2 or later.
- * You should have received a copy of the license in this archive (see LICENSE).
- *
- * Copyright Peter Iakovlev, 2013.
- */
-
 #import "TGCreateContactController.h"
 
-#import "ActionStage.h"
-#import "TGPhoneUtils.h"
-#import "TGStringUtils.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/ActionStage.h>
 
 #import "TGDatabase.h"
 
@@ -18,12 +10,11 @@
 #import "TGUserInfoEditingPhoneCollectionItem.h"
 #import "TGUserInfoAddPhoneCollectionItem.h"
 
-#import "TGNavigationController.h"
 #import "TGPhoneLabelPickerController.h"
 
 #import "TGSynchronizeContactsActor.h"
 
-#import "TGAlertView.h"
+#import "TGCustomAlertView.h"
 
 @interface TGCreateContactController () <TGUserInfoEditingPhoneCollectionItemDelegate, TGPhoneLabelPickerControllerDelegate>
 {
@@ -37,6 +28,8 @@
     bool _activateNameEditingOnReset;
     
     NSIndexPath *_currentLabelPickerIndexPath;
+    
+    TGContactMediaAttachment *_attachment;
 }
 
 @end
@@ -55,7 +48,7 @@
     return self;
 }
 
-- (instancetype)initWithUid:(int32_t)uid firstName:(NSString *)firstName lastName:(NSString *)lastName phoneNumber:(NSString *)phoneNumber
+- (instancetype)initWithUid:(int32_t)uid firstName:(NSString *)firstName lastName:(NSString *)lastName phoneNumber:(NSString *)phoneNumber attachment:(TGContactMediaAttachment *)attachment
 {
     self = [super init];
     if (self != nil)
@@ -88,11 +81,17 @@
                 [phoneItem makePhoneFieldFirstResponder];
             }
         }
+        
+        if (attachment.vcard.length > 0)
+        {
+            TGVCard *vcard = [[TGVCard alloc] initWithString:attachment.vcard];
+            [self setupWithVCard:vcard skipPhones:phoneNumber != nil ? @[phoneNumber] : @[]];
+        }
     }
     return self;
 }
 
-- (instancetype)initWithFirstName:(NSString *)firstName lastName:(NSString *)lastName phoneNumber:(NSString *)phoneNumber
+- (instancetype)initWithFirstName:(NSString *)firstName lastName:(NSString *)lastName phoneNumber:(NSString *)phoneNumber attachment:(TGContactMediaAttachment *)attachment
 {
     self = [super init];
     if (self != nil)
@@ -103,6 +102,12 @@
         _user.firstName = firstName;
         _user.lastName = lastName;
         _user.phoneNumber = phoneNumber;
+        
+        _attachment = attachment;
+        
+        firstName = [firstName stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (firstName.length == 0 && phoneNumber.length > 0)
+            _activateNameEditingOnReset = true;
         
         [self.userInfoItem setUser:_user animated:false];
         self.navigationItem.rightBarButtonItem.enabled = firstName.length != 0 || lastName.length != 0;
@@ -124,11 +129,17 @@
                 [phoneItem makePhoneFieldFirstResponder];
             }
         }
+        
+        if (attachment.vcard.length > 0)
+        {
+            TGVCard *vcard = [[TGVCard alloc] initWithString:attachment.vcard];
+            [self setupWithVCard:vcard skipPhones:phoneNumber != nil ? @[phoneNumber] : @[]];
+        }
     }
     return self;
 }
 
-- (instancetype)initWithUid:(int32_t)uid phoneNumber:(NSString *)phoneNumber existingUid:(int32_t)existingUid
+- (instancetype)initWithUid:(int32_t)uid phoneNumber:(NSString *)phoneNumber existingUid:(int32_t)existingUid attachment:(TGContactMediaAttachment *)attachment
 {
     self = [super init];
     if (self != nil)
@@ -184,16 +195,22 @@
                 [phoneItem makePhoneFieldFirstResponder];
             }
         }
+        
+        if (attachment.vcard.length > 0)
+        {
+            TGVCard *vcard = [[TGVCard alloc] initWithString:attachment.vcard];
+            [self setupWithVCard:vcard skipPhones:phoneNumber != nil ? @[phoneNumber] : @[]];
+        }
     }
     return self;
 }
 
-- (instancetype)initWithUid:(int32_t)uid phoneNumber:(NSString *)phoneNumber existingNativeContactId:(int)existingNativeContactId
+- (instancetype)initWithUid:(int32_t)uid phoneNumber:(NSString *)phoneNumber existingNativeContactId:(int)existingNativeContactId attachment:(TGContactMediaAttachment *)attachment modal:(bool)modal
 {
     self = [super init];
     if (self != nil)
     {
-        [self _commonInit:false];
+        [self _commonInit:modal];
         
         _phonebookInfo = [TGDatabaseInstance() phonebookContactByNativeId:existingNativeContactId];
         _user = [[TGUser alloc] init];
@@ -203,13 +220,18 @@
         _uidToAdd =  uid;
         _phoneNumberToAdd = phoneNumber;
         
-        self.userInfoItem.disableAvatar = true;
+        //self.userInfoItem.disableAvatar = true;
         [self.userInfoItem setUser:_user animated:false];
         self.navigationItem.rightBarButtonItem.enabled = _user.firstName.length != 0 || _user.lastName.length != 0;
         
+        NSMutableArray *phonesToSkip = [[NSMutableArray alloc] init];
+        
+        bool hasThatPhone = false;
         NSMutableArray *existingLabels = [[NSMutableArray alloc] initWithArray:[TGSynchronizeContactsManager phoneLabels]];
         for (TGPhoneNumber *number in _phonebookInfo.phoneNumbers)
         {
+            [phonesToSkip addObject:[TGPhoneUtils cleanInternationalPhone:number.number forceInternational:false]];
+            
             TGUserInfoEditingPhoneCollectionItem *phoneItem = [[TGUserInfoEditingPhoneCollectionItem alloc] init];
             phoneItem.delegate = self;
             phoneItem.label = number.label;
@@ -227,10 +249,16 @@
                 
                 [phoneItem makePhoneFieldFirstResponder];
             }
+            
+            if ([TGVCardUserInfoController comparePhone:phoneNumber otherPhone:number.number]) {
+                hasThatPhone = true;
+            }
         }
-        
-        if (phoneNumber.length != 0)
+                
+        if (phoneNumber.length != 0 && !hasThatPhone)
         {
+            [phonesToSkip addObject:[TGPhoneUtils cleanInternationalPhone:phoneNumber forceInternational:false]];
+            
             TGUserInfoEditingPhoneCollectionItem *phoneItem = [[TGUserInfoEditingPhoneCollectionItem alloc] init];
             phoneItem.delegate = self;
             phoneItem.label = existingLabels.count != 0 ? [existingLabels firstObject] : [[TGSynchronizeContactsManager phoneLabels] lastObject];
@@ -246,8 +274,21 @@
                 [phoneItem makePhoneFieldFirstResponder];
             }
         }
+        
+        if (attachment.vcard.length > 0)
+        {
+            TGVCard *vcard = [[TGVCard alloc] initWithString:attachment.vcard];
+            [self setupWithVCard:vcard skipPhones:phonesToSkip];
+        }
     }
     return self;
+}
+
+- (void)viewWillDisappear:(BOOL)animated
+{
+    [super viewWillDisappear:animated];
+    
+    [self.view endEditing:true];
 }
 
 - (void)_commonInit:(bool)isModal
@@ -274,10 +315,7 @@
 - (void)_resetCollectionView
 {
     [super _resetCollectionView];
-    
-    if ([self.collectionView respondsToSelector:@selector(setKeyboardDismissMode:)])
-        self.collectionView.keyboardDismissMode = UIScrollViewKeyboardDismissModeInteractive;
-    
+        
     if (_activateNameEditingOnReset)
     {
         _activateNameEditingOnReset = false;
@@ -328,8 +366,18 @@
         phonebookContact.lastName = self.userInfoItem.editingLastName == nil ? @"" : self.userInfoItem.editingLastName;
         phonebookContact.phoneNumbers = phoneNumbers;
         
+        NSMutableDictionary *options = [[NSMutableDictionary alloc] init];
+        options[@"contact"] = phonebookContact;
+        options[@"uid"] = hasCurrentNumber ? @(_uid) : @0;
+        
+        if (_attachment != nil) {
+            TGVCard *vcard = [self vcardForCheckedItems];
+            NSString *vcardString = [vcard vcardString];
+            if (vcardString.length > 0)
+                options[@"vcard"] = vcardString;
+        }
         static int actionId = 0;
-        [ActionStageInstance() requestActor:[NSString stringWithFormat:@"/tg/synchronizeContacts/(%d,%d,addContactLocal)", _uid, actionId++] options:[NSDictionary dictionaryWithObjectsAndKeys:phonebookContact, @"contact", [[NSNumber alloc] initWithInt:hasCurrentNumber ? _uid : 0], @"uid", nil] watcher:self];
+        [ActionStageInstance() requestActor:[NSString stringWithFormat:@"/tg/synchronizeContacts/(%d,%d,addContactLocal)", _uid, actionId++] options:options watcher:self];
     }
 }
 
@@ -420,7 +468,7 @@
             {
                 self.view.userInteractionEnabled = true;
                 
-                [[[TGAlertView alloc] initWithTitle:nil message:TGLocalized(@"Profile.PhonebookAccessDisabled") delegate:nil cancelButtonTitle:TGLocalized(@"Common.OK") otherButtonTitles:nil] show];
+                [TGCustomAlertView presentAlertWithTitle:nil message:TGLocalized(@"Contacts.AccessDeniedError") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
             });
         }
         else
@@ -458,7 +506,6 @@
         }
     }];
 }
-
 
 #pragma mark -
 

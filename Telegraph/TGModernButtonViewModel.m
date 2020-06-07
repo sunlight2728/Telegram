@@ -1,8 +1,26 @@
 #import "TGModernButtonViewModel.h"
 
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGModernButtonView.h"
 
+@interface TGModernButtonViewModel ()
+{
+    bool _displayProgress;
+}
+@end
+
 @implementation TGModernButtonViewModel
+
+- (instancetype)init
+{
+    self = [super init];
+    if (self != nil)
+    {
+        _titleColor = [UIColor whiteColor];
+    }
+    return self;
+}
 
 - (Class)viewClass
 {
@@ -28,12 +46,25 @@
         [view setTitle:_title];
         [view setTitleFont:_font];
         [view setImage:_image];
+        [view setHighlightedImage:_highlightedImage];
         [view setExtendedEdgeInsets:_extendedEdgeInsets];
+        [view setSupplementaryIcon:_supplementaryIcon];
         
-        [view setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+        [view setTitleColor:_titleColor forState:UIControlStateNormal];
+        [view setTitleEdgeInsets:UIEdgeInsetsMake(0.0f, 4.0f, 0.0f, 4.0f)];
+        [view.titleLabel setLineBreakMode:NSLineBreakByTruncatingTail];
     }
     
+    [view addTarget:self action:@selector(buttonPressed) forControlEvents:UIControlEventTouchUpInside];
+    
     view.modernHighlight = _modernHighlight;
+    
+    [view setDisplayProgress:_displayProgress animated:false presentation:self.presentation];
+}
+
+- (void)unbindView:(TGModernViewStorage *)viewStorage {
+    [(TGModernButtonView *)self.boundView removeTarget:self action:@selector(buttonPressed) forControlEvents:UIControlEventTouchUpInside];
+    [super unbindView:viewStorage];
 }
 
 - (void)setTitle:(NSString *)title
@@ -45,6 +76,14 @@
     {
         [(TGModernButtonView *)[self boundView] setTitle:_title];
     }
+}
+
+- (void)setTitleColor:(UIColor *)titleColor
+{
+    _titleColor = titleColor;
+    
+    if ([self boundView] != nil)
+        [(TGModernButtonView *)[self boundView] setTitleColor:_titleColor];
 }
 
 - (void)setPossibleTitles:(NSArray *)possibleTitles
@@ -118,7 +157,22 @@
             CGSize imageSize = _image.size;
             [_image drawInRect:CGRectMake(CGFloor((bounds.size.width - imageSize.width) / 2.0f), CGFloor((bounds.size.height - imageSize.height) / 2.0f), imageSize.width, imageSize.height)];
         }
+        if (_title.length != 0) {
+            CGSize titleSize = [_title sizeWithFont:_font];
+            [_title drawInRect:CGRectMake(CGFloor(self.frame.size.width - titleSize.width), CGFloor(self.frame.size.height - titleSize.height), titleSize.width, titleSize.height) withFont:_font];
+        }
     }
+}
+
+- (void)buttonPressed {
+    if (_pressed) {
+        _pressed();
+    }
+}
+
+- (void)setDisplayProgress:(bool)displayProgress animated:(bool)animated {
+    _displayProgress = displayProgress;
+    [(TGModernButtonView *)[self boundView] setDisplayProgress:displayProgress animated:animated presentation:self.presentation];
 }
 
 @end

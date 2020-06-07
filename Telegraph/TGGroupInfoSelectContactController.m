@@ -22,8 +22,7 @@
 
 - (void)singleUserSelected:(TGUser *)user
 {
-    if ([self.tableView indexPathForSelectedRow] != nil)
-        [self.tableView deselectRowAtIndexPath:[self.tableView indexPathForSelectedRow] animated:true];
+    [self deselectRow];
     
     id<TGGroupInfoSelectContactControllerDelegate> delegate = _delegate;
     if ([delegate respondsToSelector:@selector(selectContactControllerDidSelectUser:)])
@@ -54,7 +53,7 @@
     {
         cell = [[TGGroupInfoContactListCreateLinkCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"TGGroupInfoContactListCreateLinkCell"];
     }
-    
+    cell.presentation = self.presentation;
     return cell;
 }
 

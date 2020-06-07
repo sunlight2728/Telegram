@@ -1,10 +1,10 @@
 #import "TGPreparedAssetVideoMessage.h"
+
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGAppDelegate.h"
 
-#import "TGMessage.h"
-
-#import "TGImageInfo.h"
-#import "TGRemoteImageView.h"
+#import <LegacyComponents/TGRemoteImageView.h>
 
 @interface TGPreparedAssetVideoMessage ()
 {
@@ -14,12 +14,13 @@
 
 @implementation TGPreparedAssetVideoMessage
 
-- (instancetype)initWithAssetIdentifier:(NSString *)assetIdentifier localVideoId:(int64_t)localVideoId imageInfo:(TGImageInfo *)imageInfo duration:(NSTimeInterval)duration dimensions:(CGSize)dimensions adjustments:(NSDictionary *)adjustments useMediaCache:(bool)useMediaCache liveUpload:(bool)liveUpload passthrough:(bool)passthrough caption:(NSString *)caption isCloud:(bool)isCloud document:(bool)document localDocumentId:(int64_t)localDocumentId fileSize:(int)fileSize mimeType:(NSString *)mimeType attributes:(NSArray *)attributes replyMessage:(TGMessage *)replyMessage
+- (instancetype)initWithAssetIdentifier:(NSString *)assetIdentifier assetURL:(NSURL *)assetURL localVideoId:(int64_t)localVideoId imageInfo:(TGImageInfo *)imageInfo duration:(NSTimeInterval)duration dimensions:(CGSize)dimensions adjustments:(NSDictionary *)adjustments useMediaCache:(bool)useMediaCache liveUpload:(bool)liveUpload passthrough:(bool)passthrough text:(NSString *)text entities:(NSArray *)entities isCloud:(bool)isCloud document:(bool)document localDocumentId:(int64_t)localDocumentId fileSize:(int)fileSize mimeType:(NSString *)mimeType attributes:(NSArray *)attributes replyMessage:(TGMessage *)replyMessage replyMarkup:(TGReplyMarkupAttachment *)replyMarkup stickerDocuments:(NSArray *)stickerDocuments roundMessage:(bool)roundMessage groupedId:(int64_t)groupedId
 {
     self = [super init];
     if (self != nil)
     {
         _assetIdentifier = assetIdentifier;
+        _assetURL = assetURL;
         _localVideoId = localVideoId;
         _imageInfo = imageInfo;
         _duration = duration;
@@ -28,15 +29,20 @@
         _useMediaCache = useMediaCache;
         _liveUpload = liveUpload;
         _passthrough = passthrough;
-        _caption = caption;
+        self.text = text;
+        self.entities = entities;
         _isCloud = isCloud;
         _document = document;
         _localDocumentId = localDocumentId;
         _fileSize = fileSize;
         _mimeType = mimeType;
         _attributes = attributes;
+        _stickerDocuments = stickerDocuments;
+        _roundMessage = roundMessage;
+        self.groupedId = groupedId;
         
         self.replyMessage = replyMessage;
+        self.replyMarkup = replyMarkup;
     }
     return self;
 }
@@ -44,11 +50,11 @@
 - (void)setImageInfoWithThumbnailData:(NSData *)data thumbnailSize:(CGSize)thumbnailSize
 {
     TGImageInfo *imageInfo = [[TGImageInfo alloc] init];
-    [imageInfo addImageWithSize:thumbnailSize url:[TGPreparedAssetVideoMessage _fileUrlForStoredData:data]];
+    [imageInfo addImageWithSize:thumbnailSize url:[TGPreparedAssetVideoMessage _fileUrlForStoredData:data isAnimation:self.isAnimation]];
      _imageInfo = imageInfo;
 }
 
-+ (NSString *)_fileUrlForStoredData:(NSData *)data
++ (NSString *)_fileUrlForStoredData:(NSData *)data isAnimation:(bool)isAnimation
 {
     NSString *documentsDirectory = [TGAppDelegate documentsPath];
     NSString *uploadDirectory = [documentsDirectory stringByAppendingPathComponent:@"upload"];
@@ -59,9 +65,14 @@
     arc4random_buf(&randomId, sizeof(randomId));
     NSString *imagePathComponent = [[NSString alloc] initWithFormat:@"%" PRIx64 ".bin", randomId];
     NSString *filePath = [uploadDirectory stringByAppendingPathComponent:imagePathComponent];
-    [data writeToFile:filePath atomically:false];
     
-    return [@"file://" stringByAppendingString:filePath];
+    NSString *fileUrl = [@"file://" stringByAppendingString:filePath];
+    if (isAnimation)
+        [data writeToFile:[[TGRemoteImageView sharedCache] pathForCachedData:fileUrl] atomically:true];
+
+    [data writeToFile:filePath atomically:true];
+    
+    return fileUrl;
 }
 
 - (NSString *)localVideoPath
@@ -149,6 +160,9 @@
     message.date = self.date;
     message.isBroadcast = self.isBroadcast;
     message.messageLifetime = self.messageLifetime;
+    message.outgoing = true;
+    message.groupedId = self.groupedId;
+    message.text = self.text;
     
     NSMutableArray *attachments = [[NSMutableArray alloc] init];
     
@@ -162,7 +176,7 @@
     TGVideoInfo *videoInfo = [[TGVideoInfo alloc] init];
     [videoInfo addVideoWithQuality:1 url:[[NSString alloc] initWithFormat:@"local-video:local%llx.mov", _localVideoId] size:_fileSize];
     videoAttachment.videoInfo = videoInfo;
-    videoAttachment.caption = self.caption;
+    videoAttachment.roundMessage = self.roundMessage;
     [attachments addObject:videoAttachment];
     
     TGLocalMessageMetaMediaAttachment *mediaMeta = [[TGLocalMessageMetaMediaAttachment alloc] init];
@@ -178,7 +192,11 @@
     }
     
     message.mediaAttachments = attachments;
-    message.contentProperties = @{@"mediaAsset": [[TGMediaAssetContentProperty alloc] initWithAssetIdentifier:_assetIdentifier isVideo:true editAdjustments:_adjustments isCloud:_isCloud useMediaCache:_useMediaCache liveUpload:_liveUpload passthrough:_passthrough]};
+    message.entities = self.entities;
+    
+    NSMutableDictionary *contentProperties = [[NSMutableDictionary alloc] initWithDictionary:message.contentProperties];
+    contentProperties[@"mediaAsset"] = [[TGMediaAssetContentProperty alloc] initWithAssetIdentifier:_assetIdentifier assetURL:_assetURL isVideo:true editAdjustments:_adjustments isCloud:_isCloud useMediaCache:_useMediaCache liveUpload:_liveUpload passthrough:_passthrough roundMessage:_roundMessage];
+    message.contentProperties = contentProperties;
     
     return message;
 }
@@ -190,6 +208,7 @@
     message.date = self.date;
     message.isBroadcast = self.isBroadcast;
     message.messageLifetime = self.messageLifetime;
+    message.text = self.text;
     
     NSMutableArray *attachments = [[NSMutableArray alloc] init];
     
@@ -209,15 +228,21 @@
         [attachments addObject:replyMedia];
     }
     
+    if (self.replyMarkup != nil) {
+        [attachments addObject:self.replyMarkup];
+    }
+    
     message.mediaAttachments = attachments;
-    message.contentProperties = @{@"mediaAsset": [[TGMediaAssetContentProperty alloc] initWithAssetIdentifier:_assetIdentifier isVideo:true editAdjustments:nil isCloud:_isCloud useMediaCache:false liveUpload:false passthrough:false]};
+    message.entities = self.entities;
+    
+    message.contentProperties = @{@"mediaAsset": [[TGMediaAssetContentProperty alloc] initWithAssetIdentifier:_assetIdentifier assetURL:_assetURL isVideo:true editAdjustments:nil isCloud:_isCloud useMediaCache:false liveUpload:false passthrough:false roundMessage:false]};
     
     return message;
 }
 
 - (NSArray *)attributes
 {
-    NSMutableArray *attributes =  _attributes != nil ? [_attributes mutableCopy] : [[NSMutableArray alloc] init];
+    NSMutableArray *attributes = _attributes != nil ? [_attributes mutableCopy] : [[NSMutableArray alloc] init];
     
     bool hasFileName = false;
     for (id attribute in attributes)
@@ -235,6 +260,16 @@
     _attributes = attributes;
     
     return attributes;
+}
+
+- (bool)isAnimation
+{
+    for (id attribute in _attributes)
+    {
+        if ([attribute isKindOfClass:[TGDocumentAttributeAnimated class]])
+            return true;
+    }
+    return false;
 }
 
 @end

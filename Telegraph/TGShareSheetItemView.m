@@ -1,8 +1,6 @@
 #import "TGShareSheetItemView.h"
 
-#import "TGImageUtils.h"
-
-#import "TGViewController.h"
+#import <LegacyComponents/LegacyComponents.h>
 
 @interface TGShareSheetItemView ()
 {
@@ -23,7 +21,7 @@
 
 - (CGFloat)preferredHeightForMaximumHeight:(CGFloat)__unused maximumHeight
 {
-    return [TGViewController hasLargeScreen] ? 57.0f : 45.0f;
+    return 57.0f;
 }
 
 - (bool)followsKeyboard

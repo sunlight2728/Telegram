@@ -8,6 +8,8 @@
 
 #import <UIKit/UIKit.h>
 
+@class TGPresentation;
+
 typedef enum {
     TGFlatActionCellModeInvite = 0,
     TGFlatActionCellModeCreateGroup = 1,
@@ -15,11 +17,16 @@ typedef enum {
     TGFlatActionCellModeCreateGroupContacts = 3,
     TGFlatActionCellModeChannels = 4,
     TGFlatActionCellModeCreateChannel = 5,
-    TGFlatActionCellModeCreateChannelGroup = 6
+    TGFlatActionCellModeCreateChannelGroup = 6,
+    TGFlatActionCellModeAddPhoneNumber = 7,
+    TGFlatActionCellModeShareApp = 8
 } TGFlatActionCellMode;
 
 @interface TGFlatActionCell : UITableViewCell
 
-- (void)setMode:(TGFlatActionCellMode)mode;
+@property (nonatomic) TGFlatActionCellMode mode;
+@property (nonatomic) TGPresentation *presentation;
+
+- (void)setPhoneNumber:(NSString *)phoneNumber;
 
 @end

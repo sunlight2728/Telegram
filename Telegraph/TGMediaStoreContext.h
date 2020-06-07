@@ -1,10 +1,12 @@
-#import "TGModernCache.h"
+#import <LegacyComponents/TGModernCache.h>
 
 @interface TGMediaStoreContext : NSObject
 
 + (TGMediaStoreContext *)instance;
 
 - (TGModernCache *)temporaryFilesCache;
+
+- (void)clearMemoryCache;
 
 - (NSNumber *)mediaImageAverageColor:(NSString *)key;
 - (void)setMediaImageAverageColorForKey:(NSString *)key averageColor:(NSNumber *)averageColor;

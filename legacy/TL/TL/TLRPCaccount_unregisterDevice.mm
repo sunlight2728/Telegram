@@ -34,7 +34,7 @@
     return 0;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)__unused metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)__unused metaObject
 {
     TGLog(@"TLbuildFromMetaObject is not implemented for base type");
     return nil;
@@ -53,7 +53,7 @@
 
 - (int32_t)TLconstructorSignature
 {
-    return (int32_t)0x65c55b40;
+    return (int32_t)0x3076c4bf;
 }
 
 - (int32_t)TLconstructorName
@@ -61,11 +61,12 @@
     return (int32_t)0xb7a9ce9e;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)metaObject
 {
     TLRPCaccount_unregisterDevice$account_unregisterDevice *object = [[TLRPCaccount_unregisterDevice$account_unregisterDevice alloc] init];
     object.token_type = metaObject->getInt32((int32_t)0xb5f2fc25);
     object.token = metaObject->getString((int32_t)0x1e8aa3f5);
+    object.other_uids = metaObject->getArray((int32_t)0xec1da239);
     return object;
 }
 
@@ -82,6 +83,12 @@
         value.type = TLConstructedValueTypeString;
         value.nativeObject = self.token;
         values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0x1e8aa3f5, value));
+    }
+    {
+        TLConstructedValue value;
+        value.type = TLConstructedValueTypeVector;
+        value.nativeObject = self.other_uids;
+        values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0xec1da239, value));
     }
 }
 

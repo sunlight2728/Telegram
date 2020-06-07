@@ -1,11 +1,10 @@
 #import "TGWebSearchResultsGalleryImageItem.h"
 
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGWebSearchResultsGalleryImageItemView.h"
 
 #import "TGBingSearchResultItem+TGMediaItem.h"
-
-#import "TGStringUtils.h"
-#import "TGImageUtils.h"
 
 @interface TGWebSearchResultsGalleryImageItem ()
 {
@@ -50,7 +49,7 @@
 
 - (TGPhotoEditorTab)toolbarTabs
 {
-    return TGPhotoEditorCaptionTab | TGPhotoEditorCropTab | TGPhotoEditorToolsTab;
+    return TGPhotoEditorCropTab | TGPhotoEditorPaintTab | TGPhotoEditorToolsTab;
 }
 
 - (NSString *)uniqueId

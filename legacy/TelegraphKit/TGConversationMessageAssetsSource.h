@@ -106,28 +106,18 @@
 - (UIImage *)messageLinkCornerLR;
 - (UIImage *)messageLinkCornerRL;
 
-- (UIImage *)messageAvatarPlaceholder:(int)uid;
-- (UIImage *)messageGenericAvatarPlaceholder;
-
-- (UIImage *)messageAttachmentImagePlaceholderIncoming;
-- (UIImage *)messageAttachmentImagePlaceholderOutgoing;
-- (UIImage *)messageAttachmentImageIncomingTopCorners;
-- (UIImage *)messageAttachmentImageIncomingTopCornersHighlighted;
-- (UIImage *)messageAttachmentImageIncomingBottomCorners;
-- (UIImage *)messageAttachmentImageIncomingBottomCornersHighlighted;
-- (UIImage *)messageAttachmentImageOutgoingTopCorners;
-- (UIImage *)messageAttachmentImageOutgoingTopCornersHighlighted;
-- (UIImage *)messageAttachmentImageOutgoingBottomCorners;
-- (UIImage *)messageAttachmentImageOutgoingBottomCornersHighlighted;
-- (UIImage *)messageAttachmentImageLoadingIcon;
-
-- (UIImage *)messageActionConversationPhotoPlaceholder;
-
 - (UIImage *)systemMessageBackground;
 - (UIImage *)systemReplyBackground;
 - (UIColor *)systemMessageBackgroundColor;
 - (UIImage *)dateListMessageBackground;
 - (UIImage *)systemShareButton;
+- (UIImage *)systemGoToButton;
+- (UIImage *)systemSwipeReplyIcon;
+- (UIImage *)systemReplyButton;
+- (UIImage *)systemReplyHighlightedButton;
+
+- (UIImage *)systemUnmuteButton;
+- (UIImage *)systemMuteButton;
 
 - (UIEdgeInsets)messageBodyMargins;
 - (CGSize)messageMinimalBodySize;

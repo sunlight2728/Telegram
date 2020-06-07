@@ -4,6 +4,8 @@
 
 #import "TGCommentCollectionItem.h"
 
+#import "TGPresentation.h"
+
 @interface TGPasswordConfirmationController ()
 {
     SMetaDisposable *_twoStepConfigDisposable;
@@ -27,21 +29,9 @@
         TGCommentCollectionItem *textItem = [[TGCommentCollectionItem alloc] initWithFormattedText:TGLocalized(@"TwoStepAuth.ConfirmationText")];
         TGCommentCollectionItem *emailItem = [[TGCommentCollectionItem alloc] initWithText:email];
         emailItem.topInset = 4.0f;
-        TGCommentCollectionItem *changeItem = [[TGCommentCollectionItem alloc] initWithText:TGLocalized(@"TwoStepAuth.ConfirmationChangeEmail")];
-        changeItem.topInset = -6.0f;
-        changeItem.textColor = TGAccentColor();
-        changeItem.action = ^
-        {
-            __strong TGPasswordConfirmationController *strongSelf = weakSelf;
-            if (strongSelf != nil)
-            {
-                if (strongSelf->_changeEmail)
-                    strongSelf->_changeEmail();
-            }
-        };
         TGCommentCollectionItem *abortItem = [[TGCommentCollectionItem alloc] initWithText:TGLocalized(@"TwoStepAuth.ConfirmationAbort")];
         abortItem.topInset = 0.0f;
-        abortItem.textColor = TGAccentColor();
+        abortItem.textColor = self.presentation.pallete.collectionMenuAccentColor;
         abortItem.action = ^
         {
             __strong TGPasswordConfirmationController *strongSelf = weakSelf;
@@ -55,7 +45,6 @@
         TGCollectionMenuSection *section = [[TGCollectionMenuSection alloc] initWithItems:@[
             textItem,
             emailItem,
-            //changeItem,
             abortItem
         ]];
         section.insets = UIEdgeInsetsMake(16.0f, 0.0f, 32.0f, 0.0f);
@@ -79,7 +68,7 @@
         __strong TGPasswordConfirmationController *strongSelf = weakSelf;
         if (strongSelf != nil)
         {
-            if (config.currentSalt.length != 0)
+            if (config.hasPassword)
             {
                 if (strongSelf->_completion)
                     strongSelf->_completion();

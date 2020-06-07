@@ -6,9 +6,11 @@
  * Copyright Peter Iakovlev, 2013.
  */
 
-#import "ASActor.h"
+#import <LegacyComponents/ASActor.h>
 
 #import "TL/TLMetaScheme.h"
+
+@class SSignal;
 
 @interface TGDialogListRequestBuilder : ASActor
 
@@ -16,5 +18,7 @@
 
 - (void)dialogListRequestSuccess:(TLmessages_Dialogs *)dialogs;
 - (void)dialogListRequestFailed;
+
++ (SSignal *)signalForCompleteMessages:(NSArray *)completeMessages channels:(NSDictionary *)channels;
 
 @end

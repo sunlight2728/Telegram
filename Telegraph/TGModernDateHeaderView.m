@@ -1,9 +1,10 @@
 #import "TGModernDateHeaderView.h"
 
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGTelegraphConversationMessageAssetsSource.h"
-#import "TGDateUtils.h"
-#import "TGFont.h"
-#import "TGImageUtils.h"
+
+#import "TGPresentation.h"
 
 @interface TGModernDateHeaderView ()
 {
@@ -12,6 +13,8 @@
     
     int _date;
     CGSize _textSize;
+    
+    TGPresentation *_presentation;
 }
 
 @property (nonatomic, strong) NSString *viewIdentifier;
@@ -21,16 +24,13 @@
 
 @implementation TGModernDateHeaderView
 
-+ (void)drawDate:(int)date forContainerWidth:(CGFloat)containerWidth inContext:(CGContextRef)context andBindBackgroundToContainer:(UIView *)__unused backgroundContainer atPosition:(CGPoint)__unused position
++ (void)drawDate:(int)date forContainerWidth:(CGFloat)containerWidth inContext:(CGContextRef)context andBindBackgroundToContainer:(UIView *)__unused backgroundContainer atPosition:(CGPoint)__unused position presentation:(TGPresentation *)presentation
 {
     static UIFont *font = nil;
-    static CGColorRef color = NULL;
-    
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^
     {
-        font = TGMediumSystemFontOfSize(13.0f);
-        color = CGColorRetain([UIColor whiteColor].CGColor);
+        font = TGBoldSystemFontOfSize(13.0f);
     });
     
     NSString *text = [TGDateUtils stringForDialogTime:date * 24 * 60 * 60];
@@ -41,27 +41,28 @@
     CGPoint textOrigin = CGPointMake(CGFloor((containerWidth - textSize.width) / 2), CGFloor((27.0f - textSize.height) / 2) + TGRetinaPixel);
     textOrigin.x = CGEven(textOrigin.x);
     
-    UIImage *backgroundImage = [[TGTelegraphConversationMessageAssetsSource instance] systemMessageBackground];
+    UIImage *backgroundImage = presentation.images.chatSystemBackground;
     CGRect backgroundFrame = CGRectMake(textOrigin.x - 10, textOrigin.y - 2, textSize.width + 20, backgroundImage.size.height);
     [backgroundImage drawInRect:backgroundFrame blendMode:kCGBlendModeCopy alpha:1.0f];
     
-    CGContextSetFillColorWithColor(context, color);
+    CGContextSetFillColorWithColor(context, presentation.pallete.chatSystemTextColor.CGColor);
     [text drawAtPoint:textOrigin withFont:font];
 }
 
-- (id)initWithFrame:(CGRect)frame
+- (instancetype)initWithFrame:(CGRect)frame presentation:(TGPresentation *)presentation
 {
     self = [super initWithFrame:frame];
     if (self)
     {
         self.viewIdentifier = @"_date";
+        _presentation = presentation;
         
-        _backgroundImageView = [[UIImageView alloc] initWithImage:[[TGTelegraphConversationMessageAssetsSource instance] systemMessageBackground]];
+        _backgroundImageView = [[UIImageView alloc] initWithImage:presentation.images.chatSystemBackground];
         [self addSubview:_backgroundImageView];
         
         _dateLabel = [[UILabel alloc] init];
         _dateLabel.transform = CGAffineTransformMakeRotation((float)M_PI);
-        _dateLabel.textColor = [[TGTelegraphConversationMessageAssetsSource instance] messageActionTextColor];
+        _dateLabel.textColor = presentation.pallete.chatSystemTextColor;
         _dateLabel.font = TGMediumSystemFontOfSize(13.0f);
         _dateLabel.textAlignment = NSTextAlignmentCenter;
         _dateLabel.backgroundColor = [UIColor clearColor];
@@ -70,6 +71,13 @@
         _date = INT_MIN;
     }
     return self;
+}
+
+- (void)setPresentation:(TGPresentation *)presentation
+{
+    _presentation = presentation;
+    _backgroundImageView.image = presentation.images.chatSystemBackground;
+    _dateLabel.textColor = presentation.pallete.chatSystemTextColor;
 }
 
 - (void)willBecomeRecycled
@@ -101,7 +109,7 @@
 
 - (void)updateAssets
 {
-    _backgroundImageView.image = [[TGTelegraphConversationMessageAssetsSource instance] systemMessageBackground];
+    _backgroundImageView.image = _presentation.images.chatSystemBackground;
 }
 
 - (void)layoutSubviews

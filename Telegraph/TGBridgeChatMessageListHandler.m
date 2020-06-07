@@ -1,8 +1,9 @@
 #import "TGBridgeChatMessageListHandler.h"
 
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGTelegraph.h"
 
-#import "TGMessage.h"
 #import "TGDatabase.h"
 #import "TGChatMessageListSignal.h"
 #import "TGUserSignal.h"
@@ -11,8 +12,6 @@
 #import "TGBridgeChat+TGConversation.h"
 #import "TGBridgeChatMessageListView+TGChatMessageListView.h"
 #import "TGBridgeUser+TGUser.h"
-
-#import "TGPeerIdAdapter.h"
 
 NSString *const TGBridgeUserIdsKey = @"userIds";
 NSString *const TGBridgeChannelIdsKey = @"channelIds";
@@ -44,7 +43,8 @@ NSString *const TGBridgeChannelIdsKey = @"channelIds";
                 }
             }
             
-            TGBridgeChatMessageListView *bridgeMessageListView = [TGBridgeChatMessageListView chatMessageListViewWithTGChatMessageListView:messageListView];
+            TGConversation *conversation = [TGDatabaseInstance() loadConversationWithId:messagesListSubscription.peerId];
+            TGBridgeChatMessageListView *bridgeMessageListView = [TGBridgeChatMessageListView chatMessageListViewWithTGChatMessageListView:messageListView conversation:conversation];
             
             NSMutableArray *userSignals = [[NSMutableArray alloc] init];
             [userIds enumerateIndexesUsingBlock:^(NSUInteger index, __unused BOOL *stop)
@@ -122,7 +122,7 @@ NSString *const TGBridgeChannelIdsKey = @"channelIds";
                     [channelIds addObject:channelId];
             }
             
-            TGBridgeMessage *bridgeMessage = [TGBridgeMessage messageWithTGMessage:requiredMessage];
+            TGBridgeMessage *bridgeMessage = [TGBridgeMessage messageWithTGMessage:requiredMessage conversation:nil];
             
             NSMutableArray *userSignals = [[NSMutableArray alloc] init];
             [userIds enumerateIndexesUsingBlock:^(NSUInteger index, __unused BOOL *stop)

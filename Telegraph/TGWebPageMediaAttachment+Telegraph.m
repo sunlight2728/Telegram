@@ -6,21 +6,8 @@
 
 #import "TGDocumentMediaAttachment+Telegraph.h"
 
-/*
- @property (nonatomic) int64_t webPageId;
- @property (nonatomic, strong) NSString *url;
- @property (nonatomic, strong) NSString *displayUrl;
- @property (nonatomic, strong) NSString *pageType;
- @property (nonatomic, strong) NSString *siteName;
- @property (nonatomic, strong) NSString *title;
- @property (nonatomic, strong) NSString *pageDescription;
- @property (nonatomic, strong) TGImageInfo *photoInfo;
- @property (nonatomic, strong) NSString *embedUrl;
- @property (nonatomic, strong) NSString *embedType;
- @property (nonatomic) CGSize embedSize;
- @property (nonatomic, strong) NSNumber *duration;
- @property (nonatomic, strong) NSString *author;
- */
+#import "TGInstantPage+TG.h"
+#import "TGMediaOriginInfo+Telegraph.h"
 
 @implementation TGWebPageMediaAttachment (Telegraph)
 
@@ -43,8 +30,10 @@
             self.siteName = webPage.site_name;
             self.title = webPage.title;
             self.pageDescription = webPage.n_description;
-            if (webPage.photo != nil)
+            if (webPage.photo != nil) {
                 self.photo = [[TGImageMediaAttachment alloc] initWithTelegraphDesc:webPage.photo];
+                self.photo.originInfo = [TGMediaOriginInfo mediaOriginInfoForPhoto:webPage.photo webpageUrl:webPage.url];
+            }
             self.embedUrl = webPage.embed_url;
             self.embedType = webPage.embed_type;
             self.embedSize = CGSizeMake(webPage.embed_width, webPage.embed_height);
@@ -55,8 +44,14 @@
                 TGDocumentMediaAttachment *document = [[TGDocumentMediaAttachment alloc] initWithTelegraphDocumentDesc:webPage.document];
                 if (document.documentId != 0) {
                     self.document = document;
+                    self.document.originInfo = [TGMediaOriginInfo mediaOriginInfoForDocument:webPage.document webpageUrl:webPage.url];
                 }
             }
+            
+            if (webPage.cached_page != nil) {
+                self.instantPage = [TGInstantPage parse:webPage.cached_page webpageUrl:webPage.url];
+            }
+            self.webPageHash = webPage.n_hash;
         }
         else if ([desc isKindOfClass:[TLWebPage$webPagePending class]])
         {

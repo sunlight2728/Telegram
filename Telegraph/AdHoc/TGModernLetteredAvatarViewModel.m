@@ -34,6 +34,7 @@
     self = [super init];
     if (self != nil)
     {
+        _fontSize = 16.0f;
         _size = size;
         _placeholder = placeholder;
         _filter = [[NSString alloc] initWithFormat:@"circle:%dx%d", (int)_size.width, (int)_size.height];
@@ -65,18 +66,26 @@
     [super bindViewToContainer:container viewStorage:viewStorage];
     
     TGModernLetteredAvatarView *view = (TGModernLetteredAvatarView *)[self boundView];
-    [view setSingleFontSize:14.0f doubleFontSize:14.0f useBoldFont:true];
+    [view setSingleFontSize:_fontSize doubleFontSize:_fontSize useBoldFont:false];
     view.fadeTransition = true;
     
     if (_avatarUri.length == 0) {
         if (_uid != 0) {
             [view setFirstName:_firstName lastName:_lastName uid:_uid placeholder:_placeholder];
-        } else {
+        } else if (_groupId != 0) {
             [view setTitle:_title groupId:_groupId placeholder:_placeholder];
+        } else {
+            [view setFirstName:_firstName lastName:_lastName uid:0 placeholder:_placeholder];
         }
     } else {
         [view setAvatarUri:_avatarUri filter:_filter placeholder:_placeholder];
     }
+}
+
+- (void)setFontSize:(CGFloat)fontSize
+{
+    _fontSize = fontSize;
+    [(TGModernLetteredAvatarView *)self.boundView setSingleFontSize:_fontSize doubleFontSize:_fontSize useBoldFont:false];
 }
 
 - (void)setAvatarUri:(NSString *)avatarUri

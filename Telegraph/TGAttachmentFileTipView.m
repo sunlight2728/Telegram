@@ -1,11 +1,10 @@
 #import "TGAttachmentFileTipView.h"
-#import "TGModernButton.h"
+
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/TGModernButton.h>
 
 #import "TGAppDelegate.h"
-
-#import "TGFont.h"
-#import "TGStringUtils.h"
-#import "TGImageUtils.h"
 
 @interface TGAttachmentFileTipView ()
 {
@@ -24,7 +23,7 @@
     self = [super initWithType:TGMenuSheetItemTypeHeader];
     if (self != nil)
     {
-        _imageView = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"AttachmentTipIcons"]];
+        _imageView = [[UIImageView alloc] initWithImage:TGComponentsImageNamed(@"AttachmentTipIcons")];
         [self addSubview:_imageView];
         
         NSString *text = [[NSString alloc] initWithFormat:TGLocalized(@"Conversation.FileHowToText"), [TGStringUtils stringForDeviceType]];
@@ -36,11 +35,18 @@
         
         _closeButton = [[TGModernButton alloc] initWithFrame:CGRectMake(0, 0, 44, 44)];
         _closeButton.exclusiveTouch = true;
-        [_closeButton setImage:[self _dismissImage] forState:UIControlStateNormal];
         [_closeButton addTarget:self action:@selector(closeButtonPressed) forControlEvents:UIControlEventTouchUpInside];
         [self addSubview:_closeButton];
     }
     return self;
+}
+
+- (void)setPallete:(TGMenuSheetPallete *)pallete
+{
+    [super setPallete:pallete];
+    
+    _label.textColor = pallete.textColor;
+    [_closeButton setImage:[self _dismissImage:pallete.accentColor] forState:UIControlStateNormal];
 }
 
 - (void)closeButtonPressed
@@ -146,7 +152,7 @@
     _closeButton.frame = CGRectMake(self.frame.size.width - _closeButton.frame.size.width, 6, _closeButton.frame.size.width, _closeButton.frame.size.height);
 }
 
-- (UIImage *)_dismissImage
+- (UIImage *)_dismissImage:(UIColor *)color
 {
     static UIImage *image = nil;
     static dispatch_once_t onceToken;
@@ -155,7 +161,7 @@
         CGSize size = CGSizeMake(14.0f, 14.0f);
         UIGraphicsBeginImageContextWithOptions(size, false, 0.0f);
         CGContextRef context = UIGraphicsGetCurrentContext();
-        CGContextSetStrokeColorWithColor(context, TGAccentColor().CGColor);
+        CGContextSetStrokeColorWithColor(context, color.CGColor);
         CGFloat lineWidth = 1.5f;
         CGFloat lineInset = lineWidth / 2.0f;
         CGContextSetLineWidth(context, lineWidth);

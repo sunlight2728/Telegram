@@ -1,5 +1,7 @@
 #import "TGPhotoMessageViewModel.h"
 
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGModernViewContext.h"
 
 #import "TGModernRemoteImageView.h"
@@ -9,9 +11,7 @@
 #import "TGModernColorViewModel.h"
 #import "TGModernButtonViewModel.h"
 
-#import "TGMessage.h"
-
-#import "TGStringUtils.h"
+#import "TGMessageGroupedLayout.h"
 
 @interface TGPhotoMessageViewModel ()
 {
@@ -22,7 +22,7 @@
 
 @implementation TGPhotoMessageViewModel
 
-- (instancetype)initWithMessage:(TGMessage *)message imageMedia:(TGImageMediaAttachment *)imageMedia authorPeer:(id)authorPeer context:(TGModernViewContext *)context forwardPeer:(id)forwardPeer forwardAuthor:(id)forwardAuthor forwardMessageId:(int32_t)forwardMessageId replyHeader:(TGMessage *)replyHeader replyAuthor:(id)replyAuthor viaUser:(TGUser *)viaUser
+- (instancetype)initWithMessage:(TGMessage *)message imageMedia:(TGImageMediaAttachment *)imageMedia authorPeer:(id)authorPeer context:(TGModernViewContext *)context forwardPeer:(id)forwardPeer forwardAuthor:(id)forwardAuthor forwardMessageId:(int32_t)forwardMessageId replyHeader:(TGMessage *)replyHeader replyAuthor:(id)replyAuthor viaUser:(TGUser *)viaUser webPage:(TGWebPageMediaAttachment *)webPage
 {
     TGImageInfo *previewImageInfo = imageMedia.imageInfo;
     
@@ -46,7 +46,15 @@
         
         NSMutableString *previewUri = [[NSMutableString alloc] initWithString:@"photo-thumbnail://?"];
         if (imageMedia.imageId != 0)
+        {
             [previewUri appendFormat:@"id=%" PRId64 "", imageMedia.imageId];
+            
+            [previewUri appendFormat:@"&cid=%" PRId64 "", message.cid];
+            [previewUri appendFormat:@"&mid=%" PRId32 "", message.mid];
+            
+            if (imageMedia.originInfo != nil)
+                [previewUri appendFormat:@"&origin_info=%@", [imageMedia.originInfo stringRepresentation]];
+        }
         else
             [previewUri appendFormat:@"local-id=%" PRId64 "", localImageId];
         
@@ -55,6 +63,9 @@
         [TGImageMessageViewModel calculateImageSizesForImageSize:largestSize thumbnailSize:&thumbnailSize renderSize:&renderSize squareAspect:message.messageLifetime > 0 && message.messageLifetime <= 60 && message.layer >= 17];
         
         [previewUri appendFormat:@"&width=%d&height=%d&renderWidth=%d&renderHeight=%d", (int)thumbnailSize.width, (int)thumbnailSize.height, (int)renderSize.width, (int)renderSize.height];
+        
+        if (_positionFlags != 0)
+            [previewUri appendFormat:@"&position=%d", _positionFlags];
         
         NSString *legacyFilePath = nil;
         if ([legacyCacheUrl hasPrefix:@"file://"])
@@ -74,7 +85,7 @@
         [previewImageInfo addImageWithSize:thumbnailSize url:previewUri];
     }
     
-    self = [super initWithMessage:message imageInfo:previewImageInfo authorPeer:authorPeer context:context forwardPeer:forwardPeer forwardAuthor:forwardAuthor forwardMessageId:forwardMessageId replyHeader:replyHeader replyAuthor:replyAuthor viaUser:viaUser caption:imageMedia.caption textCheckingResults:imageMedia.textCheckingResults];
+    self = [super initWithMessage:message imageInfo:previewImageInfo authorPeer:authorPeer context:context forwardPeer:forwardPeer forwardAuthor:forwardAuthor forwardMessageId:forwardMessageId replyHeader:replyHeader replyAuthor:replyAuthor viaUser:viaUser caption:message.caption textCheckingResults:message.textCheckingResults webPage:webPage];
     if (self != nil)
     {
         _imageMedia = imageMedia;
@@ -85,7 +96,7 @@
         {
             self.isSecret = true;
             
-            [self enableInstantPreview];
+            //[self enableInstantPreview];
         }
         
         if (self.isSecret)
@@ -98,6 +109,21 @@
 {
     [super updateMessage:message viewStorage:viewStorage sizeUpdated:sizeUpdated];
     
+    TGImageMediaAttachment *imageMedia = nil;
+    for (id attachment in message.mediaAttachments)
+    {
+        if ([attachment isKindOfClass:[TGImageMediaAttachment class]])
+        {
+            imageMedia = attachment;
+            break;
+        }
+    }
+    
+    _canDownload = _imageMedia.imageId != 0 || (![[imageMedia.imageInfo imageUrlForLargestSize:NULL] hasPrefix:@"http"]);
+}
+
+- (NSString *)updatedImageUriForMessage:(TGMessage *)message outImageInfo:(TGImageInfo **)outImageInfo
+{
     TGImageMediaAttachment *imageMedia = nil;
     for (id attachment in message.mediaAttachments)
     {
@@ -127,17 +153,34 @@
             previewImageInfo = [[TGImageInfo alloc] init];
             
             NSMutableString *previewUri = [[NSMutableString alloc] initWithString:@"photo-thumbnail://?"];
-            if (imageMedia.imageId != 0)
+            if (imageMedia.imageId != 0) {
                 [previewUri appendFormat:@"id=%" PRId64 "", imageMedia.imageId];
+                
+                [previewUri appendFormat:@"&cid=%" PRId64 "", message.cid];
+                [previewUri appendFormat:@"&mid=%" PRId32 "", message.mid];
+                
+                if (imageMedia.originInfo != nil)
+                    [previewUri appendFormat:@"&origin_info=%@", [imageMedia.originInfo stringRepresentation]];
+            }
             else
                 [previewUri appendFormat:@"local-id=%" PRId64 "", localImageId];
             
             CGSize thumbnailSize = CGSizeZero;
             CGSize renderSize = CGSizeZero;
-            [TGImageMessageViewModel calculateImageSizesForImageSize:largestSize thumbnailSize:&thumbnailSize renderSize:&renderSize squareAspect:message.messageLifetime > 0 && message.messageLifetime <= 60 && message.layer >= 17];
+            
+            if (self.groupedLayout != nil)
+            {
+                CGRect frame = [self.groupedLayout frameForMessageId:message.mid];
+                thumbnailSize = frame.size;
+                renderSize = TGScaleToFill(largestSize, thumbnailSize);
+            }
+            else
+            {
+                [TGImageMessageViewModel calculateImageSizesForImageSize:largestSize thumbnailSize:&thumbnailSize renderSize:&renderSize squareAspect:message.messageLifetime > 0 && message.messageLifetime <= 60 && message.layer >= 17];
+            }
             
             [previewUri appendFormat:@"&width=%d&height=%d&renderWidth=%d&renderHeight=%d", (int)thumbnailSize.width, (int)thumbnailSize.height, (int)renderSize.width, (int)renderSize.height];
-            
+                        
             NSString *legacyFilePath = nil;
             if ([legacyCacheUrl hasPrefix:@"file://"])
                 legacyFilePath = [legacyCacheUrl substringFromIndex:@"file://".length];
@@ -156,21 +199,12 @@
             [previewImageInfo addImageWithSize:renderSize url:previewUri];
         }
         
-        [self updateImageInfo:previewImageInfo];
+        if (outImageInfo != NULL)
+            *outImageInfo = previewImageInfo;
+        
+        return [self updatedImageUriForInfo:previewImageInfo];
     }
-    
-    _canDownload = _imageMedia.imageId != 0 || (![[imageMedia.imageInfo imageUrlForLargestSize:NULL] hasPrefix:@"http"]);
-}
-
-- (void)updateMessageAttributes
-{
-    [super updateMessageAttributes];
-    
-    //_overlayIconModel.hidden = [_context isSecretMessageViewed:_mid];
-    //_overlayIconMaskLeftModel.hidden = [_context isSecretMessageScreenshotted:_mid];
-    //_overlayIconMaskRightModel.hidden = _overlayIconMaskLeftModel.hidden;
-    //_overlayIconMaskTopModel.hidden = _overlayIconMaskLeftModel.hidden;
-    //_overlayIconMaskBottomModel.hidden = _overlayIconMaskLeftModel.hidden;
+    return nil;
 }
 
 - (bool)instantPreviewGesture
@@ -178,14 +212,21 @@
     return false;
 }
 
+- (bool)isPreviewableAtPoint:(CGPoint)point
+{
+    if (self.isSecret)
+        return false;
+    
+    return CGRectContainsPoint(self.imageModel.frame, point);
+}
+
 - (void)bindSpecialViewsToContainer:(UIView *)container viewStorage:(TGModernViewStorage *)viewStorage atItemPosition:(CGPoint)itemPosition
 {
     [super bindSpecialViewsToContainer:container viewStorage:viewStorage atItemPosition:itemPosition];
 }
 
-- (void)layoutForContainerSize:(CGSize)containerSize
-{
-    [super layoutForContainerSize:containerSize];
+- (bool)isInstant {
+    return self.isSecret;
 }
 
 @end

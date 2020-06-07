@@ -1,22 +1,22 @@
 #import "TGTimelineUploadPhotoRequestBuilder.h"
 
+#import <LegacyComponents/LegacyComponents.h>
+
 #import <UIKit/UIKit.h>
 
 #import <CommonCrypto/CommonDigest.h>
 
-#import "ActionStage.h"
-#import "SGraphObjectNode.h"
+#import <LegacyComponents/ActionStage.h>
+#import <LegacyComponents/SGraphObjectNode.h>
 
 #import "TGTelegraph.h"
 #import "TGUser+Telegraph.h"
 #import "TGTimelineItem.h"
 #import "TGImageMediaAttachment+Telegraph.h"
 
-#import "TGImageUtils.h"
-
 #import "TGUserDataRequestBuilder.h"
 
-#import "TGRemoteImageView.h"
+#import <LegacyComponents/TGRemoteImageView.h>
 
 #import "TGDatabase.h"
 
@@ -25,6 +25,8 @@
 #import <Security/Security.h>
 
 #import "TGAppDelegate.h"
+
+#import "TGTelegramNetworking.h"
 
 #define FILE_CHUNK_SIZE (16 * 1024)
 
@@ -110,7 +112,7 @@
     _fileData = imageData;
 
     static int actionId = 0;
-    [ActionStageInstance() requestActor:[[NSString alloc] initWithFormat:@"/tg/upload/(userAvatar%d)", actionId++] options:[[NSDictionary alloc] initWithObjectsAndKeys:_fileData, @"data", nil] watcher:self];
+    [ActionStageInstance() requestActor:[[NSString alloc] initWithFormat:@"/tg/upload/(userAvatar%d)", actionId++] options:[[NSDictionary alloc] initWithObjectsAndKeys:_fileData, @"data", @(TGNetworkMediaTypeTagImage), @"mediaTypeTag", nil] watcher:self];
 }
 
 - (UIImage *)currentLoginBigPhoto

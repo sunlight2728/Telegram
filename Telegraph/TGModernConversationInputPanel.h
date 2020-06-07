@@ -9,6 +9,7 @@
 #import <UIKit/UIKit.h>
 
 @class TGModernConversationInputPanel;
+@class TGPresentation;
 
 @protocol TGModernConversationInputPanelDelegate <NSObject>
 
@@ -20,8 +21,13 @@
 
 @property (nonatomic, weak) id<TGModernConversationInputPanelDelegate> delegate;
 
-- (void)setAvailableSpaceAbove:(CGFloat)availableSpaceAbove;
-- (void)adjustForSize:(CGSize)size keyboardHeight:(CGFloat)keyboardHeight duration:(NSTimeInterval)duration animationCurve:(int)animationCurve;
-- (void)changeToSize:(CGSize)size keyboardHeight:(CGFloat)keyboardHeight duration:(NSTimeInterval)duration;
+@property (nonatomic, strong) TGPresentation *presentation;
+
+- (void)setContentAreaHeight:(CGFloat)contentAreaHeight;
+- (void)adjustForSize:(CGSize)size keyboardHeight:(CGFloat)keyboardHeight duration:(NSTimeInterval)duration animationCurve:(int)animationCurve contentAreaHeight:(CGFloat)contentAreaHeight safeAreaInset:(UIEdgeInsets)safeAreaInset;
+- (void)adjustForSize:(CGSize)size keyboardHeight:(CGFloat)keyboardHeight duration:(NSTimeInterval)duration animationCurve:(int)animationCurve contentAreaHeight:(CGFloat)contentAreaHeight safeAreaInset:(UIEdgeInsets)safeAreaInset dismissOffset:(CGFloat)dismissOffset;
+- (void)changeToSize:(CGSize)size keyboardHeight:(CGFloat)keyboardHeight duration:(NSTimeInterval)duration contentAreaHeight:(CGFloat)contentAreaHeight safeAreaInset:(UIEdgeInsets)safeAreaInset;
+
+- (CGFloat)currentHeight;
 
 @end

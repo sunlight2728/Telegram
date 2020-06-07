@@ -14,8 +14,15 @@ typedef enum {
     TGModernClockProgressTypeIncomingClock = 2
 } TGModernClockProgressType;
 
+@class TGModernClockProgressView;
+@class TGPresentation;
+
 @interface TGModernClockProgressViewModel : TGModernViewModel
 
+@property (nonatomic, strong) TGPresentation *presentation;
+
 - (instancetype)initWithType:(TGModernClockProgressType)type;
+
++ (void)setupView:(TGModernClockProgressView *)view forType:(TGModernClockProgressType)type presentation:(TGPresentation *)presentation;
 
 @end

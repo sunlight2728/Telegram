@@ -1,6 +1,7 @@
 #import "TGBridgeChat+TGConversation.h"
 #import "TGBridgeMediaAttachment+TGMediaAttachment.h"
-#import "TGConversation.h"
+
+#import <LegacyComponents/LegacyComponents.h>
 
 @implementation TGBridgeChat (TGConversation)
 
@@ -8,7 +9,7 @@
 {
     TGBridgeChat *chat = [[TGBridgeChat alloc] init];
     chat->_identifier = conversation.conversationId;
-    chat->_date = conversation.date;
+    chat->_date = conversation.messageDate;
     chat->_fromUid = conversation.fromUid;
     chat->_text = conversation.text;
     

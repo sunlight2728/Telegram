@@ -1,4 +1,8 @@
 #import "TGLockIconView.h"
+#import <LegacyComponents/TGImageUtils.h>
+
+#import "TGPresentation.h"
+
 
 @interface TGLockIconView ()
 {
@@ -14,22 +18,22 @@
 
 - (UIImage *)topLockedImage
 {
-    return [UIImage imageNamed:@"ChatListLock_LockedTop.png"];
+    return _presentation.images.dialogLockTopActiveIcon;
 }
 
 - (UIImage *)topUnlockedImage
 {
-    return [UIImage imageNamed:@"ChatListLock_UnlockedTop.png"];
+    return _presentation.images.dialogLockTopIcon;
 }
 
 - (UIImage *)bottomLockedImage
 {
-    return [UIImage imageNamed:@"ChatListLock_LockedBottom.png"];
+    return _presentation.images.dialogLockBaseActiveIcon;
 }
 
 - (UIImage *)bottomUnlockedImage
 {
-    return [UIImage imageNamed:@"ChatListLock_UnlockedBottom.png"];
+    return _presentation.images.dialogLockBaseIcon;
 }
 
 - (instancetype)initWithFrame:(CGRect)frame
@@ -48,6 +52,12 @@
 - (bool)isLocked
 {
     return _isLocked;
+}
+
+- (void)setPresentation:(TGPresentation *)presentation
+{
+    _presentation = presentation;
+    [self setIsLocked:_isLocked animated:false];
 }
 
 - (void)setIsLocked:(bool)isLocked animated:(bool)animated
@@ -120,13 +130,13 @@
 {
     if (_isLocked)
     {
-        _topView.frame = CGRectMake((10.0f - 7.0f) / 2.0f, 0.0f, 7.0f, 5.0f);
-        _bottomView.frame = CGRectMake(0.0f, 5.0f, 10.0f, 7.0f);
+        _topView.frame = CGRectMake(TGScreenPixelFloor((10.0f - 7.0f) / 2.0f), -1.0f + TGScreenPixel, 7.0f, 6.0f);
+        _bottomView.frame = CGRectMake(0.0f, 5.0f + TGScreenPixel, 10.0f, 7.0f);
     }
     else
     {
-        _topView.frame = CGRectMake(6.0f, 0.0f, 7.0f, 5.0f);
-        _bottomView.frame = CGRectMake(0.0f, 5.0f, 10.0f, 7.0f);
+        _topView.frame = CGRectMake(6.0f, -1.0f + TGScreenPixel, 7.0f, 6.0f);
+        _bottomView.frame = CGRectMake(0.0f, 5.0f + TGScreenPixel, 10.0f, 7.0f);
     }
 }
 

@@ -1,17 +1,20 @@
 #import "TGShareSheetView.h"
 
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGShareSheetWindow.h"
 
 #import "TGShareSheetItemView.h"
-#import "TGImageUtils.h"
 #import "TGVerticalSwipeDismissGestureRecognizer.h"
 #import "TGAttachmentSheetScrollView.h"
 
 #import "TGShareSheetButtonItemView.h"
 
-#import "TGObserverProxy.h"
+#import <LegacyComponents/TGObserverProxy.h>
 
 #import <Accelerate/Accelerate.h>
+
+#import "TGPresentation.h"
 
 static CGFloat blurStaticOffset = 10.0f;
 static CGFloat blurDynamicOffset = 5.0f;
@@ -50,64 +53,51 @@ static CGFloat blurDynamicOffset = 5.0f;
 
 @implementation TGShareSheetView
 
-+ (UIImage *)containerBackgroundWithFirst:(bool)first last:(bool)last {
-    static UIImage *singleImage = nil;
-    static UIImage *firstImage = nil;
-    static UIImage *lastImage = nil;
-    
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        CGFloat diameter = 30.0f;
-        {
-            UIGraphicsBeginImageContextWithOptions(CGSizeMake(diameter, diameter), false, 0.0f);
-            CGContextRef context = UIGraphicsGetCurrentContext();
-            CGContextSetFillColorWithColor(context, [UIColor whiteColor].CGColor);
-            CGContextFillEllipseInRect(context, CGRectMake(0.0f, 0.0f, diameter, diameter));
-            singleImage = [UIGraphicsGetImageFromCurrentImageContext() stretchableImageWithLeftCapWidth:(NSInteger)(diameter / 2.0f) topCapHeight:(NSInteger)(diameter / 2.0f)];
-            UIGraphicsEndImageContext();
-        }
-        {
-            UIGraphicsBeginImageContextWithOptions(CGSizeMake(diameter, diameter), false, 0.0f);
-            CGContextRef context = UIGraphicsGetCurrentContext();
-            CGContextSetFillColorWithColor(context, [UIColor whiteColor].CGColor);
-            CGContextFillEllipseInRect(context, CGRectMake(0.0f, 0.0f, diameter, diameter));
-            CGContextFillRect(context, CGRectMake(0.0f, diameter / 2.0f, diameter, diameter / 2.0f));
-            firstImage = [UIGraphicsGetImageFromCurrentImageContext() stretchableImageWithLeftCapWidth:(NSInteger)(diameter / 2.0f) topCapHeight:(NSInteger)(diameter / 2.0f)];
-            UIGraphicsEndImageContext();
-        }
-        {
-            UIGraphicsBeginImageContextWithOptions(CGSizeMake(diameter, diameter), false, 0.0f);
-            CGContextRef context = UIGraphicsGetCurrentContext();
-            CGContextSetFillColorWithColor(context, [UIColor whiteColor].CGColor);
-            CGContextFillEllipseInRect(context, CGRectMake(0.0f, 0.0f, diameter, diameter));
-            CGContextFillRect(context, CGRectMake(0.0f, 0.0f, diameter, diameter / 2.0f));
-            lastImage = [UIGraphicsGetImageFromCurrentImageContext() stretchableImageWithLeftCapWidth:(NSInteger)(diameter / 2.0f) topCapHeight:(NSInteger)(diameter / 2.0f)];
-            UIGraphicsEndImageContext();
-        }
-    });
-    
++ (UIImage *)containerBackgroundWithFirst:(bool)first last:(bool)last color:(UIColor *)color {
+    CGFloat diameter = 30.0f;
     if (first && last) {
+        UIGraphicsBeginImageContextWithOptions(CGSizeMake(diameter, diameter), false, 0.0f);
+        CGContextRef context = UIGraphicsGetCurrentContext();
+        CGContextSetFillColorWithColor(context, color.CGColor);
+        CGContextFillEllipseInRect(context, CGRectMake(0.0f, 0.0f, diameter, diameter));
+        UIImage *singleImage = [UIGraphicsGetImageFromCurrentImageContext() stretchableImageWithLeftCapWidth:(NSInteger)(diameter / 2.0f) topCapHeight:(NSInteger)(diameter / 2.0f)];
+        UIGraphicsEndImageContext();
         return singleImage;
     } else if (first) {
+        UIGraphicsBeginImageContextWithOptions(CGSizeMake(diameter, diameter), false, 0.0f);
+        CGContextRef context = UIGraphicsGetCurrentContext();
+        CGContextSetFillColorWithColor(context, color.CGColor);
+        CGContextFillEllipseInRect(context, CGRectMake(0.0f, 0.0f, diameter, diameter));
+        CGContextFillRect(context, CGRectMake(0.0f, diameter / 2.0f, diameter, diameter / 2.0f));
+        UIImage *firstImage = [UIGraphicsGetImageFromCurrentImageContext() stretchableImageWithLeftCapWidth:(NSInteger)(diameter / 2.0f) topCapHeight:(NSInteger)(diameter / 2.0f)];
+        UIGraphicsEndImageContext();
         return firstImage;
     } else {
+        UIGraphicsBeginImageContextWithOptions(CGSizeMake(diameter, diameter), false, 0.0f);
+        CGContextRef context = UIGraphicsGetCurrentContext();
+        CGContextSetFillColorWithColor(context, color.CGColor);
+        CGContextFillEllipseInRect(context, CGRectMake(0.0f, 0.0f, diameter, diameter));
+        CGContextFillRect(context, CGRectMake(0.0f, 0.0f, diameter, diameter / 2.0f));
+        UIImage *lastImage = [UIGraphicsGetImageFromCurrentImageContext() stretchableImageWithLeftCapWidth:(NSInteger)(diameter / 2.0f) topCapHeight:(NSInteger)(diameter / 2.0f)];
+        UIGraphicsEndImageContext();
         return lastImage;
     }
 }
 
-+ (UIImage *)selectionBackgroundWithFirst:(bool)first last:(bool)last {
++ (UIImage *)selectionBackgroundWithFirst:(bool)first last:(bool)last color:(UIColor *)color {
     static UIImage *singleImage = nil;
     static UIImage *firstImage = nil;
     static UIImage *lastImage = nil;
     static UIImage *middleImage = nil;
+    static UIImage *cachedColor = nil;
     
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
+    if (![color isEqual:cachedColor])
+    {
         CGFloat diameter = 30.0f;
         {
             UIGraphicsBeginImageContextWithOptions(CGSizeMake(diameter, diameter), false, 0.0f);
             CGContextRef context = UIGraphicsGetCurrentContext();
-            CGContextSetFillColorWithColor(context, TGSelectionColor().CGColor);
+            CGContextSetFillColorWithColor(context, color.CGColor);
             CGContextFillEllipseInRect(context, CGRectMake(0.0f, 0.0f, diameter, diameter));
             singleImage = [UIGraphicsGetImageFromCurrentImageContext() stretchableImageWithLeftCapWidth:(NSInteger)(diameter / 2.0f) topCapHeight:(NSInteger)(diameter / 2.0f)];
             UIGraphicsEndImageContext();
@@ -115,7 +105,7 @@ static CGFloat blurDynamicOffset = 5.0f;
         {
             UIGraphicsBeginImageContextWithOptions(CGSizeMake(diameter, diameter), false, 0.0f);
             CGContextRef context = UIGraphicsGetCurrentContext();
-            CGContextSetFillColorWithColor(context, TGSelectionColor().CGColor);
+            CGContextSetFillColorWithColor(context, color.CGColor);
             CGContextFillEllipseInRect(context, CGRectMake(0.0f, 0.0f, diameter, diameter));
             CGContextFillRect(context, CGRectMake(0.0f, diameter / 2.0f, diameter, diameter / 2.0f));
             firstImage = [UIGraphicsGetImageFromCurrentImageContext() stretchableImageWithLeftCapWidth:(NSInteger)(diameter / 2.0f) topCapHeight:(NSInteger)(diameter / 2.0f)];
@@ -124,7 +114,7 @@ static CGFloat blurDynamicOffset = 5.0f;
         {
             UIGraphicsBeginImageContextWithOptions(CGSizeMake(diameter, diameter), false, 0.0f);
             CGContextRef context = UIGraphicsGetCurrentContext();
-            CGContextSetFillColorWithColor(context, TGSelectionColor().CGColor);
+            CGContextSetFillColorWithColor(context, color.CGColor);
             CGContextFillEllipseInRect(context, CGRectMake(0.0f, 0.0f, diameter, diameter));
             CGContextFillRect(context, CGRectMake(0.0f, 0.0f, diameter, diameter / 2.0f));
             lastImage = [UIGraphicsGetImageFromCurrentImageContext() stretchableImageWithLeftCapWidth:(NSInteger)(diameter / 2.0f) topCapHeight:(NSInteger)(diameter / 2.0f)];
@@ -133,12 +123,12 @@ static CGFloat blurDynamicOffset = 5.0f;
         {
             UIGraphicsBeginImageContextWithOptions(CGSizeMake(diameter, diameter), false, 0.0f);
             CGContextRef context = UIGraphicsGetCurrentContext();
-            CGContextSetFillColorWithColor(context, TGSelectionColor().CGColor);
+            CGContextSetFillColorWithColor(context, color.CGColor);
             CGContextFillRect(context, CGRectMake(0.0f, 0.0f, diameter, diameter));
             middleImage = [UIGraphicsGetImageFromCurrentImageContext() stretchableImageWithLeftCapWidth:(NSInteger)(diameter / 2.0f) topCapHeight:(NSInteger)(diameter / 2.0f)];
             UIGraphicsEndImageContext();
         }
-    });
+    }
     
     if (first && last) {
         return singleImage;
@@ -165,10 +155,10 @@ static CGFloat blurDynamicOffset = 5.0f;
         _containerView.userInteractionEnabled = true;
         [self addSubview:_containerView];
         
-        _containerBackgroundView = [[UIImageView alloc] initWithImage:[TGShareSheetView containerBackgroundWithFirst:true last:true]];
+        _containerBackgroundView = [[UIImageView alloc] init];
         [_containerView addSubview:_containerBackgroundView];
         
-        _scrollViewMask = [[UIImageView alloc] initWithImage:[TGShareSheetView containerBackgroundWithFirst:true last:true]];
+        _scrollViewMask = [[UIImageView alloc] init];
         
         __weak TGShareSheetView *weakSelf = self;
         _cancelItemView = [[TGShareSheetButtonItemView alloc] initWithTitle:TGLocalized(@"Common.Cancel") pressed:^{
@@ -181,7 +171,7 @@ static CGFloat blurDynamicOffset = 5.0f;
         }];
         [_cancelItemView setBold:true];
         
-        _cancelContainer = [[UIImageView alloc] initWithImage:[TGShareSheetView containerBackgroundWithFirst:true last:true]];
+        _cancelContainer = [[UIImageView alloc] init];
         _cancelContainer.userInteractionEnabled = true;
         [_cancelContainer addSubview:_cancelItemView];
         [_containerView addSubview:_cancelContainer];
@@ -207,6 +197,16 @@ static CGFloat blurDynamicOffset = 5.0f;
     return self;
 }
 
+- (void)setPresentation:(TGPresentation *)presentation
+{
+    _presentation = presentation;
+    
+    _cancelItemView.presentation = presentation;
+    _containerBackgroundView.image = [TGShareSheetView containerBackgroundWithFirst:true last:true color:presentation.pallete.menuBackgroundColor];
+    _scrollViewMask.image = [TGShareSheetView containerBackgroundWithFirst:true last:true color:presentation.pallete.menuBackgroundColor];
+    _cancelContainer.image = [TGShareSheetView containerBackgroundWithFirst:true last:true color:presentation.pallete.menuBackgroundColor];
+}
+
 - (CGFloat)swipeOffsetForOffset:(CGFloat)offset
 {
     if (offset < 0.0f)
@@ -230,23 +230,33 @@ static CGFloat blurDynamicOffset = 5.0f;
     return UIEdgeInsetsMake(8.0f, 10.0f, 10.0f, 10.0f);
 }
 
+- (void)setSafeAreaInset:(UIEdgeInsets)safeAreaInset
+{
+    _safeAreaInset = safeAreaInset;
+    [self updateLayout];
+}
+
 - (void)animateToDefaultPosition:(CGFloat)__unused velocity
 {
     UIEdgeInsets insets = [self insets];
+    insets.left += _safeAreaInset.left;
+    insets.right += _safeAreaInset.left;
+    if (_keyboardOffset < FLT_EPSILON)
+        insets.bottom += _safeAreaInset.bottom;
     CGFloat cancelHeight = insets.top + [_cancelItemView preferredHeightForMaximumHeight:CGFLOAT_MAX] + insets.bottom;
     
     if (iosMajorVersion() >= 7)
     {
         [UIView animateWithDuration:0.45 delay:0.0 usingSpringWithDamping:0.48f initialSpringVelocity:0.0f options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction animations:^
         {
-            _containerView.frame = CGRectMake(insets.left, self.frame.size.height - _containerView.frame.size.height - MAX(0.0f, _keyboardOffset - cancelHeight), _containerView.frame.size.width, _containerView.frame.size.height);
+            _containerView.frame = CGRectMake(insets.left, self.frame.size.height - _containerView.frame.size.height - MAX(0.0f, _keyboardOffset - cancelHeight) - insets.bottom, _containerView.frame.size.width, _containerView.frame.size.height);
         } completion:nil];
     }
     else
     {
         [UIView animateWithDuration:0.2 animations:^
         {
-            _containerView.frame = CGRectMake(insets.left, self.frame.size.height - _containerView.frame.size.height - MAX(0.0f, _keyboardOffset - cancelHeight), _containerView.frame.size.width, _containerView.frame.size.height);
+            _containerView.frame = CGRectMake(insets.left, self.frame.size.height - _containerView.frame.size.height - MAX(0.0f, _keyboardOffset - cancelHeight) - insets.bottom, _containerView.frame.size.width, _containerView.frame.size.height);
         }];
     }
 }
@@ -254,6 +264,11 @@ static CGFloat blurDynamicOffset = 5.0f;
 - (void)swipeGesture:(TGVerticalSwipeDismissGestureRecognizer *)recognizer
 {
     UIEdgeInsets insets = [self insets];
+    insets.left += _safeAreaInset.left;
+    insets.right += _safeAreaInset.left;
+    if (_keyboardOffset < FLT_EPSILON)
+        insets.bottom += _safeAreaInset.bottom;
+    
     if (recognizer.state == UIGestureRecognizerStateBegan)
     {
         if (_containerView.layer.presentationLayer != nil)
@@ -266,7 +281,7 @@ static CGFloat blurDynamicOffset = 5.0f;
         
         CGFloat offset = [recognizer locationInView:self].y - _swipeStart;
         CGFloat bandOffset = [self swipeOffsetForOffset:offset];
-        _containerView.frame = CGRectMake(insets.left, self.frame.size.height - _containerView.frame.size.height - MAX(0.0f, _keyboardOffset - cancelHeight) + bandOffset, _containerView.frame.size.width, _containerView.frame.size.height);
+        _containerView.frame = CGRectMake(insets.left, self.frame.size.height - _containerView.frame.size.height - MAX(0.0f, _keyboardOffset - cancelHeight) + bandOffset - insets.bottom, _containerView.frame.size.width, _containerView.frame.size.height);
     }
     else if (recognizer.state == UIGestureRecognizerStateRecognized)
     {
@@ -417,6 +432,9 @@ static CGFloat blurDynamicOffset = 5.0f;
     [self layoutIfNeeded];
     
     UIEdgeInsets insets = [self insets];
+    insets.left += _safeAreaInset.left;
+    insets.right += _safeAreaInset.left;
+    insets.bottom += _safeAreaInset.bottom;
     
     _containerView.frame = CGRectMake(insets.left, self.frame.size.height, self.frame.size.width - insets.left - insets.right, _containerView.frame.size.height);
     
@@ -428,7 +446,7 @@ static CGFloat blurDynamicOffset = 5.0f;
         //[self beginBlur];
         [UIView animateWithDuration:0.12 delay:0.0 options:(7 << 16) | UIViewAnimationOptionAllowUserInteraction animations:^
         {
-            _containerView.frame = CGRectMake(insets.left, self.frame.size.height - _containerView.frame.size.height, self.frame.size.width - insets.left - insets.right, _containerView.frame.size.height);
+            _containerView.frame = CGRectMake(insets.left, self.frame.size.height - _containerView.frame.size.height - insets.bottom, self.frame.size.width - insets.left - insets.right, _containerView.frame.size.height);
             _backgroundView.alpha = 1.0f;
         } completion:^(__unused BOOL finished)
         {
@@ -440,7 +458,7 @@ static CGFloat blurDynamicOffset = 5.0f;
     {
         [UIView animateWithDuration:0.3 delay:0.0 options:UIViewAnimationOptionAllowUserInteraction animations:^
         {
-            _containerView.frame = CGRectMake(insets.left, self.frame.size.height - _containerView.frame.size.height, self.frame.size.width - insets.left - insets.right, _containerView.frame.size.height);
+            _containerView.frame = CGRectMake(insets.left, self.frame.size.height - _containerView.frame.size.height - insets.bottom, self.frame.size.width - insets.left - insets.right, _containerView.frame.size.height);
             _backgroundView.alpha = 1.0f;
         } completion:^(__unused BOOL finished)
         {
@@ -518,6 +536,8 @@ static CGFloat blurDynamicOffset = 5.0f;
     [self dispatchWillDisappear];
     
     UIEdgeInsets insets = [self insets];
+    insets.left += _safeAreaInset.left;
+    insets.right += _safeAreaInset.left;
     
     [UIView animateWithDuration:duration delay:0.0 options:UIViewAnimationOptionCurveEaseInOut animations:^
     {
@@ -544,6 +564,7 @@ static CGFloat blurDynamicOffset = 5.0f;
     __weak TGShareSheetView *weakSelf = self;
     for (TGShareSheetItemView *itemView in items)
     {
+        itemView.presentation = self.presentation;
         itemView.preferredHeightNeedsUpdate = ^(__unused TGShareSheetItemView *itemView) {
             __strong TGShareSheetView *strongSelf = weakSelf;
             if (strongSelf != nil) {
@@ -552,7 +573,7 @@ static CGFloat blurDynamicOffset = 5.0f;
         };
         if (itemView != items.lastObject) {
             UIView *separatorView = [[UIView alloc] init];
-            separatorView.backgroundColor = TGSeparatorColor();
+            separatorView.backgroundColor = self.presentation.pallete.menuSeparatorColor;
             [separatorViews addObject:separatorView];
             [_scrollView addSubview:separatorView];
         }
@@ -623,8 +644,13 @@ static CGFloat blurDynamicOffset = 5.0f;
     CGFloat maxScreenSide = MAX(screenSize.width, screenSize.height);
     
     UIEdgeInsets insets = [self insets];
-    
+    insets.left += _safeAreaInset.left;
+    insets.right += _safeAreaInset.left;
+
     CGFloat cancelHeight = insets.top + [_cancelItemView preferredHeightForMaximumHeight:CGFLOAT_MAX] + insets.bottom;
+    
+    if (_keyboardOffset < FLT_EPSILON)
+        insets.bottom += _safeAreaInset.bottom;
     
     CGFloat maxHeight = self.frame.size.width < (maxScreenSide - FLT_EPSILON) ? (maxScreenSide - 20.0f - 44.0f + 4.0f - cancelHeight) : (minScreenHeight - 20.0f - 32.0f + 4.0f - cancelHeight);
     if (self.frame.size.width > self.frame.size.height) {
@@ -636,7 +662,7 @@ static CGFloat blurDynamicOffset = 5.0f;
     
     CGFloat containerWidth = self.frame.size.width - insets.left - insets.right;
     CGFloat containerHeight = 0.0f;
-    CGFloat separatorHeight = TGIsRetina() ? 0.5f : 1.0f;
+    CGFloat separatorHeight = TGScreenPixel;
     
     NSInteger index = -1;
     for (TGShareSheetItemView *itemView in _items)
@@ -648,7 +674,7 @@ static CGFloat blurDynamicOffset = 5.0f;
         itemView.frame = CGRectMake(0.0f, containerHeight, containerWidth, itemPreferredHeight);
         bool first = itemView == _items.firstObject;
         bool last = itemView == _items.lastObject;
-        [itemView setHighlightedImage:[TGShareSheetView selectionBackgroundWithFirst:first last:last]];
+        [itemView setHighlightedImage:[TGShareSheetView selectionBackgroundWithFirst:first last:last color:self.presentation.pallete.menuSelectionColor]];
         
         containerHeight += itemPreferredHeight;
         
@@ -662,12 +688,12 @@ static CGFloat blurDynamicOffset = 5.0f;
     _containerBackgroundView.frame = CGRectMake(0.0f, 0.0f, containerWidth, MIN(maxHeight, containerHeight));
     
     _cancelContainer.frame = CGRectMake(0.0f, MIN(maxHeight, containerHeight) + insets.top + MAX(0.0, _keyboardOffset - cancelHeight), containerWidth, [_cancelItemView preferredHeightForMaximumHeight:CGFLOAT_MAX]);
-    [_cancelItemView setHighlightedImage:[TGShareSheetView selectionBackgroundWithFirst:true last:true]];
+    [_cancelItemView setHighlightedImage:[TGShareSheetView selectionBackgroundWithFirst:true last:true color:self.presentation.pallete.menuSelectionColor]];
     _cancelItemView.frame = CGRectMake(0.0f, 0.0f, containerWidth, [_cancelItemView preferredHeightForMaximumHeight:CGFLOAT_MAX]);
 
     _scrollView.contentSize = CGSizeMake(self.frame.size.width, containerHeight);
     
-    _containerView.frame = CGRectMake(insets.left, self.frame.size.height - MIN(maxHeight, containerHeight) - cancelHeight - MAX(0.0f, _keyboardOffset - cancelHeight), containerWidth, MIN(maxHeight, containerHeight) + cancelHeight);
+    _containerView.frame = CGRectMake(insets.left, self.frame.size.height - MIN(maxHeight, containerHeight) - cancelHeight - MAX(0.0f, _keyboardOffset - cancelHeight) - insets.bottom, containerWidth, MIN(maxHeight, containerHeight) + cancelHeight);
     _scrollViewContainer.frame = CGRectMake(0.0f, 0.0f, _containerView.frame.size.width, _containerView.frame.size.height - cancelHeight);
     _scrollView.frame = _scrollViewContainer.bounds;
     _scrollView.contentSize = CGSizeMake(_scrollView.frame.size.width, containerHeight);

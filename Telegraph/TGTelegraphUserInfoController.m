@@ -1,24 +1,15 @@
-/*
- * This is the source code of Telegram for iOS v. 1.1
- * It is licensed under GNU GPL v. 2 or later.
- * You should have received a copy of the license in this archive (see LICENSE).
- *
- * Copyright Peter Iakovlev, 2013.
- */
-
 #import "TGTelegraphUserInfoController.h"
 
-#import "ActionStage.h"
-#import "SGraphObjectNode.h"
+#import <LegacyComponents/LegacyComponents.h>
 
-#import "TGHacks.h"
-#import "TGStringUtils.h"
-#import "TGPhoneUtils.h"
+#import "TGLegacyComponentsContext.h"
+
+#import <LegacyComponents/ActionStage.h>
+#import <LegacyComponents/SGraphObjectNode.h>
 
 #import "TGDatabase.h"
 #import "TGInterfaceManager.h"
 #import "TGTelegraph.h"
-#import "TGNavigationBar.h"
 
 #import "TGUserInfoCollectionItem.h"
 #import "TGUserInfoPhoneCollectionItem.h"
@@ -28,6 +19,7 @@
 #import "TGUserInfoAddPhoneCollectionItem.h"
 #import "TGUserInfoVariantCollectionItem.h"
 #import "TGUserInfoUsernameCollectionItem.h"
+#import "TGUserInfoCallsCollectionItem.h"
 
 #import "TGAppDelegate.h"
 #import "TGTelegraph.h"
@@ -37,27 +29,48 @@
 #import "TGCreateContactController.h"
 #import "TGAddToExistingContactController.h"
 
-#import "TGProgressWindow.h"
-#import "TGActionSheet.h"
+#import <LegacyComponents/TGProgressWindow.h>
+#import "TGCustomActionSheet.h"
 
-#import "TGRemoteImageView.h"
+#import <LegacyComponents/TGRemoteImageView.h>
 
-#import "TGOverlayControllerWindow.h"
-#import "TGModernGalleryController.h"
+#import <LegacyComponents/TGModernGalleryController.h>
 #import "TGUserAvatarGalleryModel.h"
 #import "TGUserAvatarGalleryItem.h"
 
 #import "TGSynchronizeContactsActor.h"
 
-#import "TGAlertView.h"
+#import "TGCustomAlertView.h"
+#import <LegacyComponents/TGMenuView.h>
 
 #import "TGSharedMediaController.h"
 
 #import "TGTelegramNetworking.h"
 
-#import "TGTimerTarget.h"
+#import <LegacyComponents/TGTimerTarget.h>
 
 #import "TGDialogListCompanion.h"
+
+#import "TGUserSignal.h"
+#import "TGAccountSignals.h"
+
+#import "TGUserInfoTextCollectionItem.h"
+#import "TGUserInfoEditingAboutCollectionItem.h"
+
+#import "TGGroupsInCommonController.h"
+
+#import "TGShareMenu.h"
+#import "TGSendMessageSignals.h"
+#import <Contacts/Contacts.h>
+#import <AddressBook/AddressBook.h>
+
+#import <LegacyComponents/TGMenuSheetController.h>
+
+#import "TGLegacyComponentsContext.h"
+
+#import "TGCustomAlertView.h"
+
+#import "TGPresentation.h"
 
 @interface TGTelegraphUserInfoController () <TGAlertSoundControllerDelegate, TGUserInfoEditingPhoneCollectionItemDelegate, TGPhoneLabelPickerControllerDelegate, TGCreateContactControllerDelegate, TGAddToExistingContactControllerDelegate>
 {
@@ -71,17 +84,27 @@
     
     TGUser *_user;
     TGPhonebookContact *_phonebookInfo;
+    NSMutableDictionary *_defaultNotificationSettings;
     NSMutableDictionary *_userNotificationSettings;
     int _sharedMediaCount;
     bool _isUserBlocked;
     int _userLink;
+    
+    bool _supportsCalls;
+    bool _callsPrivate;
     
     TGCollectionMenuSection *_notificationSettingsSection;
     TGUserInfoVariantCollectionItem *_normalNotificationsItem;
     TGUserInfoEditingVariantCollectionItem *_notificationsItem;
     TGUserInfoEditingVariantCollectionItem *_soundItem;
     
+    TGCollectionMenuSection *_aboutSection;
+    TGUserInfoEditingAboutCollectionItem *_editAboutItem;
+    
+    TGUserInfoButtonCollectionItem *_shareContactItem;
+    
     TGCollectionMenuSection *_deleteContactSection;
+    TGUserInfoButtonCollectionItem *_deleteContactItem;
     TGUserInfoButtonCollectionItem *_startSecretChatItem;
     
     TGCollectionMenuSection *_blockUserSection;
@@ -92,6 +115,19 @@
     TGProgressWindow *_progressWindow;
     
     NSTimer *_muteExpirationTimer;
+    
+    NSString *_about;
+    int32_t _groupsInCommonCount;
+    id<SDisposable> _updatedCachedDataDisposable;
+    id<SDisposable> _cachedDataDisposable;
+    SMetaDisposable *_updateAboutDisposable;
+    
+    bool _checked3dTouch;
+    
+    NSArray *_callMessages;
+    
+    TGMenuContainerView *_tooltipContainerView;
+    NSTimer *_tooltipTimer;
 }
 
 @end
@@ -100,6 +136,12 @@
 
 - (instancetype)initWithUid:(int32_t)uid
 {
+    return [self initWithUid:uid withoutCompose:false];
+}
+
+- (instancetype)initWithUid:(int32_t)uid callMessages:(NSArray *)callMessages
+{
+    _callMessages = callMessages;
     return [self initWithUid:uid withoutCompose:false];
 }
 
@@ -124,11 +166,23 @@
         _user = [TGDatabaseInstance() loadUser:_uid];
         _phonebookInfo = _user.phoneNumber.length != 0 ? [TGDatabaseInstance() phonebookContactByPhoneId:phoneMatchHash(_user.phoneNumber)] : nil;
         
-        _userNotificationSettings = [[NSMutableDictionary alloc] initWithDictionary:@{@"muteUntil": @(0), @"soundId": @(1)}];
+        _defaultNotificationSettings = [[NSMutableDictionary alloc] initWithDictionary:@{@"muteUntil": @(0), @"soundId": @(1)}];
+        _userNotificationSettings = [[NSMutableDictionary alloc] initWithDictionary:@{}];
         
         _defaultPhonesSectionInsets = self.phonesSection.insets;
         
         [self.userInfoItem setUser:_user animated:false];
+        
+        if (_withoutActions)
+        {
+            _defaultPhonesSectionInsets.bottom = 0;
+            
+            UIEdgeInsets actionsSectionInsets = self.actionsSection.insets;
+            actionsSectionInsets.bottom = 44.0f;
+            self.actionsSection.insets = actionsSectionInsets;
+        }
+        
+        [self _updateCalls];
         
         _notificationsItem = [[TGUserInfoEditingVariantCollectionItem alloc] initWithTitle:TGLocalized(@"GroupInfo.Notifications") variant:nil action:@selector(notificationsPressed)];
         _notificationsItem.deselectAutomatically = true;
@@ -139,32 +193,71 @@
             _soundItem
         ]];
         
+        if (_uid == TGTelegraphInstance.clientUserId)
+        {
+            _updateAboutDisposable = [[SMetaDisposable alloc] init];
+            
+            _editAboutItem = [[TGUserInfoEditingAboutCollectionItem alloc] init];
+            _editAboutItem.maxLength = 70;
+            _editAboutItem.disallowNewLines = true;
+            _editAboutItem.placeholder = TGLocalized(@"UserInfo.About.Placeholder");
+            _editAboutItem.showRemainingCount = true;
+            _editAboutItem.returnKeyType = UIReturnKeyDone;
+            __weak TGTelegraphUserInfoController *weakSelf = self;
+            _editAboutItem.heightChanged = ^ {
+                __strong TGTelegraphUserInfoController *strongSelf = weakSelf;
+                if (strongSelf != nil) {
+                    [strongSelf.collectionLayout invalidateLayout];
+                    [strongSelf.collectionView layoutSubviews];
+                }
+            };
+            _editAboutItem.returned = ^ {
+                __strong TGTelegraphUserInfoController *strongSelf = weakSelf;
+                if (strongSelf != nil) {
+                    [strongSelf donePressed];
+                }
+            };
+            
+            _aboutSection = [[TGCollectionMenuSection alloc] initWithItems:@[ _editAboutItem ]];
+            
+            UIEdgeInsets notificationSettingsInsets = _notificationSettingsSection.insets;
+            notificationSettingsInsets.bottom = 0;
+            _notificationSettingsSection.insets = notificationSettingsInsets;
+        }
+        
         _startSecretChatItem = [[TGUserInfoButtonCollectionItem alloc] initWithTitle:TGLocalized(@"UserInfo.StartSecretChat") action:@selector(startSecretChatPressed)];
         _startSecretChatItem.deselectAutomatically = true;
-        _startSecretChatItem.titleColor = TGAccentColor();
+        _startSecretChatItem.titleColor = self.presentation.pallete.collectionMenuAccentColor;
         
         _normalNotificationsItem = [[TGUserInfoVariantCollectionItem alloc] initWithTitle:TGLocalized(@"GroupInfo.Notifications") variant:nil action:@selector(notificationsPressed)];
         _normalNotificationsItem.deselectAutomatically = true;
         _sharedMediaItem = [[TGUserInfoVariantCollectionItem alloc] initWithTitle:TGLocalized(@"GroupInfo.SharedMedia") variant:nil action:@selector(sharedMediaPressed)];
+        _groupsInCommonItem = [[TGUserInfoVariantCollectionItem alloc] initWithTitle:TGLocalized(@"UserInfo.GroupsInCommon") variant:@"" action:@selector(groupsInCommonPressed)];
         _sharedMediaSection = [[TGCollectionMenuSection alloc] initWithItems:@[_sharedMediaItem, _normalNotificationsItem]];
         _sharedMediaSection.insets = UIEdgeInsetsMake(22.0f, 0.0f, 0.0f, 0.0f);
         
         self.actionsSection.insets = UIEdgeInsetsMake(0.0f, 0.0f, 0.0f, 0.0f);
         
-        TGUserInfoButtonCollectionItem *deleteContactItem = [[TGUserInfoButtonCollectionItem alloc] initWithTitle:TGLocalized(@"UserInfo.DeleteContact") action:@selector(deleteContactPressed)];
-        deleteContactItem.editing = true;
-        deleteContactItem.deselectAutomatically = true;
-        deleteContactItem.titleColor = TGDestructiveAccentColor();
-        _deleteContactSection = [[TGCollectionMenuSection alloc] initWithItems:@[deleteContactItem]];
+        _deleteContactItem = [[TGUserInfoButtonCollectionItem alloc] initWithTitle:TGLocalized(@"UserInfo.DeleteContact") action:@selector(deleteContactPressed)];
+        _deleteContactItem.editing = true;
+        _deleteContactItem.deselectAutomatically = true;
+        _deleteContactItem.titleColor = self.presentation.pallete.collectionMenuDestructiveColor;
+        _deleteContactSection = [[TGCollectionMenuSection alloc] initWithItems:@[_deleteContactItem]];
 
         _blockUserItem = [[TGUserInfoButtonCollectionItem alloc] initWithTitle:@"" action:@selector(blockUserPressed)];
         _blockUserItem.deselectAutomatically = true;
-        _blockUserItem.titleColor = TGDestructiveAccentColor();
+        _blockUserItem.titleColor = self.presentation.pallete.collectionMenuDestructiveColor;
         _blockUserSection = [[TGCollectionMenuSection alloc] initWithItems:@[_blockUserItem]];
         _blockUserSection.insets = UIEdgeInsetsMake(22.0f, 0.0f, 44.0f, 0.0f);
         
         bool outdated = false;
         _userLink = [TGDatabaseInstance() loadUserLink:_uid outdated:&outdated];
+        
+        _about = [TGDatabaseInstance() _userCachedDataSync:_uid].about;
+        
+        if (_uid == 777000 || _uid == 333000) {
+            self.userInfoItem.automaticallyManageUserPresence = false;
+        }
         
         [self _updatePhonesAndActions];
         [self _updateNotificationSettings:false];
@@ -180,16 +273,66 @@
                 @"/tg/contactlist",
                 @"/tg/phonebook",
                 @"/tg/blockedUsers",
+                @"/tg/calls/enabled",
                 [[NSString alloc] initWithFormat:@"/tg/sharedMediaCount/(%" PRIx64 ")", (int64_t)_uid]
             ] watcher:self];
             
             [ActionStageInstance() watchForPath:[NSString stringWithFormat:@"/tg/peerSettings/(%" PRId32 ")", _uid] watcher:self];
             [ActionStageInstance() requestActor:[NSString stringWithFormat:@"/tg/peerSettings/(%" PRId32 ",cachedOnly)", _uid] options:@{@"peerId": @(_uid)} watcher:self];
+            [ActionStageInstance() watchForPath:[NSString stringWithFormat:@"/tg/peerSettings/(%" PRId32 ")", INT_MAX - 1] watcher:self];
+            [ActionStageInstance() requestActor:[NSString stringWithFormat:@"/tg/peerSettings/(%d,cachedOnly)", INT_MAX - 1] options:[NSDictionary dictionaryWithObject:[NSNumber numberWithLongLong:INT_MAX - 1] forKey:@"peerId"] watcher:self];
             
             [ActionStageInstance() requestActor:@"/tg/blockedUsers/(cached)" options:nil watcher:self];
         }];
+        
+        __weak TGTelegraphUserInfoController *weakSelf = self;
+        _updatedCachedDataDisposable = [[TGUserSignal updatedUserCachedDataWithUserId:_uid] startWithNext:nil];
+        _cachedDataDisposable = [[[TGDatabaseInstance() userCachedData:_uid] deliverOn:[SQueue mainQueue]] startWithNext:^(TGCachedUserData *data) {
+            __strong TGTelegraphUserInfoController *strongSelf = weakSelf;
+            if (strongSelf != nil) {
+                if (!TGStringCompare(strongSelf->_about, data.about) || strongSelf->_groupsInCommonCount != data.groupsInCommonCount || strongSelf->_supportsCalls != data.supportsCalls || strongSelf->_callsPrivate != data.callsPrivate) {
+                    bool forceUpdate = !TGStringCompare(strongSelf->_about, data.about) || strongSelf->_supportsCalls != data.supportsCalls;
+                    if ((strongSelf->_groupsInCommonCount != 0) != (data.groupsInCommonCount != 0)) {
+                        forceUpdate = true;
+                    }
+                    strongSelf->_about = data.about;
+                    strongSelf->_groupsInCommonCount = data.groupsInCommonCount;
+                    [strongSelf->_groupsInCommonItem setVariant:[NSString stringWithFormat:@"%d", data.groupsInCommonCount]];
+                    strongSelf->_supportsCalls = data.supportsCalls;
+                    strongSelf->_callsPrivate = data.callsPrivate;
+                    
+                    strongSelf.userInfoItem.showCall = strongSelf->_supportsCalls;
+                    
+                    if (strongSelf.userInfoItem.showCall)
+                    {
+                        TGDispatchAfter(0.3, dispatch_get_main_queue(), ^{
+                            [strongSelf setupCallTooltip];
+                        });
+                    }
+                    
+                    if (forceUpdate) {
+                        [strongSelf _updatePhonesAndActions];
+                    }
+                }
+            }
+        }];
     }
     return self;
+}
+
+- (void)dealloc {
+    [_updatedCachedDataDisposable dispose];
+    [_cachedDataDisposable dispose];
+    [_updateAboutDisposable dispose];
+}
+
+- (void)setPresentation:(TGPresentation *)presentation
+{
+    [super setPresentation:presentation];
+    
+    _startSecretChatItem.titleColor = presentation.pallete.collectionMenuAccentColor;
+    _blockUserItem.titleColor = presentation.pallete.collectionMenuDestructiveColor;
+    _deleteContactItem.titleColor = presentation.pallete.collectionMenuDestructiveColor;
 }
 
 - (void)_resetCollectionView
@@ -200,29 +343,50 @@
         self.collectionView.keyboardDismissMode = UIScrollViewKeyboardDismissModeInteractive;
 }
 
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    
+    [self check3DTouch];
+}
+
+- (void)willRotateToInterfaceOrientation:(UIInterfaceOrientation)toInterfaceOrientation duration:(NSTimeInterval)duration
+{
+    [super willRotateToInterfaceOrientation:toInterfaceOrientation duration:duration];
+    
+    [self tooltipTimerTick];
+}
+
 #pragma mark -
+
+- (void)_updateCalls
+{
+    if (_callMessages != nil)
+    {
+        NSUInteger callsSectionIndex = [self indexForSection:self.callsSection];
+        for (int i = (int)self.callsSection.items.count - 1; i >= 0; i--)
+        {
+            [self.menuSections deleteItemFromSection:callsSectionIndex atIndex:0];
+        }
+        
+        if (!_editing)
+        {
+            if (callsSectionIndex != NSNotFound)
+            {
+                TGUserInfoCallsCollectionItem *callsItem = [[TGUserInfoCallsCollectionItem alloc] init];
+                [callsItem setCallMessages:_callMessages];
+                [self.menuSections addItemToSection:callsSectionIndex item:callsItem];
+            }
+        }
+    }
+}
 
 - (void)_updatePhonesAndActions
 {
-    if (_phonebookInfo == nil)
+    bool isContact = _phonebookInfo != nil;
+    if (self.navigationItem.rightBarButtonItem == nil)
     {
-        if (_editing)
-        {
-            _editing = false;
-            [self leaveEditingMode:false];
-            
-            if (self.navigationItem.leftBarButtonItem != nil)
-                [self setLeftBarButtonItem:nil];
-            if (self.navigationItem.rightBarButtonItem != nil)
-                [self setRightBarButtonItem:nil];
-        }
-    }
-    else
-    {
-        if (self.navigationItem.rightBarButtonItem == nil)
-        {
-            [self setRightBarButtonItem:[[UIBarButtonItem alloc] initWithTitle:TGLocalized(@"Common.Edit") style:UIBarButtonItemStylePlain target:self action:@selector(editPressed)] animated:false];
-        }
+        [self setRightBarButtonItem:[[UIBarButtonItem alloc] initWithTitle:TGLocalized(@"Common.Edit") style:UIBarButtonItemStylePlain target:self action:@selector(editPressed)] animated:false];
     }
     
     NSUInteger usernameSectionIndex = [self indexForSection:self.usernameSection];
@@ -233,10 +397,38 @@
             [self.menuSections deleteItemFromSection:usernameSectionIndex atIndex:0];
         }
         
-        if (!_editing && _user.userName.length != 0)
-        {
-            TGUserInfoUsernameCollectionItem *usernameItem = [[TGUserInfoUsernameCollectionItem alloc] initWithLabel:TGLocalized(@"Profile.Username") username:[[NSString alloc] initWithFormat:@"@%@", _user.userName]];
-            [self.menuSections addItemToSection:usernameSectionIndex item:usernameItem];
+        for (int j = 0; j < 2; j++) {
+            bool processAbout = j == 1;
+            bool processUsername = j == 0;
+            
+            //if (_user.kind == TGUserKindBot || _user.kind == TGUserKindSmartBot) {
+                processAbout = !processAbout;
+                processUsername = !processUsername;
+            //}
+            
+            if (processAbout && !_editing && _about.length != 0)
+            {
+                TGUserInfoTextCollectionItem *infoItem = [[TGUserInfoTextCollectionItem alloc] init];
+                infoItem.highlightLinks = _user.kind == TGUserKindBot || _user.kind == TGUserKindSmartBot;
+                infoItem.title = TGLocalized(@"Profile.About");
+                infoItem.text = _about;
+                __weak TGTelegraphUserInfoController *weakSelf = self;
+                infoItem.followLink = ^(NSString *link) {
+                    TGTelegraphUserInfoController *strongSelf = weakSelf;
+                    if (strongSelf != nil) {
+                        [strongSelf followLink:link];
+                    }
+                };
+                [self.menuSections addItemToSection:usernameSectionIndex item:infoItem];
+            }
+            
+            if (processUsername && !_editing && _user.userName.length != 0)
+            {
+                TGUserInfoUsernameCollectionItem *usernameItem = [[TGUserInfoUsernameCollectionItem alloc] initWithLabel:TGLocalized(@"Profile.Username") username:[[NSString alloc] initWithFormat:@"@%@", _user.userName]];
+                usernameItem.lastInList = true;
+                usernameItem.action = @selector(shareUserInfoPressed);
+                [self.menuSections addItemToSection:usernameSectionIndex item:usernameItem];
+            }
         }
     }
     
@@ -264,7 +456,7 @@
     {
         index++;
         
-        if (_editing)
+        if (_editing && isContact)
         {
             TGUserInfoEditingPhoneCollectionItem *editingPhoneItem = [[TGUserInfoEditingPhoneCollectionItem alloc] init];
             editingPhoneItem.delegate = self;
@@ -274,13 +466,13 @@
         }
         else
         {
-            TGUserInfoPhoneCollectionItem *phoneItem = [[TGUserInfoPhoneCollectionItem alloc] initWithLabel:phoneNumber.label phone:phoneNumber.number phoneColor:_phonebookInfo.phoneNumbers.count > 1 && [[TGPhoneUtils cleanPhone:phoneNumber.number] isEqualToString:[TGPhoneUtils cleanPhone:_user.phoneNumber]] ? TGAccentColor() : [UIColor blackColor] action:@selector(phonePressed:)];
+            TGUserInfoPhoneCollectionItem *phoneItem = [[TGUserInfoPhoneCollectionItem alloc] initWithLabel:phoneNumber.label phone:phoneNumber.number phoneColor:_phonebookInfo.phoneNumbers.count > 1 && [[TGPhoneUtils cleanPhone:phoneNumber.number] isEqualToString:[TGPhoneUtils cleanPhone:_user.phoneNumber]] ? self.presentation.pallete.dialogEncryptedColor : self.presentation.pallete.collectionMenuAccentColor action:@selector(phonePressed:)];
             phoneItem.lastInList = index == (int)_phonebookInfo.phoneNumbers.count - 1;
             [self.menuSections addItemToSection:phonesSectionIndex item:phoneItem];
         }
     }
     
-    if (_editing)
+    if (_editing && isContact)
     {
         NSInteger phonesSectionIndex = [self indexForSection:self.phonesSection];
         if (phonesSectionIndex != NSNotFound)
@@ -288,6 +480,8 @@
             [self.menuSections insertItem:[[TGUserInfoAddPhoneCollectionItem alloc] initWithAction:@selector(addPhonePressed)] toSection:phonesSectionIndex atIndex:self.phonesSection.items.count];
         }
     }
+    
+    bool isCurrentUser = (_user.uid == TGTelegraphInstance.clientUserId);
     
     if (_editing)
     {
@@ -300,20 +494,44 @@
             [self.menuSections deleteSection:sharedMediaSectionIndex];
         
         NSUInteger notificationSettingsIndex = [self indexForSection:_notificationSettingsSection];
-        if (notificationSettingsIndex == NSNotFound)
+        if (!isCurrentUser)
         {
-            NSUInteger phonesSectionIndex = [self indexForSection:self.phonesSection];
-            if (phonesSectionIndex != NSNotFound)
-                [self.menuSections insertSection:_notificationSettingsSection atIndex:phonesSectionIndex + 1];
+            if (notificationSettingsIndex == NSNotFound)
+            {
+                NSUInteger phonesSectionIndex = [self indexForSection:self.phonesSection];
+                if (phonesSectionIndex != NSNotFound)
+                    [self.menuSections insertSection:_notificationSettingsSection atIndex:phonesSectionIndex + 1];
+                
+                notificationSettingsIndex = [self indexForSection:_notificationSettingsSection];
+            }
+        }
             
-            notificationSettingsIndex = [self indexForSection:_notificationSettingsSection];
+        NSUInteger aboutSectionIndex = [self indexForSection:_aboutSection];
+        if (aboutSectionIndex == NSNotFound)
+        {
+            NSUInteger aboveSectionIndex = notificationSettingsIndex;
+            NSUInteger phoneSectionIndex = [self indexForSection:self.phonesSection];
+            if (phoneSectionIndex != NSNotFound)
+                aboveSectionIndex = phoneSectionIndex;
+            
+            if (aboveSectionIndex != NSNotFound)
+            {
+                _editAboutItem.text = _about;
+                
+                [self.menuSections insertSection:_aboutSection atIndex:aboveSectionIndex + 1];
+            }
         }
         
         NSUInteger deleteContactSectionIndex = [self indexForSection:_deleteContactSection];
-        if (deleteContactSectionIndex == NSNotFound)
+        if (deleteContactSectionIndex == NSNotFound && isContact)
         {
-            if (notificationSettingsIndex != NSNotFound)
-                [self.menuSections insertSection:_deleteContactSection atIndex:notificationSettingsIndex + 1];
+            NSUInteger aboveSectionIndex = notificationSettingsIndex;
+            NSUInteger aboutSectionIndex = [self indexForSection:_aboutSection];
+            if (aboutSectionIndex != NSNotFound)
+                aboveSectionIndex = aboutSectionIndex;
+            
+            if (aboveSectionIndex != NSNotFound)
+                [self.menuSections insertSection:_deleteContactSection atIndex:aboveSectionIndex + 1];
         }
         
         NSUInteger blockUserSection = [self indexForSection:_blockUserSection];
@@ -322,11 +540,22 @@
     }
     else
     {
-        bool isCurrentUser = (_user.uid == TGTelegraphInstance.clientUserId);
+        if (!isCurrentUser)
+        {
+            NSUInteger notificationSettingsIndex = [self indexForSection:_notificationSettingsSection];
+            if (notificationSettingsIndex != NSNotFound)
+                [self.menuSections deleteSection:notificationSettingsIndex];
+        }
+        else
+        {
+            NSUInteger normalNotificationIndex = [_sharedMediaSection indexOfItem:_normalNotificationsItem];
+            if (normalNotificationIndex != NSNotFound)
+                [_sharedMediaSection deleteItemAtIndex:normalNotificationIndex];
+        }
         
-        NSUInteger notificationSettingsIndex = [self indexForSection:_notificationSettingsSection];
-        if (notificationSettingsIndex != NSNotFound)
-            [self.menuSections deleteSection:notificationSettingsIndex];
+        NSUInteger aboutSectionIndex = [self indexForSection:_aboutSection];
+        if (aboutSectionIndex != NSNotFound)
+            [self.menuSections deleteSection:aboutSectionIndex];
         
         NSUInteger deleteContactSectionIndex = [self indexForSection:_deleteContactSection];
         if (deleteContactSectionIndex != NSNotFound)
@@ -350,6 +579,12 @@
             }
             
             actionsSectionIndex = [self indexForSection:self.actionsSection];
+        }
+        
+        if (_groupsInCommonCount == 0) {
+            [_sharedMediaSection deleteItem:_groupsInCommonItem];
+        } else if ([_sharedMediaSection indexOfItem:_groupsInCommonItem] == NSNotFound) {
+            [_sharedMediaSection addItem:_groupsInCommonItem];
         }
         
         NSUInteger sharedMediaSectionIndex = [self indexForSection:_sharedMediaSection];
@@ -389,11 +624,10 @@
                 
                 if (_phonebookInfo != nil)
                 {
-                    TGUserInfoButtonCollectionItem *shareContactItem = [[TGUserInfoButtonCollectionItem alloc] initWithTitle:TGLocalized(@"UserInfo.ShareContact") action:@selector(shareContactPressed)];
-                    if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad)
-                        shareContactItem.deselectAutomatically = true;
+                    _shareContactItem = [[TGUserInfoButtonCollectionItem alloc] initWithTitle:TGLocalized(@"UserInfo.ShareContact") action:@selector(shareContactPressed)];
+                    _shareContactItem.deselectAutomatically = true;
                     
-                    [self.menuSections addItemToSection:actionsSectionIndex item:shareContactItem];
+                    [self.menuSections addItemToSection:actionsSectionIndex item:_shareContactItem];
                 }
                 else if (_user.phoneNumber.length != 0)
                 {
@@ -401,8 +635,8 @@
                     addContactItem.deselectAutomatically = true;
                     [self.menuSections addItemToSection:actionsSectionIndex item:addContactItem];
                 }
-                
-                if ((_userLink & TGUserLinkKnown) && !(_userLink & (TGUserLinkForeignHasPhone | TGUserLinkForeignMutual)))
+            
+                if (_callMessages == nil && (_userLink & TGUserLinkKnown) && !(_userLink & (TGUserLinkForeignHasPhone | TGUserLinkForeignMutual)))
                 {
                     TGUserInfoButtonCollectionItem *shareContactInfoItem = [[TGUserInfoButtonCollectionItem alloc] initWithTitle:TGLocalized(@"UserInfo.ShareMyContactInfo") action:@selector(shareMyContactInfoPressed)];
                     shareContactInfoItem.deselectAutomatically = true;
@@ -429,16 +663,23 @@
     _muteExpirationTimer = nil;
     
     NSString *variant = TGLocalized(@"UserInfo.NotificationsEnabled");
-    int muteUntil = [_userNotificationSettings[@"muteUntil"] intValue];
-    if (muteUntil <= [[TGTelegramNetworking instance] approximateRemoteTime])
+    NSNumber *muteUntil = _userNotificationSettings[@"muteUntil"];
+    
+    bool usesDefault = false;
+    if (muteUntil == nil) {
+        muteUntil = _defaultNotificationSettings[@"muteUntil"];
+        usesDefault = true;
+    }
+    
+    if (muteUntil.intValue <= [[TGTelegramNetworking instance] approximateRemoteTime])
     {
-        variant = TGLocalized(@"UserInfo.NotificationsEnabled");
+        variant = usesDefault ? TGLocalized(@"UserInfo.NotificationsDefaultEnabled") : TGLocalized(@"UserInfo.NotificationsEnabled");
     }
     else
     {
-        int muteExpiration = muteUntil - (int)[[TGTelegramNetworking instance] approximateRemoteTime];
+        int muteExpiration = muteUntil.intValue - (int)[[TGTelegramNetworking instance] approximateRemoteTime];
         if (muteExpiration >= 7 * 24 * 60 * 60)
-            variant = TGLocalized(@"UserInfo.NotificationsDisabled");
+            variant = usesDefault ? TGLocalized(@"UserInfo.NotificationsDefaultDisabled"): TGLocalized(@"UserInfo.NotificationsDisabled");
         else
         {
             variant = [TGStringUtils stringForRemainingMuteInterval:muteExpiration];
@@ -450,21 +691,31 @@
     [_notificationsItem setVariant:variant];
     [_normalNotificationsItem setVariant:variant];
 
-    int privateSoundId = [[_userNotificationSettings objectForKey:@"soundId"] intValue];
-    _soundItem.variant = [self soundNameFromId:privateSoundId];
+    bool isDefault = false;
+    NSNumber *privateSoundId = _userNotificationSettings[@"soundId"];
+    if (privateSoundId == nil) {
+        privateSoundId = _defaultNotificationSettings[@"soundId"];
+        isDefault = true;
+    }
+    
+    NSString *soundName = [TGAlertSoundController soundNameFromId:privateSoundId.intValue];
+    _soundItem.variant = isDefault ? [NSString stringWithFormat:TGLocalized(@"UserInfo.NotificationsDefaultSound"), soundName] : soundName;
 }
 
 - (void)updateMuteExpiration
 {
     NSString *variant = TGLocalized(@"UserInfo.NotificationsEnabled");
-    int muteUntil = [_userNotificationSettings[@"muteUntil"] intValue];
-    if (muteUntil <= [[TGTelegramNetworking instance] approximateRemoteTime])
+    NSNumber *muteUntil = _userNotificationSettings[@"muteUntil"];
+    if (muteUntil == nil)
+        muteUntil = _defaultNotificationSettings[@"muteUntil"];
+    
+    if (muteUntil.intValue <= [[TGTelegramNetworking instance] approximateRemoteTime])
     {
         variant = TGLocalized(@"UserInfo.NotificationsEnabled");
     }
     else
     {
-        int muteExpiration = muteUntil - (int)[[TGTelegramNetworking instance] approximateRemoteTime];
+        int muteExpiration = muteUntil.intValue - (int)[[TGTelegramNetworking instance] approximateRemoteTime];
         variant = [TGStringUtils stringForRemainingMuteInterval:muteExpiration];
     }
     
@@ -477,7 +728,6 @@
 
 - (void)_updateSharedMediaCount
 {
-    //_sharedMediaItem.variant = _sharedMediaCount == 0 ? TGLocalized(@"GroupInfo.SharedMediaNone") : ( TGIsLocaleArabic() ? [TGStringUtils stringWithLocalizedNumber:_sharedMediaCount] : [[NSString alloc] initWithFormat:@"%d", _sharedMediaCount]);
     _sharedMediaItem.variant = @"";
 }
 
@@ -503,8 +753,12 @@
         [self animateCollectionCrossfade];
         
         [self enterEditingMode:false];
+        [self _updateCalls];
         [self _updatePhonesAndActions];
-        [self.userInfoItem setEditing:true animated:false];
+        if (_phonebookInfo != nil)
+            [self.userInfoItem setEditing:true animated:false];
+        
+        [self tooltipTimerTick];
     }
 }
 
@@ -546,6 +800,7 @@ static UIView *_findBackArrow(UIView *view)
     [self animateCollectionCrossfade];
     
     [self leaveEditingMode:false];
+    [self _updateCalls];
     [self _updatePhonesAndActions];
     [self.userInfoItem setEditing:false animated:false];
     
@@ -566,50 +821,73 @@ static UIView *_findBackArrow(UIView *view)
     {
         [self.view endEditing:true];
         
-        _phonebookInfo = [_phonebookInfo copy];
+        bool isContact = _phonebookInfo != nil;
         
-        if (!TGStringCompare(self.userInfoItem.editingFirstName, _user.firstName) || !(TGStringCompare(self.userInfoItem.editingLastName, _user.lastName)))
+        if (isContact)
         {
-            _user = [_user copy];
-            _user.phonebookFirstName = self.userInfoItem.editingFirstName;
-            _user.phonebookLastName = self.userInfoItem.editingLastName;
+            _phonebookInfo = [_phonebookInfo copy];
             
-            [self.userInfoItem setUser:_user animated:false];
-            
-            [self changeContactFirstName:self.userInfoItem.editingFirstName lastName:self.userInfoItem.editingLastName];
-        }
-        
-        if ([self havePhoneChanges])
-        {
-            NSString *cleanMainPhone = nil;
-            if (_user.phoneNumber.length != 0)
-                cleanMainPhone = [TGPhoneUtils cleanInternationalPhone:_user.phoneNumber forceInternational:false];
-            
-            bool removedMainPhone = cleanMainPhone == nil ? false : true;
-            
-            NSMutableArray *newPhoneNumbers = [[NSMutableArray alloc] init];
-            for (id item in self.phonesSection.items)
+            if (!TGStringCompare(self.userInfoItem.editingFirstName, _user.firstName) || !(TGStringCompare(self.userInfoItem.editingLastName, _user.lastName)))
             {
-                if ([item isKindOfClass:[TGUserInfoEditingPhoneCollectionItem class]])
+                _user = [_user copy];
+                _user.phonebookFirstName = self.userInfoItem.editingFirstName;
+                _user.phonebookLastName = self.userInfoItem.editingLastName;
+                
+                [self.userInfoItem setUser:_user animated:false];
+                
+                [self changeContactFirstName:self.userInfoItem.editingFirstName lastName:self.userInfoItem.editingLastName];
+            }
+            
+            if (_uid == TGTelegraphInstance.clientUserId)
+            {
+                NSString *text = [_editAboutItem.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                if (![text isEqualToString:_about])
                 {
-                    TGUserInfoEditingPhoneCollectionItem *phoneItem = item;
-                    if (phoneItem.phone.length != 0)
-                    {
-                        if (cleanMainPhone != nil && [[TGPhoneUtils cleanInternationalPhone:phoneItem.phone forceInternational:false] isEqualToString:cleanMainPhone])
-                            removedMainPhone = false;
-                        [newPhoneNumbers addObject:[[TGPhoneNumber alloc] initWithLabel:phoneItem.label number:phoneItem.phone]];
-                    }
+                    _about = text;
+                    
+                    TGProgressWindow *progressWindow = [[TGProgressWindow alloc] init];
+                    [progressWindow showWithDelay:0.2];
+                    
+                    [_updateAboutDisposable setDisposable:[[[[TGAccountSignals updateAbout:text] deliverOn:[SQueue mainQueue]] onDispose:^{
+                        [progressWindow dismiss:true];
+                    }] startWithNext:nil error:^(__unused id error) {
+                        [TGCustomAlertView presentAlertWithTitle:TGLocalized(@"Login.UnknownError") message:nil cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
+                    } completed:nil]];
                 }
             }
             
-            _phonebookInfo.phoneNumbers = newPhoneNumbers;
-            
-            [self changePhoneNumbers:newPhoneNumbers removedMainPhone:removedMainPhone];
-            
-            if (removedMainPhone)
+            if ([self havePhoneChanges])
             {
-                self.view.userInteractionEnabled = false;
-                return;
+                NSString *cleanMainPhone = nil;
+                if (_user.phoneNumber.length != 0)
+                    cleanMainPhone = [TGPhoneUtils cleanInternationalPhone:_user.phoneNumber forceInternational:false];
+                
+                bool removedMainPhone = cleanMainPhone == nil ? false : true;
+                
+                NSMutableArray *newPhoneNumbers = [[NSMutableArray alloc] init];
+                for (id item in self.phonesSection.items)
+                {
+                    if ([item isKindOfClass:[TGUserInfoEditingPhoneCollectionItem class]])
+                    {
+                        TGUserInfoEditingPhoneCollectionItem *phoneItem = item;
+                        if (phoneItem.phone.length != 0)
+                        {
+                            if (cleanMainPhone != nil && [[TGPhoneUtils cleanInternationalPhone:phoneItem.phone forceInternational:false] isEqualToString:cleanMainPhone])
+                                removedMainPhone = false;
+                            [newPhoneNumbers addObject:[[TGPhoneNumber alloc] initWithLabel:phoneItem.label number:phoneItem.phone]];
+                        }
+                    }
+                }
+                
+                _phonebookInfo.phoneNumbers = newPhoneNumbers;
+                
+                [self changePhoneNumbers:newPhoneNumbers removedMainPhone:removedMainPhone];
+                
+                if (removedMainPhone)
+                {
+                    self.view.userInteractionEnabled = false;
+                    return;
+                }
             }
         }
         
@@ -628,11 +906,13 @@ static UIView *_findBackArrow(UIView *view)
             } completion:nil];
         }
         
-        [self.userInfoItem setEditing:false animated:false];
+        if (isContact)
+            [self.userInfoItem setEditing:false animated:false];
         
         [self animateCollectionCrossfade];
 
         [self leaveEditingMode:false];
+        [self _updateCalls];
         [self _updatePhonesAndActions];
     }
 }
@@ -670,11 +950,94 @@ static UIView *_findBackArrow(UIView *view)
     {
         if (item == phoneItem)
         {
-            [TGAppDelegateInstance performPhoneCall:[NSURL URLWithString:[[NSString alloc] initWithFormat:@"tel:%@", [TGPhoneUtils formatPhoneUrl:phoneItem.phone]]]];
+            NSString *phone = [TGPhoneUtils formatPhoneUrl:phoneItem.phone];
+            NSURL *url = [NSURL URLWithString:phone];
+            if (url == nil) {
+                phone = [TGPhoneUtils cleanInternationalPhone:phone forceInternational:[phone hasPrefix:@"+"]];
+                url = [NSURL URLWithString:phone];
+            }
+        
+            
+            TGMenuSheetController *controller = [[TGMenuSheetController alloc] initWithContext:[TGLegacyComponentsContext shared] dark:false];
+            controller.dismissesByOutsideTap = true;
+            controller.hasSwipeGesture = true;
+            
+            __weak TGMenuSheetController *weakController = controller;
+            __weak TGTelegraphUserInfoController *weakSelf = self;
+            TGMenuSheetButtonItemView *cancelItem = [[TGMenuSheetButtonItemView alloc] initWithTitle:TGLocalized(@"Common.Cancel") type:TGMenuSheetButtonTypeCancel action:^
+            {
+                __strong TGMenuSheetController *strongController = weakController;
+                if (strongController != nil)
+                    [strongController dismissAnimated:true];
+            }];
+            
+            TGMenuSheetTitleItemView *titleItem = [[TGMenuSheetTitleItemView alloc] initWithTitle:nil subtitle:[TGPhoneUtils formatPhone:phoneItem.phone forceInternational:false]];
+        
+            if (_supportsCalls)
+            {
+                TGMenuSheetButtonItemView *telegramItem = [[TGMenuSheetButtonItemView alloc] initWithTitle:TGLocalized(@"UserInfo.TelegramCall") type:TGMenuSheetButtonTypeDefault action:^
+                {
+                    __strong TGTelegraphUserInfoController *strongSelf = weakSelf;
+                    if (strongSelf != nil)
+                        [strongSelf callPressed];
+                    
+                    __strong TGMenuSheetController *strongController = weakController;
+                    if (strongController != nil)
+                        [strongController dismissAnimated:true];
+                }];
+                
+                TGMenuSheetButtonItemView *phoneItem = [[TGMenuSheetButtonItemView alloc] initWithTitle:TGLocalized(@"UserInfo.PhoneCall") type:TGMenuSheetButtonTypeDefault action:^
+                {
+                    [TGAppDelegateInstance performPhoneCall:[NSURL URLWithString:[[NSString alloc] initWithFormat:@"tel:%@", phone]]];
+                    __strong TGMenuSheetController *strongController = weakController;
+                    if (strongController != nil)
+                        [strongController dismissAnimated:true];
+                }];
+                
+                [controller setItemViews:@[ titleItem, telegramItem, phoneItem, cancelItem ]];
+            }
+            else
+            {
+                TGMenuSheetButtonItemView *phoneItem = [[TGMenuSheetButtonItemView alloc] initWithTitle:TGLocalized(@"Conversation.Call") type:TGMenuSheetButtonTypeDefault action:^
+                {
+                    [TGAppDelegateInstance performPhoneCall:[NSURL URLWithString:[[NSString alloc] initWithFormat:@"tel:%@", phone]]];
+                    __strong TGMenuSheetController *strongController = weakController;
+                    if (strongController != nil)
+                        [strongController dismissAnimated:true];
+                }];
+            
+                [controller setItemViews:@[ titleItem, phoneItem, cancelItem ]];
+            }
+            
+            controller.sourceRect = ^
+            {
+                __strong TGTelegraphUserInfoController *strongSelf = weakSelf;
+                if (strongSelf == nil)
+                    return CGRectZero;
+                
+                return [strongSelf sourceRectForPhoneItem:item];
+            };
+            [controller presentInViewController:self sourceView:self.view animated:true];
             
             break;
         }
     }
+}
+
+- (CGRect)sourceRectForPhoneItem:(TGUserInfoPhoneCollectionItem *)phoneItem
+{
+    for (TGUserInfoPhoneCollectionItem *item in self.phonesSection.items)
+    {
+        if (item == phoneItem)
+        {
+            if (item.view != nil)
+                return [item.view convertRect:item.view.bounds toView:self.view];
+                
+            return CGRectZero;
+        }
+    }
+    
+    return CGRectZero;
 }
 
 - (void)sendMessagePressed
@@ -682,9 +1045,69 @@ static UIView *_findBackArrow(UIView *view)
     [[TGInterfaceManager instance] navigateToConversationWithId:_uid conversation:nil];
 }
 
+- (void)setupCallTooltip
+{
+    bool displayed = [[[NSUserDefaults standardUserDefaults] objectForKey:@"TG_displayedProfileCallTooltip_v0"] boolValue];
+//#if defined(INTERNAL_RELEASE)
+//    displayed = false;
+//#endif
+    if (displayed)
+        return;
+    
+    if (_tooltipContainerView != nil)
+        return;
+    
+    _tooltipTimer = [TGTimerTarget scheduledMainThreadTimerWithTarget:self action:@selector(tooltipTimerTick) interval:3.5 repeat:false];
+    
+    _tooltipContainerView = [[TGMenuContainerView alloc] initWithFrame:CGRectMake(0.0f, 0.0f, self.view.frame.size.width, self.view.frame.size.height)];
+    _tooltipContainerView.menuView.forceArrowOnTop = true;
+    [self.view addSubview:_tooltipContainerView];
+    
+    NSMutableArray *actions = [[NSMutableArray alloc] init];
+    [actions addObject:[[NSDictionary alloc] initWithObjectsAndKeys:TGLocalized(@"UserInfo.TapToCall"), @"title", nil]];
+    
+    [_tooltipContainerView.menuView setButtonsAndActions:actions watcherHandle:self.actionHandle];
+    [_tooltipContainerView.menuView sizeToFit];
+    _tooltipContainerView.menuView.buttonHighlightDisabled = true;
+    
+    CGRect frame = [self.view convertRect:self.userInfoItem.boundView.bounds fromView:self.userInfoItem.boundView];
+    frame.origin.x = self.view.frame.size.width - 57.0f;
+    frame.origin.y += 130.0f;
+    frame.size.width = 44.0f;
+    frame.size.height = 44.0f;
+    [_tooltipContainerView showMenuFromRect:frame animated:false];
+    
+    [[NSUserDefaults standardUserDefaults] setObject:@true forKey:@"TG_displayedProfileCallTooltip_v0"];
+}
+
+- (void)tooltipTimerTick
+{
+    [_tooltipTimer invalidate];
+    _tooltipTimer = nil;
+    
+    [_tooltipContainerView hideMenu];
+}
+
+- (void)callPressed
+{
+    if (_callsPrivate)
+    {
+        [TGCustomAlertView presentAlertWithTitle:TGLocalized(@"Call.ConnectionErrorTitle") message:[NSString stringWithFormat:TGLocalized(@"Call.PrivacyErrorMessage"), _user.displayFirstName] cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
+    }
+    else
+    {
+        [[TGInterfaceManager instance] callPeerWithId:_uid];
+    }
+}
+
 - (void)notificationsPressed
 {
     NSMutableArray *actions = [[NSMutableArray alloc] init];
+    
+    bool defaultEnabled = [_defaultNotificationSettings[@"muteUntil"] intValue] <= [[TGTelegramNetworking instance] approximateRemoteTime];
+    NSString *defaultTitle = defaultEnabled ? TGLocalized(@"UserInfo.NotificationsDefaultEnabled") : TGLocalized(@"UserInfo.NotificationsDefaultDisabled");
+    
+    [actions addObject:[[TGActionSheetAction alloc] initWithTitle:defaultTitle action:@"default"]];
     [actions addObject:[[TGActionSheetAction alloc] initWithTitle:TGLocalized(@"UserInfo.NotificationsEnable") action:@"enable"]];
     
     NSArray *muteIntervals = @[
@@ -701,41 +1124,46 @@ static UIView *_findBackArrow(UIView *view)
     [actions addObject:[[TGActionSheetAction alloc] initWithTitle:TGLocalized(@"UserInfo.NotificationsDisable") action:@"disable"]];
     [actions addObject:[[TGActionSheetAction alloc] initWithTitle:TGLocalized(@"Common.Cancel") action:@"cancel" type:TGActionSheetActionTypeCancel]];
     
-    [[[TGActionSheet alloc] initWithTitle:nil actions:actions actionBlock:^(TGTelegraphUserInfoController *controller, NSString *action)
+    [[[TGCustomActionSheet alloc] initWithTitle:nil actions:actions actionBlock:^(TGTelegraphUserInfoController *controller, NSString *action)
     {
         if ([action isEqualToString:@"enable"])
-            [controller _commitEnableNotifications:true orMuteFor:0];
+            [controller _commitEnableNotifications:@true orMuteFor:0];
+        else if ([action isEqualToString:@"default"])
+            [controller _commitEnableNotifications:nil orMuteFor:0];
         else if ([action isEqualToString:@"disable"])
-            [controller _commitEnableNotifications:false orMuteFor:0];
+            [controller _commitEnableNotifications:@false orMuteFor:0];
         else if (![action isEqualToString:@"cancel"])
-        {
-            [controller _commitEnableNotifications:false orMuteFor:[action intValue]];
-        }
+            [controller _commitEnableNotifications:@false orMuteFor:[action intValue]];
     } target:self] showInView:self.view];
 }
 
-- (void)_commitEnableNotifications:(bool)enable orMuteFor:(int)muteFor
+- (void)_commitEnableNotifications:(NSNumber *)enable orMuteFor:(int)muteFor
 {
-    int muteUntil = 0;
+    NSNumber *muteUntil = nil;
     if (muteFor == 0)
     {
         if (enable)
-            muteUntil = 0;
-        else
-            muteUntil = INT_MAX;
+            muteUntil = enable.boolValue ? @0: @(INT_MAX);
     }
     else
     {
-        muteUntil = (int)([[TGTelegramNetworking instance] approximateRemoteTime] + muteFor);
+        muteUntil = @((int)([[TGTelegramNetworking instance] approximateRemoteTime] + muteFor));
     }
     
-    if (muteUntil != [_userNotificationSettings[@"muteUntil"] intValue])
+    if (!TGObjectCompare(muteUntil, _userNotificationSettings[@"muteUntil"]))
     {
-        _userNotificationSettings[@"muteUntil"] = @(muteUntil);
+        if (muteUntil)
+            _userNotificationSettings[@"muteUntil"] = muteUntil;
+        else
+            [_userNotificationSettings removeObjectForKey:@"muteUntil"];
+        
+        if (muteUntil == nil)
+            muteUntil = @(INT32_MIN);
+        
         static int actionId = 0;
         [ActionStageInstance() requestActor:[NSString stringWithFormat:@"/tg/changePeerSettings/(%" PRId32 ")/(userInfoControllerMute%d)", _uid, actionId++] options:@{
             @"peerId": @(_uid),
-            @"muteUntil": @(muteUntil)
+            @"muteUntil": muteUntil
         } watcher:TGTelegraphInstance];
         [self _updateNotificationSettings:false];
     }
@@ -743,7 +1171,7 @@ static UIView *_findBackArrow(UIView *view)
 
 - (void)soundPressed
 {
-    TGAlertSoundController *alertSoundController = [[TGAlertSoundController alloc] initWithTitle:TGLocalized(@"GroupInfo.Sound") soundInfoList:[self _soundInfoListForSelectedSoundId:[_userNotificationSettings[@"soundId"] intValue]]];
+    TGAlertSoundController *alertSoundController = [[TGAlertSoundController alloc] initWithTitle:TGLocalized(@"GroupInfo.Sound") soundInfoList:[self _soundInfoListForSelectedSoundId:_userNotificationSettings[@"soundId"]] defaultId:_defaultNotificationSettings[@"soundId"]];
     alertSoundController.delegate = self;
     
     TGNavigationController *navigationController = [TGNavigationController navigationControllerWithControllers:@[alertSoundController] navigationBarClass:[TGWhiteNavigationBar class]];
@@ -764,10 +1192,19 @@ static UIView *_findBackArrow(UIView *view)
 
 - (void)alertSoundController:(TGAlertSoundController *)__unused alertSoundController didFinishPickingWithSoundInfo:(NSDictionary *)soundInfo
 {
-    if (soundInfo[@"soundId"] != nil && [soundInfo[@"soundId"] intValue] >= 0 && [soundInfo[@"soundId"] intValue] != [_userNotificationSettings[@"soundId"] intValue])
+    if (!TGObjectCompare(soundInfo[@"soundId"], _userNotificationSettings[@"soundId"]))
     {
-        int soundId = [soundInfo[@"soundId"] intValue];
-        _userNotificationSettings[@"soundId"] = @(soundId);
+        int soundId = 0;
+        if (soundInfo[@"soundId"] != nil)
+        {
+            _userNotificationSettings[@"soundId"] = soundInfo[@"soundId"];
+            soundId = [soundInfo[@"soundId"] intValue];
+        }
+        else
+        {
+            [_userNotificationSettings removeObjectForKey:@"soundId"];
+            soundId = INT32_MIN;
+        }
         [self _updateNotificationSettings:false];
 
         static int actionId = 0;
@@ -778,26 +1215,9 @@ static UIView *_findBackArrow(UIView *view)
     }
 }
 
-- (NSString *)soundNameFromId:(int)soundId
-{
-    if (soundId == 0 || soundId == 1)
-        return [TGAppDelegateInstance modernAlertSoundTitles][soundId];
-    
-    if (soundId >= 2 && soundId <= 9)
-        return [TGAppDelegateInstance classicAlertSoundTitles][MAX(0, soundId - 2)];
-    
-    if (soundId >= 100 && soundId <= 111)
-        return [TGAppDelegateInstance modernAlertSoundTitles][soundId - 100 + 2];
-    return @"";
-}
-
-- (NSArray *)_soundInfoListForSelectedSoundId:(int)selectedSoundId
+- (NSArray *)_soundInfoListForSelectedSoundId:(NSNumber *)selectedSoundId
 {
     NSMutableArray *infoList = [[NSMutableArray alloc] init];
-    
-    int defaultSoundId = 1;
-    [TGDatabaseInstance() loadPeerNotificationSettings:INT_MAX - 1 soundId:&defaultSoundId muteUntil:NULL previewText:NULL messagesMuted:NULL notFound:NULL];
-    NSString *defaultSoundTitle = [self soundNameFromId:defaultSoundId];
     
     int index = -1;
     for (NSString *soundName in [TGAppDelegateInstance modernAlertSoundTitles])
@@ -805,22 +1225,19 @@ static UIView *_findBackArrow(UIView *view)
         index++;
         
         int soundId = 0;
-        bool isDefault = false;
         
         if (index == 1)
-        {
             soundId = 1;
-            isDefault = true;
-        }
         else if (index == 0)
             soundId = 0;
         else
-            soundId = index + 100 - 2;
+            soundId = index + 100 - 1;
         
         NSMutableDictionary *dict = [[NSMutableDictionary alloc] init];
-        dict[@"title"] = isDefault ? [[NSString alloc] initWithFormat:@"%@ (%@)", soundName, defaultSoundTitle] : soundName;
-        dict[@"selected"] = @(selectedSoundId == soundId);
-        dict[@"soundName"] = [[NSString alloc] initWithFormat:@"%d", isDefault ? defaultSoundId : soundId];
+        dict[@"title"] = soundName;
+        if (selectedSoundId != nil)
+            dict[@"selected"] = @(selectedSoundId.intValue == soundId);
+        dict[@"soundName"] = [[NSString alloc] initWithFormat:@"%d", soundId];
         dict[@"soundId"] = @(soundId);
         dict[@"groupId"] = @(0);
         [infoList addObject:dict];
@@ -835,7 +1252,8 @@ static UIView *_findBackArrow(UIView *view)
         
         NSMutableDictionary *dict = [[NSMutableDictionary alloc] init];
         dict[@"title"] = soundName;
-        dict[@"selected"] = @(selectedSoundId == soundId);
+        if (selectedSoundId != nil)
+            dict[@"selected"] = @(selectedSoundId.intValue == soundId);
         dict[@"soundName"] =  [[NSString alloc] initWithFormat:@"%d", soundId];
         dict[@"soundId"] = @(soundId);
         dict[@"groupId"] = @(1);
@@ -847,40 +1265,97 @@ static UIView *_findBackArrow(UIView *view)
 
 - (void)shareContactPressed
 {
-    TGMessage *message = [[TGMessage alloc] init];
+    TGContactMediaAttachment *contact = [[TGContactMediaAttachment alloc] init];
+    contact.uid = _user.uid;
+    contact.firstName = _user.firstName;
+    contact.lastName = _user.lastName;
+    contact.phoneNumber = _user.formattedPhoneNumber;
     
-    TGContactMediaAttachment *contactAttachment = [[TGContactMediaAttachment alloc] init];
-    contactAttachment.uid = _user.uid;
-    contactAttachment.firstName = _user.firstName;
-    contactAttachment.lastName = _user.lastName;
-    contactAttachment.phoneNumber = _user.formattedPhoneNumber;
+    id externalShareItem = [SSignal single:[self _externalShareItemForUser:_user]];
     
-    message.mediaAttachments = [[NSArray alloc] initWithObjects:contactAttachment, nil];
-    
-    TGForwardTargetController *forwardController = [[TGForwardTargetController alloc] initWithForwardMessages:nil sendMessages:[[NSArray alloc] initWithObjects:message, nil] shareLink:nil showSecretChats:false];
-    forwardController.watcherHandle = self.actionHandle;
-    forwardController.controllerTitle = TGLocalized(@"Profile.ShareContactButton");
-    forwardController.confirmationDefaultPersonFormat = TGLocalized(@"Profile.ShareContactPersonFormat");
-    forwardController.confirmationDefaultGroupFormat = TGLocalized(@"Profile.ShareContactGroupFormat");
-    
-    TGNavigationController *navigationController = [TGNavigationController navigationControllerWithControllers:@[forwardController] navigationBarClass:[TGWhiteNavigationBar class]];
-    if ([self inPopover])
+    __weak TGTelegraphUserInfoController *weakSelf = self;
+    CGRect (^sourceRect)(void) = ^CGRect
     {
-        navigationController.modalPresentationStyle = UIModalPresentationCurrentContext;
-        navigationController.presentationStyle = TGNavigationControllerPresentationStyleChildInPopover;
-    }
-    else if ([self inFormSheet])
+        __strong TGTelegraphUserInfoController *strongSelf = weakSelf;
+        if (strongSelf == nil)
+            return CGRectZero;
+        
+        return [strongSelf->_shareContactItem.view convertRect:strongSelf->_shareContactItem.view.bounds toView:strongSelf.view];
+    };
+    
+    [TGShareMenu presentInParentController:self menuController:nil buttonTitle:nil buttonAction:nil shareAction:^(NSArray *peerIds, NSString *caption)
     {
-        navigationController.modalPresentationStyle = UIModalPresentationCurrentContext;
-        navigationController.presentationStyle = TGNavigationControllerPresentationStyleInFormSheet;
+        [[TGShareSignals shareContact:contact toPeerIds:peerIds caption:caption] startWithNext:nil];
+        
+        [[[TGProgressWindow alloc] init] dismissWithSuccess];
+    } externalShareItemSignal:externalShareItem sourceView:self.view sourceRect:sourceRect barButtonItem:nil];
+}
+
+- (id)_externalShareItemForUser:(TGUser *)user
+{
+    NSData *contactData = nil;
+    NSString *filename = nil;
+    
+    if (iosMajorVersion() >= 9)
+    {
+        CNMutableContact *contact = [[CNMutableContact alloc] init];
+        contact.givenName = user.firstName;
+        contact.familyName = user.lastName;
+        
+        CNLabeledValue<CNPhoneNumber *> *phoneValue = [CNLabeledValue labeledValueWithLabel:nil value:[CNPhoneNumber phoneNumberWithStringValue:_user.formattedPhoneNumber]];
+        contact.phoneNumbers = @[ phoneValue ];
+        
+        NSError *error;
+        contactData = [CNContactVCardSerialization dataWithContacts:@[ contact ] error:&error];
+        
+        if (error != nil)
+            return nil;
+        
+        filename = [CNContactFormatter stringFromContact:contact style:CNContactFormatterStyleFullName];
+    }
+    else
+    {
+        ABRecordRef contact = ABPersonCreate();
+        
+        ABMutableMultiValueRef phoneNumberMultiValue  = ABMultiValueCreateMutable(kABMultiStringPropertyType);
+        ABMultiValueAddValueAndLabel(phoneNumberMultiValue, (__bridge CFTypeRef)(user.formattedPhoneNumber), kABPersonPhoneMobileLabel, NULL);
+        
+        CFErrorRef error = NULL;
+        if (user.firstName.length > 0)
+            ABRecordSetValue(contact, kABPersonFirstNameProperty, (__bridge CFTypeRef)(user.firstName), &error);
+        if (user.lastName.length > 0)
+            ABRecordSetValue(contact, kABPersonLastNameProperty, (__bridge CFTypeRef)(user.lastName), &error);
+        
+        ABRecordSetValue(contact, kABPersonPhoneProperty, phoneNumberMultiValue, &error);
+        
+        if (error != NULL) {
+            if (contact != NULL)
+                CFRelease(contact);
+            
+            if (phoneNumberMultiValue != NULL)
+                CFRelease(phoneNumberMultiValue);
+            
+            return nil;
+        }
+        contactData = (__bridge_transfer NSData *)(ABPersonCreateVCardRepresentationWithPeople((__bridge CFArrayRef)@[ (__bridge_transfer id)contact ]));
+        
+        filename = user.displayName;
     }
     
-    [self presentViewController:navigationController animated:true completion:nil];
+    if (contactData.length == 0)
+        return nil;
+    
+    NSURL *tempDirectory = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"%@.vcf", filename]]];
+    
+    if ([contactData writeToURL:tempDirectory atomically:true])
+        return tempDirectory;
+    
+    return nil;
 }
 
 - (void)addContactPressed
 {
-    [[[TGActionSheet alloc] initWithTitle:nil actions:@[
+    [[[TGCustomActionSheet alloc] initWithTitle:nil actions:@[
         [[TGActionSheetAction alloc] initWithTitle:TGLocalized(@"UserInfo.CreateNewContact") action:@"createNew"],
         [[TGActionSheetAction alloc] initWithTitle:TGLocalized(@"UserInfo.AddToExisting") action:@"addToExisting"],
         [[TGActionSheetAction alloc] initWithTitle:TGLocalized(@"Common.Cancel") action:@"cancel" type:TGActionSheetActionTypeCancel]
@@ -901,7 +1376,7 @@ static UIView *_findBackArrow(UIView *view)
 
 - (void)_commitCreateNewContact
 {
-    TGCreateContactController *createContactController = [[TGCreateContactController alloc] initWithUid:_uid firstName:_user.firstName lastName:_user.lastName phoneNumber:_user.phoneNumber];
+    TGCreateContactController *createContactController = [[TGCreateContactController alloc] initWithUid:_uid firstName:_user.firstName lastName:_user.lastName phoneNumber:_user.phoneNumber attachment:nil];
     createContactController.delegate = self;
     
     TGNavigationController *navigationController = [TGNavigationController navigationControllerWithControllers:@[createContactController] navigationBarClass:[TGWhiteNavigationBar class]];
@@ -922,7 +1397,8 @@ static UIView *_findBackArrow(UIView *view)
 
 - (void)_commitAddToExistingContact
 {
-    TGAddToExistingContactController *addToExistingController = [[TGAddToExistingContactController alloc] initWithUid:_uid phoneNumber:_user.phoneNumber];
+    TGAddToExistingContactController *addToExistingController = [[TGAddToExistingContactController alloc] initWithUid:_uid phoneNumber:_user.phoneNumber attachment:nil];
+    addToExistingController.presentation = self.presentation;
     addToExistingController.delegate = self;
     
     TGNavigationController *navigationController = [TGNavigationController navigationControllerWithControllers:@[addToExistingController] navigationBarClass:[TGWhiteNavigationBar class]];
@@ -1059,13 +1535,11 @@ static UIView *_findBackArrow(UIView *view)
 - (void)sharedMediaPressed
 {
     [self.navigationController pushViewController:[[TGSharedMediaController alloc] initWithPeerId:_sharedMediaPeerId accessHash:0 important:true] animated:true];
-    
-    //[[TGInterfaceManager instance] navigateToMediaListOfConversation:_sharedMediaPeerId navigationController:self.navigationController];
 }
 
 - (void)deleteContactPressed
 {
-    [[[TGActionSheet alloc] initWithTitle:nil actions:@[
+    [[[TGCustomActionSheet alloc] initWithTitle:nil actions:@[
         [[TGActionSheetAction alloc] initWithTitle:TGLocalized(@"UserInfo.DeleteContact") action:@"deleteContact" type:TGActionSheetActionTypeDestructive],
         [[TGActionSheetAction alloc] initWithTitle:TGLocalized(@"Common.Cancel") action:@"cancel" type:TGActionSheetActionTypeCancel]
     ] actionBlock:^(TGTelegraphUserInfoController *controller, NSString *action)
@@ -1077,12 +1551,20 @@ static UIView *_findBackArrow(UIView *view)
 
 - (void)blockUserPressed
 {
-    _isUserBlocked = !_isUserBlocked;
-    
-    static int actionId = 0;
-    [ActionStageInstance() requestActor:[[NSString alloc] initWithFormat:@"/tg/changePeerBlockedStatus/(userInfo%d)", actionId++] options:@{@"peerId": @(_uid), @"block": @(_isUserBlocked)} watcher:TGTelegraphInstance];
-    
-    [self _updateUserBlocked];
+    __weak TGTelegraphUserInfoController *weakSelf = self;
+    [TGCustomAlertView presentAlertWithTitle:nil message:[NSString stringWithFormat:self->_isUserBlocked ? TGLocalized(@"UserInfo.UnblockConfirmation") : TGLocalized(@"UserInfo.BlockConfirmation"), _user.displayFirstName] cancelButtonTitle:TGLocalized(@"Common.No") okButtonTitle:TGLocalized(@"Common.Yes") completionBlock:^(bool okButtonPressed) {
+        if (okButtonPressed) {
+            __strong TGTelegraphUserInfoController *strongSelf = weakSelf;
+            if (strongSelf != nil) {
+                strongSelf->_isUserBlocked = !strongSelf->_isUserBlocked;
+                
+                static int actionId = 0;
+                [ActionStageInstance() requestActor:[[NSString alloc] initWithFormat:@"/tg/changePeerBlockedStatus/(userInfo%d)", actionId++] options:@{@"peerId": @(strongSelf->_uid), @"block": @(strongSelf->_isUserBlocked)} watcher:TGTelegraphInstance];
+                
+                [strongSelf _updateUserBlocked];
+            }
+        }
+    }];
 }
 
 - (void)_commitDeleteContact
@@ -1099,7 +1581,7 @@ static UIView *_findBackArrow(UIView *view)
             {
                 self.view.userInteractionEnabled = true;
                 
-                [[[TGAlertView alloc] initWithTitle:nil message:TGLocalized(@"Profile.PhonebookAccessDisabled") delegate:nil cancelButtonTitle:TGLocalized(@"Common.OK") otherButtonTitles:nil] show];
+                [TGCustomAlertView presentAlertWithTitle:nil message:TGLocalized(@"Contacts.AccessDeniedError") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
             });
         }
         else
@@ -1128,13 +1610,13 @@ static UIView *_findBackArrow(UIView *view)
             {
                 self.view.userInteractionEnabled = true;
                 
-                [[[TGAlertView alloc] initWithTitle:nil message:TGLocalized(@"Profile.PhonebookAccessDisabled") delegate:nil cancelButtonTitle:TGLocalized(@"OK") otherButtonTitles:nil] show];
+                [TGCustomAlertView presentAlertWithTitle:nil message:TGLocalized(@"Contacts.AccessDeniedError") cancelButtonTitle:TGLocalized(@"OK") okButtonTitle:nil completionBlock:nil];
             });
         }
         else
         {
             static int actionId = 0;
-            [ActionStageInstance() requestActor:[NSString stringWithFormat:@"/tg/synchronizeContacts/(%d,%d,changeNameLocal)", _uid, actionId++] options:[NSDictionary dictionaryWithObjectsAndKeys:[[NSNumber alloc] initWithInt:_uid], @"uid", firstName == nil ? @"" : firstName, @"firstName", lastName == nil ? @"" : lastName, @"lastName", [[NSNumber alloc] initWithInt:nativeId], @"nativeId", nil] watcher:self];
+            [ActionStageInstance() requestActor:[NSString stringWithFormat:@"/tg/synchronizeContacts/(%d,%d,changeNameLocal)", _uid, actionId++] options:[NSDictionary dictionaryWithObjectsAndKeys:[[NSNumber alloc] initWithInt:_uid], @"uid", firstName == nil ? @"" : firstName, @"firstName", lastName == nil ? @"" : lastName, @"lastName", [[NSNumber alloc] initWithInt:nativeId],  @"nativeId", nil] watcher:self];
         }
     }];
 }
@@ -1151,7 +1633,7 @@ static UIView *_findBackArrow(UIView *view)
             {
                 self.view.userInteractionEnabled = true;
                 
-                [[[TGAlertView alloc] initWithTitle:nil message:TGLocalized(@"Profile.PhonebookAccessDisabled") delegate:nil cancelButtonTitle:TGLocalized(@"Common.OK") otherButtonTitles:nil] show];
+                [TGCustomAlertView presentAlertWithTitle:nil message:TGLocalized(@"Contacts.AccessDeniedError") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
             });
         }
         else
@@ -1177,6 +1659,112 @@ static UIView *_findBackArrow(UIView *view)
     }];
 }
 
+- (TGModernGalleryController *)createAvatarGalleryControllerForPreviewMode:(bool)previewMode
+{
+    TGUser *user = [TGDatabaseInstance() loadUser:_uid];
+    
+    if (user.photoUrlSmall.length != 0)
+    {
+        TGRemoteImageView *avatarView = [self.userInfoItem visibleAvatarView];
+        
+        if (user != nil && user.photoUrlBig != nil && avatarView.currentImage != nil)
+        {
+            TGModernGalleryController *modernGallery = [[TGModernGalleryController alloc] initWithContext:[TGLegacyComponentsContext shared]];
+            modernGallery.previewMode = previewMode;
+            if (previewMode)
+                modernGallery.showInterface = false;
+            
+            modernGallery.model = [[TGUserAvatarGalleryModel alloc] initWithPeerId:_uid currentAvatarLegacyThumbnailImageUri:user.photoFullUrlSmall currentAvatarLegacyImageUri:user.photoFullUrlBig currentAvatarImageSize:CGSizeMake(640.0f, 640.0f)];
+            
+            __weak TGTelegraphUserInfoController *weakSelf = self;
+            __weak TGModernGalleryController *weakGallery = modernGallery;
+            
+            modernGallery.itemFocused = ^(id<TGModernGalleryItem> item)
+            {
+                __strong TGTelegraphUserInfoController *strongSelf = weakSelf;
+                __strong TGModernGalleryController *strongGallery = weakGallery;
+                if (strongSelf != nil)
+                {
+                    if (strongGallery.previewMode)
+                        return;
+                    
+                    if ([item isKindOfClass:[TGUserAvatarGalleryItem class]])
+                    {
+                        if (((TGUserAvatarGalleryItem *)item).isCurrent)
+                        {
+                            ((UIView *)strongSelf.userInfoItem.visibleAvatarView).hidden = true;
+                        }
+                        else
+                            ((UIView *)strongSelf.userInfoItem.visibleAvatarView).hidden = false;
+                    }
+                }
+            };
+            
+            modernGallery.beginTransitionIn = ^UIView *(id<TGModernGalleryItem> item, __unused TGModernGalleryItemView *itemView)
+            {
+                __strong TGTelegraphUserInfoController *strongSelf = weakSelf;
+                __strong TGModernGalleryController *strongGallery = weakGallery;
+                if (strongSelf != nil)
+                {
+                    if (strongGallery.previewMode)
+                        return nil;
+                    
+                    if ([item isKindOfClass:[TGUserAvatarGalleryItem class]])
+                    {
+                        if (((TGUserAvatarGalleryItem *)item).isCurrent)
+                        {
+                            return strongSelf.userInfoItem.visibleAvatarView;
+                        }
+                    }
+                }
+                
+                return nil;
+            };
+            
+            modernGallery.beginTransitionOut = ^UIView *(id<TGModernGalleryItem> item, __unused TGModernGalleryItemView *itemView)
+            {
+                __strong TGTelegraphUserInfoController *strongSelf = weakSelf;
+                if (strongSelf != nil)
+                {
+                    if ([item isKindOfClass:[TGUserAvatarGalleryItem class]])
+                    {
+                        if (((TGUserAvatarGalleryItem *)item).isCurrent)
+                        {
+                            return strongSelf.userInfoItem.visibleAvatarView;
+                        }
+                    }
+                }
+                
+                return nil;
+            };
+            
+            modernGallery.completedTransitionOut = ^
+            {
+                __strong TGTelegraphUserInfoController *strongSelf = weakSelf;
+                if (strongSelf != nil)
+                {
+                    ((UIView *)strongSelf.userInfoItem.visibleAvatarView).hidden = false;
+                }
+            };
+            
+            if (!previewMode)
+            {
+                TGOverlayControllerWindow *controllerWindow = [[TGOverlayControllerWindow alloc] initWithManager:[[TGLegacyComponentsContext shared] makeOverlayWindowManager] parentController:self contentController:modernGallery];
+                controllerWindow.hidden = false;
+            }
+            else
+            {
+                CGFloat side = MIN(self.view.frame.size.width, self.view.frame.size.height);
+                modernGallery.preferredContentSize = CGSizeMake(side, side);
+            }
+            
+            return modernGallery;
+        }
+    }
+    
+    return nil;
+}
+
 - (void)actionStageActionRequested:(NSString *)action options:(id)options
 {
     if ([action isEqualToString:@"willForwardMessages"])
@@ -1192,84 +1780,18 @@ static UIView *_findBackArrow(UIView *view)
     }
     if ([action isEqualToString:@"avatarTapped"])
     {
-        TGUser *user = [TGDatabaseInstance() loadUser:_uid];
+        [self createAvatarGalleryControllerForPreviewMode:false];
+    }
+    else if ([action isEqualToString:@"callTapped"])
+    {
+        [self callPressed];
+    }
+    else if ([action isEqualToString:@"menuAction"])
+    {
+        [_tooltipTimer invalidate];
+        _tooltipTimer = nil;
         
-        if (user.photoUrlSmall.length != 0)
-        {
-            TGRemoteImageView *avatarView = [self.userInfoItem visibleAvatarView];
-            
-            if (user != nil && user.photoUrlBig != nil && avatarView.currentImage != nil)
-            {
-                TGModernGalleryController *modernGallery = [[TGModernGalleryController alloc] init];
-                
-                modernGallery.model = [[TGUserAvatarGalleryModel alloc] initWithPeerId:_uid currentAvatarLegacyThumbnailImageUri:user.photoUrlSmall currentAvatarLegacyImageUri:user.photoUrlBig currentAvatarImageSize:CGSizeMake(640.0f, 640.0f)];
-                
-                __weak TGTelegraphUserInfoController *weakSelf = self;
-                
-                modernGallery.itemFocused = ^(id<TGModernGalleryItem> item)
-                {
-                    __strong TGTelegraphUserInfoController *strongSelf = weakSelf;
-                    if (strongSelf != nil)
-                    {
-                        if ([item isKindOfClass:[TGUserAvatarGalleryItem class]])
-                        {
-                            if (((TGUserAvatarGalleryItem *)item).isCurrent)
-                            {
-                                ((UIView *)strongSelf.userInfoItem.visibleAvatarView).hidden = true;
-                            }
-                            else
-                                ((UIView *)strongSelf.userInfoItem.visibleAvatarView).hidden = false;
-                        }
-                    }
-                };
-                
-                modernGallery.beginTransitionIn = ^UIView *(id<TGModernGalleryItem> item, __unused TGModernGalleryItemView *itemView)
-                {
-                    __strong TGTelegraphUserInfoController *strongSelf = weakSelf;
-                    if (strongSelf != nil)
-                    {
-                        if ([item isKindOfClass:[TGUserAvatarGalleryItem class]])
-                        {
-                            if (((TGUserAvatarGalleryItem *)item).isCurrent)
-                            {
-                                return strongSelf.userInfoItem.visibleAvatarView;
-                            }
-                        }
-                    }
-                    
-                    return nil;
-                };
-                
-                modernGallery.beginTransitionOut = ^UIView *(id<TGModernGalleryItem> item, __unused TGModernGalleryItemView *itemView)
-                {
-                    __strong TGTelegraphUserInfoController *strongSelf = weakSelf;
-                    if (strongSelf != nil)
-                    {
-                        if ([item isKindOfClass:[TGUserAvatarGalleryItem class]])
-                        {
-                            if (((TGUserAvatarGalleryItem *)item).isCurrent)
-                            {
-                                return strongSelf.userInfoItem.visibleAvatarView;
-                            }
-                        }
-                    }
-                    
-                    return nil;
-                };
-                
-                modernGallery.completedTransitionOut = ^
-                {
-                    __strong TGTelegraphUserInfoController *strongSelf = weakSelf;
-                    if (strongSelf != nil)
-                    {
-                        ((UIView *)strongSelf.userInfoItem.visibleAvatarView).hidden = false;
-                    }
-                };
-                
-                TGOverlayControllerWindow *controllerWindow = [[TGOverlayControllerWindow alloc] initWithParentController:self contentController:modernGallery];
-                controllerWindow.hidden = false;
-            }
-        }
+        [_tooltipContainerView hideMenu];
     }
     
     [super actionStageActionRequested:action options:options];
@@ -1354,6 +1876,23 @@ static UIView *_findBackArrow(UIView *view)
             }
         });
     }
+    else if ([path isEqualToString:@"/tg/calls/enabled"])
+    {
+        bool enabled = [((SGraphObjectNode *)resource).object boolValue];
+        
+        TGDispatchOnMainThread(^
+        {
+            if (enabled)
+            {
+                _updatedCachedDataDisposable = [[TGUserSignal updatedUserCachedDataWithUserId:_uid] startWithNext:nil];
+            }
+            else
+            {
+                _supportsCalls = false;
+                self.userInfoItem.showCall = false;
+            }
+        });
+    }
     
     [super actionStageResourceDispatched:path resource:resource arguments:arguments];
 }
@@ -1365,6 +1904,14 @@ static UIView *_findBackArrow(UIView *view)
         TGDispatchOnMainThread(^
         {
             _userNotificationSettings = [((SGraphObjectNode *)result).object mutableCopy];
+            [self _updateNotificationSettings:false];
+        });
+    }
+    else if ([path hasPrefix:[NSString stringWithFormat:@"/tg/peerSettings/(%" PRId32 "", INT_MAX - 1]])
+    {
+        TGDispatchOnMainThread(^
+        {
+            _defaultNotificationSettings = [((SGraphObjectNode *)result).object mutableCopy];
             [self _updateNotificationSettings:false];
         });
     }
@@ -1382,7 +1929,7 @@ static UIView *_findBackArrow(UIView *view)
             }
             else
             {
-                [[[TGAlertView alloc] initWithTitle:nil message:status == -2 ? [[NSString alloc] initWithFormat:TGLocalized(@"Profile.CreateEncryptedChatOutdatedError"), _user.displayFirstName, _user.displayFirstName] : TGLocalized(@"Profile.CreateEncryptedChatError") delegate:nil cancelButtonTitle:TGLocalized(@"Common.OK") otherButtonTitles:nil] show];
+                [TGCustomAlertView presentAlertWithTitle:nil message:status == -2 ? [[NSString alloc] initWithFormat:TGLocalized(@"Login.UnknownError"), _user.displayFirstName, _user.displayFirstName] : TGLocalized(@"Profile.CreateEncryptedChatError") cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
             }
         });
     }
@@ -1455,6 +2002,100 @@ static UIView *_findBackArrow(UIView *view)
         [[self popoverController] dismissPopoverAnimated:true];
     else
         [self.navigationController popViewControllerAnimated:true];
+}
+
+- (void)followLink:(NSString *)link {
+    if ([link hasPrefix:@"mention://"])
+    {
+        NSString *domain = [link substringFromIndex:@"mention://".length];
+        [ActionStageInstance() requestActor:[[NSString alloc] initWithFormat:@"/resolveDomain/(%@,profile)", domain] options:@{@"domain": domain, @"profile": @true} flags:0 watcher:TGTelegraphInstance];
+    }
+    else if ([link hasPrefix:@"hashtag://"])
+    {
+        NSString *hashtag = [link substringFromIndex:@"hashtag://".length];
+        [[TGInterfaceManager instance] displayHashtagOverview:[@"#" stringByAppendingString:hashtag] conversationId:_uid];
+    }
+    else if ([link hasPrefix:@"cashtag://"])
+    {
+        NSString *cashtag = [link substringFromIndex:@"cashtag://".length];
+        [[TGInterfaceManager instance] displayHashtagOverview:[@"$" stringByAppendingString:cashtag] conversationId:_uid];
+    }
+    else {
+        @try {
+            NSURL *url = [NSURL URLWithString:link];
+            if (url != nil) {
+                [[UIApplication sharedApplication] openURL:url];
+            }
+        } @catch (NSException *e) {
+        }
+    }
+}
+
+- (void)shareUserInfoPressed
+{
+    NSString *linkString = [NSString stringWithFormat:@"https://t.me/%@", _user.userName];
+    
+    __weak TGTelegraphUserInfoController *weakSelf = self;
+    CGRect (^sourceRect)(void) = ^CGRect
+    {
+        __strong TGTelegraphUserInfoController *strongSelf = weakSelf;
+        if (strongSelf == nil)
+            return CGRectZero;
+        
+        return [strongSelf->_shareContactItem.view convertRect:strongSelf->_shareContactItem.view.bounds toView:strongSelf.view];
+    };
+    
+    [TGShareMenu presentInParentController:self menuController:nil buttonTitle:TGLocalized(@"ShareMenu.CopyShareLink") buttonAction:^
+    {
+        [[UIPasteboard generalPasteboard] setString:linkString];
+    } shareAction:^(NSArray *peerIds, NSString *caption)
+    {
+        [[TGShareSignals shareText:linkString toPeerIds:peerIds caption:caption] startWithNext:nil];
+        
+        [[[TGProgressWindow alloc] init] dismissWithSuccess];
+    } externalShareItemSignal:[SSignal single:[NSURL URLWithString:linkString]] sourceView:self.view sourceRect:sourceRect barButtonItem:nil];
+}
+
+- (void)check3DTouch
+{
+    if (_checked3dTouch)
+        return;
+    
+    _checked3dTouch = true;
+    if (iosMajorVersion() >= 9)
+    {
+        if (self.traitCollection.forceTouchCapability == UIForceTouchCapabilityAvailable)
+        {
+            [self registerForPreviewingWithDelegate:(id)self sourceView:self.userInfoItem.avatarView];
+        }
+    }
+}
+
+- (UIViewController *)previewingContext:(id<UIViewControllerPreviewing>)previewingContext viewControllerForLocation:(CGPoint)__unused location
+{
+    if (_user.photoUrlSmall.length != 0)
+    {
+        previewingContext.sourceRect = previewingContext.sourceView.bounds;
+        return [self createAvatarGalleryControllerForPreviewMode:true];
+    }
+    
+    return nil;
+}
+
+- (void)previewingContext:(id<UIViewControllerPreviewing>)__unused previewingContext commitViewController:(UIViewController *)viewControllerToCommit
+{
+    if ([viewControllerToCommit isKindOfClass:[TGModernGalleryController class]])
+    {
+        TGModernGalleryController *controller = (TGModernGalleryController *)viewControllerToCommit;
+        controller.previewMode = false;
+        
+        TGOverlayControllerWindow *controllerWindow = [[TGOverlayControllerWindow alloc] initWithManager:[[TGLegacyComponentsContext shared] makeOverlayWindowManager] parentController:self contentController:controller];
+        controllerWindow.hidden = false;
+    }
+}
+
+- (void)groupsInCommonPressed {
+    [self.navigationController pushViewController:[[TGGroupsInCommonController alloc] initWithUserId:_uid] animated:true];
 }
 
 @end

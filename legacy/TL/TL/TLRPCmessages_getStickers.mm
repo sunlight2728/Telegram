@@ -35,7 +35,7 @@
     return 0;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)__unused metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)__unused metaObject
 {
     TGLog(@"TLbuildFromMetaObject is not implemented for base type");
     return nil;
@@ -54,7 +54,7 @@
 
 - (int32_t)TLconstructorSignature
 {
-    return (int32_t)0xae22e045;
+    return (int32_t)0x43d4f2c;
 }
 
 - (int32_t)TLconstructorName
@@ -62,11 +62,11 @@
     return (int32_t)0x76470753;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)metaObject
 {
     TLRPCmessages_getStickers$messages_getStickers *object = [[TLRPCmessages_getStickers$messages_getStickers alloc] init];
     object.emoticon = metaObject->getString((int32_t)0x9458ad3a);
-    object.n_hash = metaObject->getString((int32_t)0xc152e470);
+    object.n_hash = metaObject->getInt32((int32_t)0xc152e470);
     return object;
 }
 
@@ -80,8 +80,8 @@
     }
     {
         TLConstructedValue value;
-        value.type = TLConstructedValueTypeString;
-        value.nativeObject = self.n_hash;
+        value.type = TLConstructedValueTypePrimitiveInt32;
+        value.primitive.int32Value = self.n_hash;
         values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0xc152e470, value));
     }
 }

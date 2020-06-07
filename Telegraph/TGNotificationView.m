@@ -1,15 +1,16 @@
 #import "TGNotificationView.h"
+
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGNotificationBackgroundView.h"
 #import "TGNotificationContentView.h"
 #import "TGNotificationReplyPanelView.h"
+#import "TGNotificationReplyButtonsView.h"
 
 #import <SSignalKit/SSignalKit.h>
 
-#import "TGUser.h"
-#import "TGStringUtils.h"
-
-#import "TGModernConversationMentionsAssociatedPanel.h"
-#import "TGModernConversationHashtagsAssociatedPanel.h"
+#import <LegacyComponents/TGModernConversationMentionsAssociatedPanel.h>
+#import <LegacyComponents/TGModernConversationHashtagsAssociatedPanel.h>
 #import "TGStickerAssociatedInputPanel.h"
 
 const CGFloat TGNotificationDefaultHeight = 68.0f;
@@ -24,6 +25,7 @@ const CGFloat TGNotificationBottomHitTestInset = 20.0f;
 {
     TGNotificationBackgroundView *_backgroundView;
     TGNotificationReplyPanelView *_replyView;
+    TGNotificationReplyButtonsView *_buttonsView;
     UIView *_handleView;
     
     UIView *_transitionView;
@@ -57,6 +59,21 @@ const CGFloat TGNotificationBottomHitTestInset = 20.0f;
         _replyView.delegate = self;
         _replyView.userInteractionEnabled = false;
         [self addSubview:_replyView];
+        
+        _buttonsView = [[TGNotificationReplyButtonsView alloc] init];
+        _buttonsView.alpha = 0.0f;
+        _buttonsView.userInteractionEnabled = false;
+        __weak TGNotificationView *weakSelf = self;
+        _buttonsView.activateCommand = ^(id action, NSInteger index)
+        {
+            __strong TGNotificationView *strongSelf = weakSelf;
+            if (strongSelf != nil && strongSelf.activateCommand != nil)
+            {
+                strongSelf.activateCommand(action, index);
+                [strongSelf hideAnimated:true];
+            }
+        };
+        [self addSubview:_buttonsView];
         
         _handleView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 37, 5)];
         _handleView.layer.cornerRadius = 2.5f;
@@ -126,7 +143,7 @@ const CGFloat TGNotificationBottomHitTestInset = 20.0f;
                 origin = offset < 0 ? offset : 0;
             }
             
-            self.frame = CGRectMake(self.frame.origin.x, origin, self.frame.size.width, height);
+            self.frame = CGRectMake(self.frame.origin.x, origin + _safeAreaInset.top, self.frame.size.width, height);
             
             CGFloat threshold = expandedHeight - 95.0f;
             CGFloat progress = MAX(0, (offset - threshold) / (diff - threshold));
@@ -274,13 +291,27 @@ const CGFloat TGNotificationBottomHitTestInset = 20.0f;
     _handleView.alpha = MAX(0, 1.0f - progress * 1.2f);
     if (self.isRepliable)
     {
-        _replyView.hidden = false;
-        _replyView.alpha = progress * progress;
+        if (self.replyMarkup != nil)
+        {
+            _buttonsView.hidden = false;
+            _buttonsView.alpha = progress * progress;
+            _replyView.hidden = true;
+            _replyView.alpha = 0.0f;
+        }
+        else
+        {
+            _replyView.hidden = false;
+            _replyView.alpha = progress * progress;
+            _buttonsView.hidden = true;
+            _buttonsView.alpha = 0.0f;
+        }
     }
     else
     {
         _replyView.hidden = true;
         _replyView.alpha = 0.0f;
+        _buttonsView.hidden = true;
+        _buttonsView.alpha = 0.0f;
     }
     
     if (self.onExpandProgress != nil)
@@ -302,7 +333,7 @@ const CGFloat TGNotificationBottomHitTestInset = 20.0f;
         if (self.onExpand != nil)
             self.onExpand();
         
-        if (self.isRepliable)
+        if (self.isRepliable && self.replyMarkup == nil)
         {
             void (^block)(void) = ^
             {
@@ -317,7 +348,8 @@ const CGFloat TGNotificationBottomHitTestInset = 20.0f;
     }
     
     _isExpanded = expanded;
-    _replyView.userInteractionEnabled = (expanded && self.isRepliable);
+    _replyView.userInteractionEnabled = (expanded && self.isRepliable && self.replyMarkup == nil);
+    _buttonsView.userInteractionEnabled = (expanded && self.isRepliable && self.replyMarkup != nil);
 }
 
 - (void)expandAnimated:(bool)animated
@@ -334,7 +366,7 @@ const CGFloat TGNotificationBottomHitTestInset = 20.0f;
     
     void (^changeBlock)(void) = ^
     {
-        self.frame = CGRectMake(self.frame.origin.x, 0, self.frame.size.width, expandedHeight);
+        self.frame = CGRectMake(self.frame.origin.x, _safeAreaInset.top, self.frame.size.width, expandedHeight);
         _contentView.frame = CGRectMake(_contentView.frame.origin.x, 0, _contentView.frame.size.width, expandedContentHeight);
         
         [self setExpandProgress:1.0f isExpanded:true fromGesture:fromGesture];
@@ -358,7 +390,7 @@ const CGFloat TGNotificationBottomHitTestInset = 20.0f;
 {
     void (^changeBlock)(void) = ^
     {
-        self.frame = CGRectMake(self.frame.origin.x, 0, self.frame.size.width, TGNotificationDefaultHeight);
+        self.frame = CGRectMake(self.frame.origin.x, _safeAreaInset.top, self.frame.size.width, TGNotificationDefaultHeight);
         _contentView.frame = CGRectMake(_contentView.frame.origin.x, 0, _contentView.frame.size.width, _contentView.frame.size.height);
     };
     
@@ -386,8 +418,15 @@ const CGFloat TGNotificationBottomHitTestInset = 20.0f;
 {
     CGFloat contentWidth = _contentView.frame.size.width;
     CGFloat contentHeight = withContent ? [self expandedPreviewHeight] : TGNotificationDefaultHeight;
-    CGFloat replyPanelHeight = self.isRepliable ? [_replyView heightForWidth:contentWidth] : TGNotificationBottomPadding;
-    
+    CGFloat replyPanelHeight = TGNotificationBottomPadding;
+    if (self.isRepliable)
+    {
+        if (self.replyMarkup == nil)
+            replyPanelHeight = [_replyView heightForWidth:contentWidth];
+        else
+            replyPanelHeight = [_buttonsView heightForWidth:contentWidth];
+            
+    }
     return MAX(TGNotificationDefaultHeight, contentHeight + replyPanelHeight);
 }
 
@@ -452,8 +491,9 @@ const CGFloat TGNotificationBottomHitTestInset = 20.0f;
     
     [UIView animateWithDuration:duration delay:0.0 options:(animationCurve | UIViewAnimationOptionLayoutSubviews) animations:^
     {
-        self.frame = CGRectMake(self.frame.origin.x, self.frame.origin.y, self.frame.size.width, [self expandedHeight]);
-        _replyView.frame = CGRectMake((self.frame.size.width - contentWidth) / 2, self.frame.size.height - replyPanelHeight, contentWidth, replyPanelHeight);
+        _replyView.frame = CGRectMake((self.frame.size.width - contentWidth) / 2, [self expandedHeight] - replyPanelHeight, contentWidth, replyPanelHeight);
+        self.frame = CGRectMake(self.frame.origin.x, _safeAreaInset.top, self.frame.size.width, [self expandedHeight]);
+        [self setNeedsLayout];
     } completion:nil];
 }
 
@@ -565,11 +605,11 @@ const CGFloat TGNotificationBottomHitTestInset = 20.0f;
     }
     else
     {
-        NSString *emoji = [text getEmojiFromString:true].firstObject;
+        NSString *emoji = [[text emojiArray:true] firstObject];
         SSignal *stickersSignal = self.stickersSignal(emoji);
         
         __weak TGNotificationView *weakSelf = self;
-        [_stickerPacksDisposable setDisposable:[stickersSignal startWithNext:^(NSArray *matchedDocuments)
+        [_stickerPacksDisposable setDisposable:[stickersSignal startWithNext:^(NSDictionary *matchedDocuments)
         {
             __strong TGNotificationView *strongSelf = weakSelf;
             if (strongSelf == nil)
@@ -578,7 +618,8 @@ const CGFloat TGNotificationBottomHitTestInset = 20.0f;
             if (![text isEqualToString:inputTextPanel.text])
                 return;
 
-            if (matchedDocuments.count == 0)
+            NSArray *documents = matchedDocuments[@"documents"];
+            if (documents.count == 0)
             {
                 if ([[strongSelf->_replyView associatedPanel] isKindOfClass:[TGStickerAssociatedInputPanel class]])
                     [strongSelf->_replyView setAssociatedPanel:nil animated:true];
@@ -607,8 +648,12 @@ const CGFloat TGNotificationBottomHitTestInset = 20.0f;
 {
     UIView *view = [super hitTest:point withEvent:event];
     if (self.isExpanded && self.isRepliable && view == nil)
-        view = [_replyView hitTest:[self convertPoint:point toView:_replyView] withEvent:event];
-    
+    {
+        if (self.replyMarkup == nil)
+            view = [_replyView hitTest:[self convertPoint:point toView:_replyView] withEvent:event];
+        else
+            view = [_buttonsView hitTest:[self convertPoint:point toView:_buttonsView] withEvent:event];
+    }
     return view;
 }
 
@@ -695,7 +740,7 @@ const CGFloat TGNotificationBottomHitTestInset = 20.0f;
 
 - (bool)isIdle
 {
-    return _contentView.previewView.isIdle && (!self.isRepliable || [_replyView isIdle]);
+    return _contentView.previewView.isIdle && (!self.isRepliable || self.replyMarkup != nil || [_replyView isIdle]);
 }
 
 - (void)prepareForHide
@@ -727,26 +772,53 @@ const CGFloat TGNotificationBottomHitTestInset = 20.0f;
 
 #pragma mark -
 
+- (void)setSafeAreaInset:(UIEdgeInsets)safeAreaInset
+{
+    _safeAreaInset = safeAreaInset;
+    [self setNeedsLayout];
+}
+
 - (void)layoutSubviews
 {
     _backgroundView.frame = CGRectMake(TGNotificationBackgroundInset, TGNotificationBackgroundInset, self.frame.size.width - 2 * TGNotificationBackgroundInset, self.frame.size.height - TGNotificationBackgroundInset);
     
-    CGFloat contentWidth = self.frame.size.width;
+    CGFloat contentWidth = self.frame.size.width - _safeAreaInset.left - _safeAreaInset.right;
     if ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad)
         contentWidth = MIN(contentWidth, TGNotificationMaximumWidth);
     
     bool update = fabs(_contentView.frame.size.width - contentWidth) > FLT_EPSILON;
     _contentView.frame = CGRectMake((self.frame.size.width - contentWidth) / 2, _contentView.frame.origin.y, contentWidth, _contentView.frame.size.height);
     
-    CGFloat replyPanelHeight = [_replyView heightForWidth:contentWidth];
-    _replyView.frame = CGRectMake((self.frame.size.width - contentWidth) / 2, self.frame.size.height - replyPanelHeight, contentWidth, replyPanelHeight);
+    if (self.replyMarkup == nil)
+    {
+        CGFloat replyPanelHeight = MAX(50.0f, [_replyView heightForWidth:contentWidth]);
+        _replyView.frame = CGRectMake((self.frame.size.width - contentWidth) / 2, self.frame.size.height - replyPanelHeight, contentWidth, replyPanelHeight);
+    }
+    else
+    {
+        CGFloat replyPanelHeight = MAX(50.0f, [_buttonsView heightForWidth:contentWidth]);
+        _buttonsView.frame = CGRectMake((self.frame.size.width - contentWidth) / 2, self.frame.size.height - replyPanelHeight, contentWidth, replyPanelHeight);
+    }
     _handleView.frame = CGRectMake((_backgroundView.frame.size.width - _handleView.frame.size.width) / 2, _backgroundView.frame.size.height - _handleView.frame.size.height - 4, _handleView.frame.size.width, _handleView.frame.size.height);
     
-    if (update)
+    if (update && _isExpanded)
     {
-        [_replyView layoutIfNeeded];
-        [_replyView refreshHeight];
+        if (self.replyMarkup == nil)
+        {
+            [_replyView layoutIfNeeded];
+            [_replyView refreshHeight];
+        }
     }
+}
+
+- (void)inputPanelRequestedSendGif:(TGNotificationReplyPanelView *)__unused inputTextPanel document:(TGDocumentMediaAttachment *)__unused document {
+}
+
+- (void)setReplyMarkup:(TGBotReplyMarkup *)replyMarkup
+{
+    _replyMarkup = replyMarkup;
+    [_buttonsView setReplyMarkup:replyMarkup];
+    _contentView.previewView.unnlimitedHeight = replyMarkup != nil;
 }
 
 @end

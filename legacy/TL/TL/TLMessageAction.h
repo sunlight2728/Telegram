@@ -109,3 +109,50 @@
 
 @end
 
+@interface TLMessageAction$messageActionPinMessage : TLMessageAction
+
+
+@end
+
+@interface TLMessageAction$messageActionHistoryClear : TLMessageAction
+
+
+@end
+
+@interface TLMessageAction$messageActionGameScore : TLMessageAction
+
+@property (nonatomic) int64_t game_id;
+@property (nonatomic) int32_t score;
+
+@end
+
+@interface TLMessageAction$messageActionPaymentSent : TLMessageAction
+
+@property (nonatomic, retain) NSString *currency;
+@property (nonatomic) int64_t total_amount;
+
+@end
+
+@interface TLMessageAction$messageActionScreenshotTaken : TLMessageAction
+
+
+@end
+
+@interface TLMessageAction$messageActionCustomAction : TLMessageAction
+
+@property (nonatomic, retain) NSString *message;
+
+@end
+
+@interface TLMessageAction$messageActionBotAllowed : TLMessageAction
+
+@property (nonatomic, retain) NSString *domain;
+
+@end
+
+@interface TLMessageAction$messageActionSecureValuesSent : TLMessageAction
+
+@property (nonatomic, retain) NSArray *types;
+
+@end
+

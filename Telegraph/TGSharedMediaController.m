@@ -1,16 +1,17 @@
 #import "TGSharedMediaController.h"
 
-#import "TGHacks.h"
-#import "TGPeerIdAdapter.h"
+#import <LegacyComponents/LegacyComponents.h>
 
-#import "ActionStage.h"
+#import "TGLegacyComponentsContext.h"
+
+#import <LegacyComponents/ActionStage.h>
 #import "TGDownloadManager.h"
 #import "TGTelegraph.h"
+#import "TGInterfaceManager.h"
 
 #import "TGTelegramNetworking.h"
 #import "TGMessageSearchSignals.h"
 #import "TGSharedMediaCacheSignals.h"
-#import "TGMessage.h"
 
 #import "TGSharedMediaCollectionView.h"
 #import "TGSharedMediaCollectionLayout.h"
@@ -21,6 +22,8 @@
 #import "TGSharedMediaVideoItem.h"
 #import "TGSharedMediaFileItem.h"
 #import "TGSharedMediaLinkItem.h"
+#import "TGSharedMediaVoiceMessageItem.h"
+#import "TGSharedMediaRoundMessageItem.h"
 
 #import "TGSharedMediaImageItemView.h"
 #import "TGSharedMediaVideoItemView.h"
@@ -33,11 +36,7 @@
 #import "TGSharedMediaGroup.h"
 #import "TGSharedMediaAvailabilityState.h"
 
-#import "TGImageUtils.h"
-#import "TGFont.h"
-#import "TGDateUtils.h"
-#import "TGStringUtils.h"
-#import "TGActionSheet.h"
+#import "TGCustomActionSheet.h"
 
 #import "TGPreparedLocalDocumentMessage.h"
 
@@ -45,17 +44,16 @@
 #import "TGSharedMediaMenuView.h"
 #import "TGSharedMediaImageViewQueue.h"
 
-#import "TGModernGalleryController.h"
-#import "TGOverlayControllerWindow.h"
+#import <LegacyComponents/TGModernGalleryController.h>
 #import "TGGenericPeerMediaGalleryModel.h"
 #import "TGGenericPeerGalleryItem.h"
+#import "TGModernGalleryNewVideoItemView.h"
 
 #import "TGDatabase.h"
-#import "TGNavigationController.h"
 #import "TGDocumentController.h"
 
-#import "TGSearchBar.h"
-#import "TGSearchDisplayMixin.h"
+#import <LegacyComponents/TGSearchBar.h>
+#import <LegacyComponents/TGSearchDisplayMixin.h>
 
 #import "TGForwardTargetController.h"
 
@@ -79,14 +77,29 @@
 
 #import "TGModernConversationController.h"
 
-typedef enum {
-    TGSharedMediaControllerModeAll,
-    TGSharedMediaControllerModePhoto,
-    TGSharedMediaControllerModeVideo,
-    TGSharedMediaControllerModeFile,
-    TGSharedMediaControllerModeLink,
-    TGSharedMediaControllerModeAudio
-} TGSharedMediaControllerMode;
+#import "TGInstantPageController.h"
+
+#import <LegacyComponents/TGMenuSheetController.h>
+#import "TGEmbedMenu.h"
+
+#import <LegacyComponents/TGProgressWindow.h>
+
+#import "TGSendMessageSignals.h"
+#import "TGExternalShareSignals.h"
+
+#import "TGPreviewMenu.h"
+#import <LegacyComponents/TGItemPreviewController.h>
+#import <LegacyComponents/TGItemMenuSheetPreviewView.h>
+#import "TGPreviewConversationItemView.h"
+#import <LegacyComponents/TGMenuSheetButtonItemView.h>
+
+#import "TGSafariViewController.h"
+#import <SafariServices/SafariServices.h>
+
+#import "TGLegacyComponentsContext.h"
+
+#import "TGPresentation.h"
+#import "TGPreviewPresentationHelper.h"
 
 @interface TGSharedMediaController () <ASWatcher, UICollectionViewDataSource, TGSharedMediaCollectionViewDelegate, TGSearchBarDelegate>
 {
@@ -147,6 +160,7 @@ typedef enum {
     bool (^_isItemHidden)(id<TGSharedMediaItem>);
     bool (^_isItemSelected)(id<TGSharedMediaItem>);
     void (^_toggleItemSelection)(id<TGSharedMediaItem>);
+    void (^_itemLongPressed)(id<TGSharedMediaItem>);
     
     NSSet *_selectedMessageIds;
     
@@ -159,6 +173,9 @@ typedef enum {
     bool _waitingForItems;
     NSArray *_loadedItems;
     
+    SMetaDisposable *_musicPlayingStatusDisposable;
+    id _nowPlayingItemKey;
+    
     __weak TGGenericPeerMediaGalleryModel *_galleryModel;
     
     SMulticastSignalManager *_visibleItemsSignalManager;
@@ -167,9 +184,21 @@ typedef enum {
     
     TGSharedMediaSelectionPanelView *_selectionPanelView;
     TGAttachmentSheetWindow *_attachmentSheetWindow;
+    
+    __weak TGNavigationController *_ownNavController;
+    __weak TGNavigationBar *_ownNavbar;
+    UIView *_navbarExtensionClipView;
+    UIView *_navbarExtensionView;
+    UIImageView *_navbarExtensionMaskView;
+    UISegmentedControl *_segmentedControl;
+    UIView *_stripeView;
+    
+    bool _checked3dTouch;
+    TGItemPreviewHandle *_custom3dTouchHandle;
 }
 
 @property (nonatomic, strong) ASHandle *actionHandle;
+@property (nonatomic, readonly) TGPresentation *presentation;
 
 @end
 
@@ -177,11 +206,21 @@ typedef enum {
 
 - (instancetype)initWithPeerId:(int64_t)peerId accessHash:(int64_t)accessHash important:(bool)important
 {
+    return [self initWithPeerId:peerId accessHash:accessHash mode:TGSharedMediaControllerModeAll important:important];
+}
+
+- (instancetype)initWithPeerId:(int64_t)peerId accessHash:(int64_t)accessHash mode:(TGSharedMediaControllerMode)mode important:(bool)important
+{
     self = [super init];
     if (self != nil)
     {
         pthread_mutex_init(&_waitMutex, NULL);
         pthread_cond_init(&_waitCond, NULL);
+        
+        _presentation = TGPresentation.current;
+        
+        if (iosMajorVersion() >= 7)
+            self.title = TGLocalized(@"SharedMedia.TitleAll");
         
         _actionHandle = [[ASHandle alloc] initWithDelegate:self releaseOnMainThread:true];
         
@@ -195,14 +234,23 @@ typedef enum {
         
         if ([UIScreen mainScreen].scale >= 2.0f - FLT_EPSILON)
         {
-            if (_widescreenWidth >= 736.0f - FLT_EPSILON)
+            if (_widescreenWidth >= 812.0f - FLT_EPSILON)
             {
-                _normalItemSize = CGSizeMake(78.5f, 78.5f);
-                _wideItemSize = CGSizeMake(78.0f, 78.0f);
-                _normalEdgeInsets = UIEdgeInsetsMake(0.0f, 0.0f, 0.0f, 0.0f);
-                _wideEdgeInsets = UIEdgeInsetsMake(0.0f, 1.0f, 0.0f, 1.0f);
-                _normalLineSpacing = 2.0f;
-                _wideLineSpacing = 3.0f;
+                _normalItemSize = CGSizeMake(93.0f, 93.0f);
+                _wideItemSize = CGSizeMake(93.0f, 93.0f);
+                _normalEdgeInsets = UIEdgeInsetsMake(4.0f, 0.0f, 2.0f, 0.0f);
+                _wideEdgeInsets = UIEdgeInsetsMake(4.0f, 2.0f, 1.0f, 2.0f);
+                _normalLineSpacing = 1.0f;
+                _wideLineSpacing = 2.0f;
+            }
+            else if (_widescreenWidth >= 736.0f - FLT_EPSILON)
+            {
+                _normalItemSize = CGSizeMake(103.0f, 103.0f);
+                _wideItemSize = CGSizeMake(103.0f, 103.0f);
+                _normalEdgeInsets = UIEdgeInsetsMake(4.0f, 0.0f, 2.0f, 0.0f);
+                _wideEdgeInsets = UIEdgeInsetsMake(4.0f, 2.0f, 1.0f, 2.0f);
+                _normalLineSpacing = 1.0f;
+                _wideLineSpacing = 2.0f;
             }
             else if (_widescreenWidth >= 667.0f - FLT_EPSILON)
             {
@@ -241,21 +289,25 @@ typedef enum {
         
         [self setRightBarButtonItem:[[UIBarButtonItem alloc] initWithTitle:TGLocalized(@"Common.Select") style:UIBarButtonItemStylePlain target:self action:@selector(editPressed)]];
         
-        _titleLabel = [[UILabel alloc] init];
-        _titleLabel.backgroundColor = [UIColor clearColor];
-        _titleLabel.textColor = [UIColor blackColor];
-        _titleLabel.font = TGMediumSystemFontOfSize(17.0f);
-        _titleArrowView = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"SharedMediaNavigationBarArrow.png"]];
-        _titleView = [[TGSharedMediaTitleButton alloc] initWithFrame:CGRectMake(0.0, 0.0, 30.0, 2.0f)];
-        [_titleView addTarget:self action:@selector(titleTapped) forControlEvents:UIControlEventTouchUpInside];
-        [_titleView addSubview:_titleLabel];
-        _titleArrowContainer = [[UIView alloc] initWithFrame:_titleArrowView.bounds];
-        _titleArrowContainer.userInteractionEnabled = false;
-        [_titleArrowContainer addSubview:_titleArrowView];
-        [_titleView addSubview:_titleArrowContainer];
-        [self.navigationItem setTitleView:_titleView];
+        if (iosMajorVersion() < 7)
+        {
+            _titleLabel = [[UILabel alloc] init];
+            _titleLabel.backgroundColor = [UIColor clearColor];
+            _titleLabel.textColor = self.presentation.pallete.navigationTitleColor;
+            _titleLabel.font = TGMediumSystemFontOfSize(17.0f);
+            _titleArrowView = [[UIImageView alloc] initWithImage:TGTintedImage(TGImageNamed(@"SharedMediaNavigationBarArrow.png"), self.presentation.pallete.navigationTitleColor)];
+            _titleView = [[TGSharedMediaTitleButton alloc] initWithFrame:CGRectMake(0.0, 0.0, 30.0, 2.0f)];
+            [_titleView addTarget:self action:@selector(titleTapped) forControlEvents:UIControlEventTouchUpInside];
+            [_titleView addSubview:_titleLabel];
+            _titleArrowContainer = [[UIView alloc] initWithFrame:_titleArrowView.bounds];
+            _titleArrowContainer.userInteractionEnabled = iosMajorVersion() < 7;
+            [_titleArrowContainer addSubview:_titleArrowView];
+            [_titleView addSubview:_titleArrowContainer];
+            [self.navigationItem setTitleView:_titleView];
+        }
         
         _activityIndicatorView = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleGray];
+        _activityIndicatorView.color = self.presentation.pallete.secondaryTextColor;
         _activityIndicatorView.hidden = true;
         
         _imageViewQueue = [[TGSharedMediaImageViewQueue alloc] init];
@@ -289,6 +341,12 @@ typedef enum {
                 [strongSelf _updateSelectionInterface];
             }
         };
+        _itemLongPressed = ^(id<TGSharedMediaItem> item)
+        {
+            __strong TGSharedMediaController *strongSelf = weakSelf;
+            if (strongSelf != nil)
+                [strongSelf showOptionsForItem:item];
+        };
         
         [ActionStageInstance() watchForPaths:@[
             [NSString stringWithFormat:@"/tg/conversation/(%lld)/messages", _peerId],
@@ -298,8 +356,11 @@ typedef enum {
             @"/as/media/imageThumbnailUpdated"
         ] watcher:self];
         
-        _waitingForItems = true;
-        [self setMode:TGSharedMediaControllerModeAll filters:@[]];
+        _musicPlayingStatusDisposable = [[SMetaDisposable alloc] init];
+        
+        if (mode != TGSharedMediaControllerModeAudio)
+            _waitingForItems = true;
+        [self setMode:mode filters:@[]];
         
         [[TGDownloadManager instance] requestState:self.actionHandle];
     }
@@ -309,13 +370,28 @@ typedef enum {
 - (void)dealloc
 {
     [_disposable dispose];
+    [_musicPlayingStatusDisposable dispose];
     
     [_actionHandle reset];
     [ActionStageInstance() removeWatcher:self];
+    
+    [_navbarExtensionClipView removeFromSuperview];
+    _navbarExtensionClipView = nil;
+    _ownNavbar.musicPlayerOffset = 0.0f;
+    _ownNavbar.additionalView = nil;
+    
+    if (iosMajorVersion() >= 7)
+        _ownNavController.interactivePopGestureRecognizer.enabled = true;
 }
 
 - (void)setTitle:(NSString *)title
 {
+    if (iosMajorVersion() >= 7)
+    {
+        [super setTitle:title];
+        return;
+    }
+    
     _titleLabel.text = title;
     CGSize textSize = [title sizeWithFont:_titleLabel.font];
     _titleLabel.frame = CGRectMake(CGFloor((_titleLabel.superview.frame.size.width - textSize.width) / 2.0f), CGFloor((_titleLabel.superview.frame.size.height - textSize.height) / 2.0f), textSize.width, textSize.height);
@@ -454,25 +530,36 @@ typedef enum {
             return TGMessageSearchFilterLink;
         case TGSharedMediaControllerModeAudio:
             return TGMessageSearchFilterAudio;
+        case TGSharedMediaControllerModeVoiceRound:
+            return TGMessageSearchFilterVoiceRound;
     }
 }
 
 - (NSString *)titleForMode:(TGSharedMediaControllerMode)mode
 {
-    switch (mode)
+    if (iosMajorVersion() >= 7)
     {
-        case TGSharedMediaControllerModeAll:
-            return TGLocalized(@"SharedMedia.TitleAll");
-        case TGSharedMediaControllerModePhoto:
-            return TGLocalized(@"SharedMedia.TitlePhoto");
-        case TGSharedMediaControllerModeVideo:
-            return TGLocalized(@"SharedMedia.TitleVideo");
-        case TGSharedMediaControllerModeFile:
-            return TGLocalized(@"SharedMedia.TitleFile");
-        case TGSharedMediaControllerModeLink:
-            return TGLocalized(@"SharedMedia.TitleLink");
-        case TGSharedMediaControllerModeAudio:
-            return TGLocalized(@"SharedMedia.TitleAudio");
+        return TGLocalized(@"SharedMedia.TitleAll");
+    }
+    else
+    {
+        switch (mode)
+        {
+            case TGSharedMediaControllerModeAll:
+                return TGLocalized(@"SharedMedia.CategoryMedia");
+            
+            case TGSharedMediaControllerModeFile:
+                return TGLocalized(@"SharedMedia.CategoryDocs");
+            
+            case TGSharedMediaControllerModeLink:
+                return TGLocalized(@"SharedMedia.CategoryLinks");
+                
+            case TGSharedMediaControllerModeAudio:
+                return TGLocalized(@"SharedMedia.CategoryOther");
+            
+            default:
+                return TGLocalized(@"SharedMedia.TitleAll");
+        }
     }
 }
 
@@ -483,12 +570,18 @@ typedef enum {
         [itemView enqueueImageViewWithUri];
     }
     
+    bool wasFirstResponder = [_searchBar isFirstResponder];
+    
     [_collectionView reloadData];
     [_collectionView layoutSubviews];
     
     [_imageViewQueue resetEnqueuedImageViews];
     
     [self _maybeLoadMore];
+    
+    if (wasFirstResponder) {
+        [_searchBar becomeFirstResponder];
+    }
 }
 
 - (void)reloadSearchData
@@ -563,7 +656,7 @@ typedef enum {
             {
                 if (strongSelf->_peerId > INT_MIN && !indexDownloaded)
                 {
-                    [compositeDisposable add:[[TGMessageSearchSignals searchPeer:strongSelf->_peerId accessHash:_accessHash query:@"" filter:filter maxMessageId:maxMessageId limit:128] startWithNext:^(NSArray *messages)
+                    [compositeDisposable add:[[TGMessageSearchSignals searchPeer:strongSelf->_peerId accessHash:strongSelf->_accessHash query:@"" filter:filter maxMessageId:maxMessageId limit:128] startWithNext:^(NSArray *messages)
                     {
                         [subscriber putNext:messages];
                     } error:^(id error)
@@ -673,7 +766,8 @@ typedef enum {
     _currentFilters = filters;
     _hiddenItem = nil;
     
-    self.title = [self titleForMode:mode];
+    if (iosMajorVersion() < 7)
+        self.title = [self titleForMode:mode];
     
     _searchBar.hidden = mode == TGSharedMediaControllerModeAll;
     
@@ -700,10 +794,10 @@ typedef enum {
             {
                 pthread_mutex_lock(&strongSelf->_waitMutex);
                 pthread_cond_broadcast(&strongSelf->_waitCond);
-                if (_waitingForItems)
+                if (strongSelf->_waitingForItems)
                 {
-                    _loadedItems = items;
-                    _waitingForItems = false;
+                    strongSelf->_loadedItems = items;
+                    strongSelf->_waitingForItems = false;
                 }
                 pthread_mutex_unlock(&strongSelf->_waitMutex);
             }
@@ -735,6 +829,53 @@ typedef enum {
             }
         });
     }]];
+    
+    if (mode == TGSharedMediaControllerModeAudio)
+    {
+        [_musicPlayingStatusDisposable setDisposable:[TGTelegraphInstance.musicPlayer.playingStatus startWithNext:^(TGMusicPlayerStatus *next)
+        {
+            __strong TGSharedMediaController *strongSelf = weakSelf;
+            if (strongSelf == nil)
+                return;
+            
+            if ([next.item.key isEqual:strongSelf->_nowPlayingItemKey])
+                return;
+            
+            strongSelf->_nowPlayingItemKey = next.item.key;
+            [strongSelf updateNowPlayingCellSelection];
+        }]];
+    }
+    else
+    {
+        [_musicPlayingStatusDisposable setDisposable:nil];
+        _nowPlayingItemKey = nil;
+    }
+}
+
+- (void)updateNowPlayingCellSelection
+{
+    NSInteger keyVal = 0;
+    if ([_nowPlayingItemKey isKindOfClass:[NSNumber class]])
+        keyVal = [(NSNumber *)_nowPlayingItemKey integerValue];
+    
+    if (_collectionView.indexPathsForSelectedItems.count > 0)
+    {
+        for (NSIndexPath *indexPath in _collectionView.indexPathsForSelectedItems)
+            [_collectionView deselectItemAtIndexPath:indexPath animated:false];
+    }
+    
+    if (keyVal == 0)
+        return;
+    
+    for (TGSharedMediaItemView *itemView in _collectionView.visibleCells)
+    {
+        if ([itemView.item messageId] == keyVal)
+        {
+            NSIndexPath *indexPath = [_collectionView indexPathForCell:itemView];
+            [_collectionView selectItemAtIndexPath:indexPath animated:false scrollPosition:UICollectionViewScrollPositionNone];
+            break;
+        }
+    }
 }
 
 - (void)updateLoadMoreSignal:(bool)gotMore
@@ -819,11 +960,6 @@ typedef enum {
     }
 }
 
-- (NSArray *)directionFilterTitles
-{
-    return @[TGLocalized(@"SharedMedia.All"), TGLocalized(@"SharedMedia.Incoming"), TGLocalized(@"SharedMedia.Outgoing")];
-}
-
 - (void)loadView
 {
     struct timespec timeToWait;
@@ -844,7 +980,7 @@ typedef enum {
     
     [super loadView];
     
-    self.view.backgroundColor = [UIColor whiteColor];
+    self.view.backgroundColor = self.presentation.pallete.backgroundColor;
     
     CGSize frameSize = self.view.bounds.size;
     
@@ -865,11 +1001,14 @@ typedef enum {
     
     _collectionLayout = [[TGSharedMediaCollectionLayout alloc] init];
     _collectionView = [[TGSharedMediaCollectionView alloc] initWithFrame:CGRectMake(0.0f, -200.0f, frameSize.width, frameSize.height + 400.0f) collectionViewLayout:_collectionLayout];
+    if (iosMajorVersion() >= 11)
+        _collectionView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
     _collectionView.alwaysBounceVertical = true;
-    _collectionView.backgroundColor = [UIColor whiteColor];
+    _collectionView.backgroundColor = self.view.backgroundColor;
     
     _searchBar = [[TGSearchBar alloc] initWithFrame:CGRectMake(0.0f, 0.0f, _collectionView.frame.size.width, 44.0f) style:TGSearchBarStyleLightPlain];
     _searchBar.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+    [_searchBar setPallete:self.presentation.searchBarPallete];
     [_collectionView addSubview:_searchBar];
     _searchBar.hidden = _mode == TGSharedMediaControllerModeAll;
     _searchBar.delegate = self;
@@ -887,7 +1026,7 @@ typedef enum {
     _searchCollectionView = [[TGSharedMediaCollectionView alloc] initWithFrame:_searchCollectionContainer.bounds collectionViewLayout:_searchCollectionLayout];
     _searchCollectionView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     _searchCollectionView.alwaysBounceVertical = true;
-    _searchCollectionView.backgroundColor = [UIColor whiteColor];
+    _searchCollectionView.backgroundColor = self.view.backgroundColor;
     
     _searchCollectionView.delegate = self;
     _searchCollectionView.dataSource = self;
@@ -898,45 +1037,16 @@ typedef enum {
     [_searchCollectionContainer addSubview:_searchCollectionView];
     
     self.scrollViewsForAutomaticInsetsAdjustment = @[_collectionView];
-    self.explicitTableInset = UIEdgeInsetsMake(200.0f, 0.0f, 200.0f, 0.0f);
-    self.explicitScrollIndicatorInset = self.explicitTableInset;
+    self.explicitTableInset = UIEdgeInsetsMake(200.0f + [self additionalTopInset], 0.0f, 200.0f, 0.0f);
+    UIEdgeInsets scrollIndicatorInset = self.explicitTableInset;
+    scrollIndicatorInset.right -= self.controllerSafeAreaInset.right;
+    self.explicitScrollIndicatorInset = scrollIndicatorInset;
     
     [_collectionLayout invalidateLayout];
     [_collectionView layoutSubviews];
     
     [_searchCollectionLayout invalidateLayout];
     [_searchCollectionView layoutSubviews];
-    
-    /*_filterPanelView = [[UIView alloc] initWithFrame:CGRectMake(0.0f, self.view.frame.size.height - 45.0f, self.view.frame.size.width, 45.0f)];
-    _filterPanelView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleTopMargin;
-    _filterPanelView.backgroundColor = [UIColor whiteColor];
-    CGFloat separatorHeight = TGIsRetina() ? 0.5f : 1.0f;
-    UIView *separatorView = [[UIView alloc] initWithFrame:CGRectMake(0.0f, 0.0f, _filterPanelView.frame.size.width, separatorHeight)];
-    separatorView.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-    separatorView.backgroundColor = UIColorRGB(0xb2b2b2);
-    [_filterPanelView addSubview:separatorView];
-    
-    _filterSegmentedControl = [[UISegmentedControl alloc] initWithItems:[self directionFilterTitles]];
-    
-    [_filterSegmentedControl setBackgroundImage:[UIImage imageNamed:@"ModernSegmentedControlBackground.png"] forState:UIControlStateNormal barMetrics:UIBarMetricsDefault];
-    [_filterSegmentedControl setBackgroundImage:[UIImage imageNamed:@"ModernSegmentedControlSelected.png"] forState:UIControlStateSelected barMetrics:UIBarMetricsDefault];
-    [_filterSegmentedControl setBackgroundImage:[UIImage imageNamed:@"ModernSegmentedControlSelected.png"] forState:UIControlStateSelected | UIControlStateHighlighted barMetrics:UIBarMetricsDefault];
-    [_filterSegmentedControl setBackgroundImage:[UIImage imageNamed:@"ModernSegmentedControlHighlighted.png"] forState:UIControlStateHighlighted barMetrics:UIBarMetricsDefault];
-    UIImage *dividerImage = [UIImage imageNamed:@"ModernSegmentedControlDivider.png"];
-    [_filterSegmentedControl setDividerImage:dividerImage forLeftSegmentState:UIControlStateNormal rightSegmentState:UIControlStateNormal barMetrics:UIBarMetricsDefault];
-    
-    [_filterSegmentedControl setTitleTextAttributes:@{UITextAttributeTextColor: TGAccentColor(), UITextAttributeTextShadowColor: [UIColor clearColor], UITextAttributeFont: TGSystemFontOfSize(13)} forState:UIControlStateNormal];
-    [_filterSegmentedControl setTitleTextAttributes:@{UITextAttributeTextColor: [UIColor whiteColor], UITextAttributeTextShadowColor: [UIColor clearColor], UITextAttributeFont: TGSystemFontOfSize(13)} forState:UIControlStateSelected];
-    
-    _filterSegmentedControl.frame = CGRectMake(7.0f, 8.0f, _filterPanelView.frame.size.width - 14.0f, 29.0f);
-    _filterSegmentedControl.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-    
-    [_filterSegmentedControl setSelectedSegmentIndex:0];
-    [_filterSegmentedControl addTarget:self action:@selector(filterSegmentedControlChanged) forControlEvents:UIControlEventValueChanged];
-    
-    [_filterPanelView addSubview:_filterSegmentedControl];
-    
-    [self.view addSubview:_filterPanelView];*/
     
     [self.view addSubview:_activityIndicatorView];
     if (!_activityIndicatorView.hidden)
@@ -945,6 +1055,7 @@ typedef enum {
     _activityIndicatorView.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
     
     _menuView = [[TGSharedMediaMenuView alloc] init];
+    _menuView.presentation = self.presentation;
     NSMutableArray *menuItems = [[NSMutableArray alloc] init];
     [menuItems addObject:[self titleForMode:TGSharedMediaControllerModeAll]];
     [menuItems addObject:[self titleForMode:TGSharedMediaControllerModeFile]];
@@ -960,7 +1071,7 @@ typedef enum {
             strongSelf->_displayNavigationMenu = false;
             [UIView animateWithDuration:0.2 animations:^
             {
-                strongSelf->_titleArrowView.transform = [strongSelf titleArrowTransformForDisplayMenu:strongSelf-> _displayNavigationMenu];
+                strongSelf->_titleArrowView.transform = [strongSelf titleArrowTransformForDisplayMenu:strongSelf->_displayNavigationMenu];
             }];
         }
     };
@@ -982,12 +1093,37 @@ typedef enum {
     };
     [self.view addSubview:_menuView];
     
+    NSUInteger selectedItemIndex = 0;
+    switch (_mode)
+    {
+        case TGSharedMediaControllerModeFile:
+            selectedItemIndex = 1;
+            break;
+            
+        case TGSharedMediaControllerModeLink:
+            selectedItemIndex = 2;
+            break;
+            
+        case TGSharedMediaControllerModeAudio:
+            selectedItemIndex = 3;
+            break;
+            
+        default:
+            break;
+    }
+    
+    [_menuView setSelectedItemIndex:selectedItemIndex];
+    
     if (![self _updateControllerInset:false])
         [self controllerInsetUpdated:UIEdgeInsetsZero];
 }
 
 - (void)controllerInsetUpdated:(UIEdgeInsets)previousInset
 {
+    UIEdgeInsets scrollIndicatorInset = self.explicitTableInset;
+    scrollIndicatorInset.right -= self.controllerSafeAreaInset.right;
+    self.explicitScrollIndicatorInset = scrollIndicatorInset;
+    
     [super controllerInsetUpdated:previousInset];
     
     _menuView.frame = CGRectMake(0.0f, self.controllerInset.top - self.explicitTableInset.top, self.view.frame.size.width, self.view.frame.size.height);
@@ -996,6 +1132,8 @@ typedef enum {
         _searchCollectionContainer.frame = CGRectMake(0.0f, self.controllerInset.top - self.explicitTableInset.top + 44.0f, self.view.frame.size.width, self.view.frame.size.height - 44.0f - (self.controllerInset.top - self.explicitTableInset.top));
     }
     _searchDimView.frame = CGRectMake(0.0f, self.controllerInset.top - self.explicitTableInset.top + 44.0f, self.view.frame.size.width, self.view.frame.size.height);
+    
+    _selectionPanelView.safeAreaInset = self.controllerSafeAreaInset;
 }
 
 - (void)filterSegmentedControlChanged
@@ -1013,8 +1151,11 @@ typedef enum {
 {
     [super viewWillAppear:animated];
     
+    [self createNavigationBarExtension];
+    [self check3DTouch];
+    
     CGSize frameSize = self.view.bounds.size;
-    CGRect collectionViewFrame = CGRectMake(0.0f, -200.0f, frameSize.width, frameSize.height + 400.0f);
+    CGRect collectionViewFrame = CGRectMake(self.controllerSafeAreaInset.left, -200.0f, frameSize.width - self.controllerSafeAreaInset.left - self.controllerSafeAreaInset.right, frameSize.height + 400.0f);
     bool updateLayout = false;
     if (!CGSizeEqualToSize(_collectionView.frame.size, collectionViewFrame.size))
         updateLayout = true;
@@ -1035,6 +1176,298 @@ typedef enum {
         [_collectionView deselectItemAtIndexPath:[_collectionView indexPathsForSelectedItems].firstObject animated:true];
     if ([_searchCollectionView indexPathsForSelectedItems].count != 0)
         [_searchCollectionView deselectItemAtIndexPath:[_searchCollectionView indexPathsForSelectedItems].firstObject animated:true];
+    
+    if (iosMajorVersion() >= 7)
+    {
+        if (!self.transitionCoordinator.isCancelled && self.presentedViewController == nil)
+        {
+            //_segmentedControl.alpha = 0.0f;
+            _navbarExtensionView.transform = CGAffineTransformMakeTranslation(0.0f, -_navbarExtensionView.frame.size.height);
+        }
+        
+        TGNavigationBar *navigationBar = (TGNavigationBar *)self.navigationController.navigationBar;
+        if (navigationBar)
+            _ownNavbar = navigationBar;
+        
+        [self.transitionCoordinator animateAlongsideTransition:^(__unused id<UIViewControllerTransitionCoordinatorContext> context)
+        {
+            _segmentedControl.alpha = 1.0f;
+            _navbarExtensionView.transform = CGAffineTransformIdentity;
+         
+            navigationBar.musicPlayerOffset = [self additionalTopInset];
+        } completion:^(__unused id<UIViewControllerTransitionCoordinatorContext> context)
+        {
+            navigationBar.musicPlayerOffset = [self additionalTopInset];
+        }];
+    }
+}
+
+- (CGFloat)additionalTopInset
+{
+    return iosMajorVersion() >= 7 ? 39.0f : 0.0f;
+}
+
+- (void)viewDidAppear:(BOOL)animated
+{
+    [super viewDidAppear:animated];
+    
+    if (_mode == TGSharedMediaControllerModeAudio)
+        [self updateNowPlayingCellSelection];
+    
+    _ownNavController = self.navigationController;
+}
+
+- (void)viewWillDisappear:(BOOL)animated
+{
+    [super viewWillDisappear:animated];
+    
+    if (iosMajorVersion() >= 7)
+    {
+        if (self.presentedViewController == nil)
+        {
+            TGNavigationBar *navigationBar = (TGNavigationBar *)self.navigationController.navigationBar;
+            if (self.transitionCoordinator != nil)
+            {
+                [self.transitionCoordinator animateAlongsideTransition:^(__unused id<UIViewControllerTransitionCoordinatorContext> context)
+                {
+                    _segmentedControl.alpha = 0.0f;
+                    _navbarExtensionView.transform = CGAffineTransformMakeTranslation(0.0f, -_navbarExtensionView.frame.size.height + 1.0f);
+                    navigationBar.musicPlayerOffset = 0.0f;
+                } completion:nil];
+            }
+            else
+            {
+                [UIView animateWithDuration:0.3 delay:0.0 options:7 << 16 animations:^
+                {
+                    _segmentedControl.alpha = 0.0f;
+                    _navbarExtensionView.transform = CGAffineTransformMakeTranslation(0.0f, -_navbarExtensionView.frame.size.height + 1.0f);
+                    _ownNavbar.musicPlayerOffset = 0.0f;
+                } completion:nil];
+            }
+        }
+    }
+}
+
+- (void)viewDidDisappear:(BOOL)animated
+{
+    [super viewDidDisappear:animated];
+    
+    if (self.presentedViewController == nil)
+    {
+        [_navbarExtensionClipView removeFromSuperview];
+        _navbarExtensionClipView = nil;
+    }
+}
+
+- (void)viewWillLayoutSubviews
+{
+    [super viewWillLayoutSubviews];
+    
+    if (_navbarExtensionClipView != nil)
+    {
+        TGNavigationBar *navigationBar = (TGNavigationBar *)self.navigationController.navigationBar;
+        [navigationBar insertSubview:_navbarExtensionClipView atIndex:1];
+        
+        if (navigationBar == nil || navigationBar.frame.origin.y < 0)
+            return;
+        
+        CGRect frame = _navbarExtensionClipView.frame;
+        frame.origin.y = navigationBar.frame.size.height - 12.0f;
+        _navbarExtensionClipView.frame = frame;
+        _segmentedControl.frame = CGRectMake(12.0f + self.controllerSafeAreaInset.left, 0.0f, _navbarExtensionView.frame.size.width - 24.0f - self.controllerSafeAreaInset.left - self.controllerSafeAreaInset.right, 29.0f);
+    }
+}
+
+- (void)viewDidLayoutSubviews
+{
+    [super viewDidLayoutSubviews];
+    
+    if (_navbarExtensionClipView != nil)
+    {
+        TGNavigationBar *navigationBar = (TGNavigationBar *)self.navigationController.navigationBar;
+        [navigationBar insertSubview:_navbarExtensionClipView atIndex:1];
+    }
+}
+
+- (void)setPresentation:(TGPresentation *)presentation
+{
+    _presentation = presentation;
+    [self setNavigationBarExtensionPresentation:presentation];
+    
+    _titleLabel.textColor = presentation.pallete.navigationTitleColor;
+    _titleArrowView.image = TGTintedImage(TGImageNamed(@"SharedMediaNavigationBarArrow.png"), presentation.pallete.navigationTitleColor);
+    
+    _activityIndicatorView.color = presentation.pallete.secondaryTextColor;
+    self.view.backgroundColor = presentation.pallete.backgroundColor;
+    
+    _collectionView.backgroundColor = self.view.backgroundColor;
+    _searchCollectionView.backgroundColor = self.view.backgroundColor;
+    
+    [_searchBar setPallete:presentation.searchBarPallete];
+    _menuView.presentation = presentation;
+    
+    _selectionPanelView.presentation = presentation;
+    
+    for (UICollectionViewCell *cell in _collectionView.visibleCells)
+    {
+        if ([cell isKindOfClass:[TGSharedMediaItemView class]])
+        {
+            ((TGSharedMediaItemView *)cell).presentation = presentation;
+        }
+    }
+    
+    for (UIView *view in _collectionView.subviews)
+    {
+        if ([view isKindOfClass:[TGSharedMediaSectionHeaderView class]])
+        {
+            ((TGSharedMediaSectionHeaderView *)view).presentation = presentation;
+        }
+    }
+}
+
+- (void)setNavigationBarExtensionPresentation:(TGPresentation *)presentation
+{
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(10.0f, 10.0f), false, 0.0f);
+    CGContextRef context = UIGraphicsGetCurrentContext();
+    
+    UIColor *whiteColor = (TGIsPad() && [self inPopover]) ? [UIColor whiteColor] : self.presentation.pallete.barBackgroundColor;
+    
+    CGColorRef colors[3] = {
+        CGColorRetain(whiteColor.CGColor),
+        CGColorRetain(whiteColor.CGColor),
+        CGColorRetain([whiteColor colorWithAlphaComponent:0.0f].CGColor)
+    };
+    
+    CFArrayRef colorsArray = CFArrayCreate(kCFAllocatorDefault, (const void **)&colors, 3, NULL);
+    CGFloat locations[3] = {0.0f, 0.45f, 1.0f};
+    
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    CGGradientRef gradient = CGGradientCreateWithColors(colorSpace, colorsArray, (CGFloat const *)&locations);
+    
+    CFRelease(colorsArray);
+    CFRelease(colors[0]);
+    CFRelease(colors[1]);
+    CFRelease(colors[2]);
+    
+    CGColorSpaceRelease(colorSpace);
+    
+    CGContextDrawLinearGradient(context, gradient, CGPointMake(0.0f, 0.0f), CGPointMake(0.0f, 10.0f), 0);
+    
+    CFRelease(gradient);
+    
+    UIImage *maskImage = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    
+    _navbarExtensionView.backgroundColor = whiteColor;
+    _navbarExtensionMaskView.image = maskImage;
+    
+    [_segmentedControl setBackgroundImage:presentation.images.segmentedControlBackgroundImage forState:UIControlStateNormal barMetrics:UIBarMetricsDefault];
+    [_segmentedControl setBackgroundImage:presentation.images.segmentedControlSelectedImage forState:UIControlStateSelected barMetrics:UIBarMetricsDefault];
+    [_segmentedControl setBackgroundImage:presentation.images.segmentedControlSelectedImage forState:UIControlStateSelected | UIControlStateHighlighted barMetrics:UIBarMetricsDefault];
+    [_segmentedControl setBackgroundImage:presentation.images.segmentedControlHighlightedImage forState:UIControlStateHighlighted barMetrics:UIBarMetricsDefault];
+    [_segmentedControl setDividerImage:presentation.images.segmentedControlDividerImage forLeftSegmentState:UIControlStateNormal rightSegmentState:UIControlStateNormal barMetrics:UIBarMetricsDefault];
+    [_segmentedControl setTitleTextAttributes:@{UITextAttributeTextColor:presentation.pallete.navigationButtonColor, UITextAttributeTextShadowColor: [UIColor clearColor], UITextAttributeFont: TGSystemFontOfSize(13)} forState:UIControlStateNormal];
+    [_segmentedControl setTitleTextAttributes:@{UITextAttributeTextColor:presentation.pallete.accentContrastColor, UITextAttributeTextShadowColor: [UIColor clearColor], UITextAttributeFont: TGSystemFontOfSize(13)} forState:UIControlStateSelected];
+    
+    _stripeView.backgroundColor = presentation.pallete.barSeparatorColor;
+}
+
+- (void)createNavigationBarExtension
+{
+    if (iosMajorVersion() < 7 || _navbarExtensionClipView != nil)
+        return;
+    
+    [UIView performWithoutAnimation:^
+    {
+        TGNavigationBar *navigationBar = (TGNavigationBar *)self.navigationController.navigationBar;
+        
+        _navbarExtensionClipView = [[UIView alloc] initWithFrame:CGRectMake(0.0f, navigationBar.frame.size.height - 12.0f, navigationBar.frame.size.width, 51.0f)];
+        _navbarExtensionClipView.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+        _navbarExtensionClipView.clipsToBounds = true;
+        [navigationBar insertSubview:_navbarExtensionClipView atIndex:1];
+
+        navigationBar.additionalView = _navbarExtensionClipView;
+        
+        _navbarExtensionView = [[UIView alloc] initWithFrame:CGRectMake(0.0f, 11.0f, navigationBar.frame.size.width, 40.0f)];
+        _navbarExtensionView.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+        [_navbarExtensionClipView addSubview:_navbarExtensionView];
+
+        _navbarExtensionMaskView = [[UIImageView alloc] initWithFrame:CGRectMake(0.0f, 0.0f, _navbarExtensionClipView.frame.size.width, 11.0f)];
+        _navbarExtensionMaskView.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+        [_navbarExtensionClipView addSubview:_navbarExtensionMaskView];
+        
+        [self setNavigationBarExtensionPresentation:self.presentation];
+        
+        dispatch_async(dispatch_get_main_queue(), ^
+        {
+            NSArray *items = @[TGLocalized(@"SharedMedia.CategoryMedia"), TGLocalized(@"SharedMedia.CategoryDocs"), TGLocalized(@"SharedMedia.CategoryLinks"), TGLocalized(@"SharedMedia.CategoryOther")];
+            _segmentedControl = [[UISegmentedControl alloc] initWithItems:items];
+            
+            _segmentedControl.frame = CGRectMake(12.0f + self.controllerSafeAreaInset.left, 0.0f, _navbarExtensionView.frame.size.width - 24.0f - self.controllerSafeAreaInset.left - self.controllerSafeAreaInset.right, 29.0f);
+            _segmentedControl.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleTopMargin;
+            [_segmentedControl setSelectedSegmentIndex:0];
+            [_segmentedControl addTarget:self action:@selector(segmentedControlChanged) forControlEvents:UIControlEventValueChanged];
+            
+            _stripeView = [[UIView alloc] initWithFrame:CGRectMake(0.0f, _navbarExtensionView.frame.size.height - TGScreenPixel, _navbarExtensionView.frame.size.width, TGScreenPixel)];
+            _stripeView.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+            [_navbarExtensionView addSubview:_stripeView];
+            
+            [_navbarExtensionView addSubview:_segmentedControl];
+            
+            switch (_mode)
+            {
+                case TGSharedMediaControllerModeAll:
+                    _segmentedControl.selectedSegmentIndex = 0;
+                    break;
+                    
+                case TGSharedMediaControllerModeFile:
+                    _segmentedControl.selectedSegmentIndex = 1;
+                    break;
+                    
+                case TGSharedMediaControllerModeLink:
+                    _segmentedControl.selectedSegmentIndex = 2;
+                    break;
+                    
+                case TGSharedMediaControllerModeAudio:
+                    _segmentedControl.selectedSegmentIndex = 3;
+                    break;
+                    
+                default:
+                    break;
+            }
+            
+            _segmentedControl.alpha = 0.0f;
+            [UIView animateWithDuration:0.2 animations:^
+            {
+                _segmentedControl.alpha = 1.0f;
+            }];
+            
+            [self setNavigationBarExtensionPresentation:self.presentation];
+        });
+    }];
+}
+
+- (void)segmentedControlChanged
+{
+    NSInteger index = _segmentedControl.selectedSegmentIndex;
+    TGSharedMediaControllerMode mode = TGSharedMediaControllerModeAll;
+    switch (index) {
+        case 1:
+            mode = TGSharedMediaControllerModeFile;
+            break;
+            
+        case 2:
+            mode = TGSharedMediaControllerModeLink;
+            break;
+            
+        case 3:
+            mode = TGSharedMediaControllerModeAudio;
+            break;
+            
+        default:
+            break;
+    }
+    [self setMode:mode];
 }
 
 - (void)layoutControllerForSize:(CGSize)size duration:(NSTimeInterval)duration {
@@ -1058,7 +1491,9 @@ typedef enum {
     CGAffineTransform tableTransform = _collectionView.transform;
     _collectionView.transform = CGAffineTransformIdentity;
     
-    CGRect tableFrame = CGRectMake(0, 0.0f - 200.0f, screenSize.width, screenSize.height - 0.0f + 400.0f);
+
+    UIEdgeInsets safeAreaInset = [self calculatedSafeAreaInset];    
+    CGRect tableFrame = CGRectMake(safeAreaInset.left, 0.0f - 200.0f, screenSize.width - safeAreaInset.left - safeAreaInset.right, screenSize.height - 0.0f + 400.0f);
     _collectionViewWidth = tableFrame.size.width;
     _collectionView.frame = tableFrame;
     
@@ -1072,6 +1507,8 @@ typedef enum {
     
     [_collectionView.collectionViewLayout invalidateLayout];
     [_collectionView layoutSubviews];
+    
+    _selectionPanelView.frame = CGRectMake(0.0f, self.view.frame.size.height - (_editing ? 45.0f + safeAreaInset.bottom : 0.0f), self.view.frame.size.width, 45.0f + safeAreaInset.bottom);
 }
 
 - (NSArray *)sharedMediaItemsForMessages:(NSArray *)messages
@@ -1080,33 +1517,47 @@ typedef enum {
     
     for (TGMessage *message in messages)
     {
+        if (message.messageLifetime > 0 && message.messageLifetime <= 60) {
+            continue;
+        }
         bool found = false;
-        for (id attachment in message.mediaAttachments)
+        if (_mode != TGSharedMediaControllerModeLink)
         {
-            if ([attachment isKindOfClass:[TGImageMediaAttachment class]])
+            for (id attachment in message.mediaAttachments)
             {
-                [items addObject:[[TGSharedMediaImageItem alloc] initWithMessage:message messageId:message.mid date:message.date incoming:!message.outgoing imageMediaAttachment:attachment]];
-                found = true;
-            }
-            else if ([attachment isKindOfClass:[TGVideoMediaAttachment class]])
-            {
-                [items addObject:[[TGSharedMediaVideoItem alloc] initWithMessage:message messageId:message.mid date:message.date incoming:!message.outgoing videoMediaAttachment:attachment]];
-                found = true;
-            }
-            else if ([attachment isKindOfClass:[TGDocumentMediaAttachment class]])
-            {
-                [items addObject:[[TGSharedMediaFileItem alloc] initWithMessage:message messageId:message.mid date:message.date incoming:!message.outgoing documentMediaAttachment:attachment]];
-                found = true;
+                if ([attachment isKindOfClass:[TGImageMediaAttachment class]])
+                {
+                    [items addObject:[[TGSharedMediaImageItem alloc] initWithMessage:message messageId:message.mid date:message.date incoming:!message.outgoing imageMediaAttachment:attachment]];
+                    found = true;
+                }
+                else if ([attachment isKindOfClass:[TGVideoMediaAttachment class]])
+                {
+                    TGVideoMediaAttachment *videoAttachment = (TGVideoMediaAttachment *)attachment;
+                        [items addObject:[[TGSharedMediaVideoItem alloc] initWithMessage:message messageId:message.mid date:message.date incoming:!message.outgoing videoMediaAttachment:videoAttachment]];
+                    found = true;
+                }
+                else if ([attachment isKindOfClass:[TGDocumentMediaAttachment class]])
+                {
+                    TGDocumentMediaAttachment *documentAttachment = (TGDocumentMediaAttachment *)attachment;
+                    if (documentAttachment.isVoice)
+                    {
+                        [items addObject:[[TGSharedMediaVoiceMessageItem alloc] initWithMessage:message messageId:message.mid date:message.date incoming:!message.outgoing documentMediaAttachment:documentAttachment]];
+                    }
+                    else
+                    {
+                        [items addObject:[[TGSharedMediaFileItem alloc] initWithMessage:message messageId:message.mid date:message.date incoming:!message.outgoing documentMediaAttachment:attachment]];
+                    }
+                    found = true;
+                }
             }
         }
-        
         if (!found)
         {
             for (id entity in message.entities)
             {
                 if ([entity isKindOfClass:[TGMessageEntityUrl class]] || [entity isKindOfClass:[TGMessageEntityTextUrl class]] || [entity isKindOfClass:[TGMessageEntityEmail class]])
                 {
-                    [items addObject:[[TGSharedMediaLinkItem alloc] initWithMessage:message messageId:message.mid date:message.date incoming:!message.outgoing]];
+                    [items addObject:[[TGSharedMediaLinkItem alloc] initWithMessage:message messageId:message.mid date:message.date incoming:!message.outgoing presentation:self.presentation]];
                     break;
                 }
             }
@@ -1212,11 +1663,11 @@ typedef enum {
             NSString *filePath = nil;
             if (fileItem.documentMediaAttachment.documentId != 0)
             {
-                filePath = [TGPreparedLocalDocumentMessage localDocumentDirectoryForDocumentId:fileItem.documentMediaAttachment.documentId];
+                filePath = [TGPreparedLocalDocumentMessage localDocumentDirectoryForDocumentId:fileItem.documentMediaAttachment.documentId version:fileItem.documentMediaAttachment.version];
             }
             else
             {
-                filePath = [TGPreparedLocalDocumentMessage localDocumentDirectoryForLocalDocumentId:fileItem.documentMediaAttachment.localDocumentId];
+                filePath = [TGPreparedLocalDocumentMessage localDocumentDirectoryForLocalDocumentId:fileItem.documentMediaAttachment.localDocumentId version:fileItem.documentMediaAttachment.version];
             }
             
             filePath = [filePath stringByAppendingPathComponent:[fileItem.documentMediaAttachment safeFileName]];
@@ -1243,7 +1694,11 @@ typedef enum {
 {
     if (collectionView == _collectionView)
     {
-        if (_mode != TGSharedMediaControllerModeFile && _mode != TGSharedMediaControllerModeAudio)
+        if (_mode == TGSharedMediaControllerModeVoiceRound)
+        {
+            return CGSizeMake(_collectionViewWidth, 56.0f);
+        }
+        else if (_mode != TGSharedMediaControllerModeFile && _mode != TGSharedMediaControllerModeAudio)
         {
             NSUInteger itemIndex = (NSUInteger)indexPath.item;
             
@@ -1285,10 +1740,11 @@ typedef enum {
 
 - (UIEdgeInsets)collectionView:(UICollectionView *)collectionView layout:(UICollectionViewLayout *)__unused collectionViewLayout insetForSectionAtIndex:(NSInteger)__unused section
 {
+    CGFloat headerHeight = 42.0f;
     if (collectionView == _collectionView)
     {
-        if (_mode == TGSharedMediaControllerModeFile || _mode == TGSharedMediaControllerModeLink || _mode == TGSharedMediaControllerModeAudio)
-            return UIEdgeInsetsMake(36.0f + (section == 0 ? 44.0f : 0.0f), 0.0f, 0.0f, 0.0f);
+        if (_mode == TGSharedMediaControllerModeFile || _mode == TGSharedMediaControllerModeLink || _mode == TGSharedMediaControllerModeAudio || _mode == TGSharedMediaControllerModeVoiceRound)
+            return UIEdgeInsetsMake(headerHeight + (section == 0 ? 44.0f : 0.0f), 0.0f, 0.0f, 0.0f);
         
         UIEdgeInsets insets = UIEdgeInsetsZero;
         
@@ -1296,14 +1752,14 @@ typedef enum {
             insets = UIEdgeInsetsMake(10.0f, 10.0f, 10.0f, 10.0f);
         else
             insets = (_collectionViewWidth >= _widescreenWidth - FLT_EPSILON) ? _wideEdgeInsets : _normalEdgeInsets;
-        insets.top += 36.0f;
+        insets.top += headerHeight;
         
         return insets;
     }
     else
     {
         if (_mode == TGSharedMediaControllerModeFile)
-            return UIEdgeInsetsMake(36.0f, 0.0f, 0.0f, 0.0f);
+            return UIEdgeInsetsMake(headerHeight, 0.0f, 0.0f, 0.0f);
         
         UIEdgeInsets insets = UIEdgeInsetsZero;
         
@@ -1311,7 +1767,7 @@ typedef enum {
             insets = UIEdgeInsetsMake(10.0f, 10.0f, 10.0f, 10.0f);
         else
             insets = (_collectionViewWidth >= _widescreenWidth - FLT_EPSILON) ? _wideEdgeInsets : _normalEdgeInsets;
-        insets.top += 36.0f;
+        insets.top += headerHeight;
         
         return insets;
     }
@@ -1321,7 +1777,7 @@ typedef enum {
 {
     if (collectionView == _collectionView)
     {
-        if (_mode == TGSharedMediaControllerModeFile || _mode == TGSharedMediaControllerModeLink || _mode == TGSharedMediaControllerModeAudio)
+        if (_mode == TGSharedMediaControllerModeFile || _mode == TGSharedMediaControllerModeLink || _mode == TGSharedMediaControllerModeAudio || _mode == TGSharedMediaControllerModeVoiceRound)
             return 0.0f;
         
         if (ABS(_collectionViewWidth - 540.0f) < FLT_EPSILON)
@@ -1331,7 +1787,7 @@ typedef enum {
     }
     else
     {
-        if (_mode == TGSharedMediaControllerModeFile || _mode == TGSharedMediaControllerModeLink || _mode == TGSharedMediaControllerModeAudio)
+        if (_mode == TGSharedMediaControllerModeFile || _mode == TGSharedMediaControllerModeLink || _mode == TGSharedMediaControllerModeAudio || _mode == TGSharedMediaControllerModeVoiceRound)
             return 0.0f;
         
         if (ABS(_collectionViewWidth - 540.0f) < FLT_EPSILON)
@@ -1430,11 +1886,11 @@ typedef enum {
     }
     
     TGSharedMediaItemView *itemView = nil;
-    
     if ([item isKindOfClass:[TGSharedMediaImageItem class]])
     {
         TGSharedMediaImageItem *imageItem = (TGSharedMediaImageItem *)item;
         TGSharedMediaImageItemView *imageItemView = (TGSharedMediaImageItemView *)[collectionView dequeueReusableCellWithReuseIdentifier:@"TGSharedMediaImageItemView" forIndexPath:indexPath];
+        imageItemView.presentation = self.presentation;
         imageItemView.imageViewQueue = _imageViewQueue;
         imageItemView.isItemHidden = _isItemHidden;
         imageItemView.isItemSelected = _isItemSelected;
@@ -1447,6 +1903,7 @@ typedef enum {
     {
         TGSharedMediaVideoItem *videoItem = (TGSharedMediaVideoItem *)item;
         TGSharedMediaVideoItemView *videoItemView = (TGSharedMediaVideoItemView *)[collectionView dequeueReusableCellWithReuseIdentifier:@"TGSharedMediaVideoItemView" forIndexPath:indexPath];
+        videoItemView.presentation = self.presentation;
         videoItemView.imageViewQueue = _imageViewQueue;
         videoItemView.isItemHidden = _isItemHidden;
         videoItemView.isItemSelected = _isItemSelected;
@@ -1460,6 +1917,7 @@ typedef enum {
         if (_mode == TGSharedMediaControllerModeFile || _mode == TGSharedMediaControllerModeAudio)
         {
             TGSharedMediaFileItemView *fileItemView = (TGSharedMediaFileItemView *)[collectionView dequeueReusableCellWithReuseIdentifier:@"TGSharedMediaFileItemView" forIndexPath:indexPath];
+            fileItemView.presentation = self.presentation;
             fileItemView.imageViewQueue = _imageViewQueue;
             fileItemView.isItemHidden = _isItemHidden;
             fileItemView.isItemSelected = _isItemSelected;
@@ -1467,10 +1925,21 @@ typedef enum {
             fileItemView.item = item;
             [fileItemView setDocumentMediaAttachment:((TGSharedMediaFileItem *)item).documentMediaAttachment date:(int)[item date] lastInSection:lastInSection availabilityState:availabilityState thumbnailColors:[TGSharedMediaController thumbnailColorsForFileName:((TGSharedMediaFileItem *)item).documentMediaAttachment.fileName]];
             itemView = fileItemView;
+            
+            NSInteger keyVal = 0;
+            if ([_nowPlayingItemKey isKindOfClass:[NSNumber class]])
+                keyVal = [(NSNumber *)_nowPlayingItemKey integerValue];
+
+            if (keyVal != 0)
+            {
+                if ([item messageId] == keyVal)
+                    [_collectionView selectItemAtIndexPath:indexPath animated:false scrollPosition:UICollectionViewScrollPositionNone];
+            }
         }
         else
         {
             TGSharedMediaFileThumbnailItemView *fileItemView = (TGSharedMediaFileThumbnailItemView *)[collectionView dequeueReusableCellWithReuseIdentifier:@"TGSharedMediaFileThumbnailItemView" forIndexPath:indexPath];
+            fileItemView.presentation = self.presentation;
             fileItemView.imageViewQueue = _imageViewQueue;
             fileItemView.isItemHidden = _isItemHidden;
             fileItemView.isItemSelected = _isItemSelected;
@@ -1479,10 +1948,13 @@ typedef enum {
             [fileItemView setDocumentMediaAttachment:((TGSharedMediaFileItem *)item).documentMediaAttachment availabilityState:availabilityState thumbnailColors:[TGSharedMediaController thumbnailColorsForFileName:((TGSharedMediaFileItem *)item).documentMediaAttachment.fileName]];
             itemView = fileItemView;
         }
+        
+        itemView.itemLongPressed = _itemLongPressed;
     }
     else if ([item isKindOfClass:[TGSharedMediaLinkItem class]])
     {
         TGSharedMediaLinkItemView *linkItemView = (TGSharedMediaLinkItemView *)[collectionView dequeueReusableCellWithReuseIdentifier:@"TGSharedMediaLinkItemView" forIndexPath:indexPath];
+        linkItemView.presentation = self.presentation;
         linkItemView.imageViewQueue = _imageViewQueue;
         linkItemView.isItemHidden = _isItemHidden;
         linkItemView.isItemSelected = _isItemSelected;
@@ -1491,6 +1963,14 @@ typedef enum {
         linkItemView.item = item;
         [linkItemView setMessage:((TGSharedMediaLinkItem *)item).message date:(int)[item date] lastInSection:false textModel:[(TGSharedMediaLinkItem *)item textModel] imageSignal:[(TGSharedMediaLinkItem *)item imageSignal] links:[(TGSharedMediaLinkItem *)item links] webPage:[(TGSharedMediaLinkItem *)item webPage]];
         itemView = linkItemView;
+    }
+    else if ([item isKindOfClass:[TGSharedMediaVoiceMessageItem class]])
+    {
+        
+    }
+    else if ([item isKindOfClass:[TGSharedMediaRoundMessageItem class]])
+    {
+        
     }
     
     if (collectionView == _collectionView)
@@ -1509,66 +1989,33 @@ typedef enum {
 
 - (NSString *)summaryStringForGroup:(TGSharedMediaGroup *)group
 {
-    NSString *format = @"";
+    NSString *key = @"";
     switch (group.contentType)
     {
         case TGSharedMediaGroupContentTypeImage:
-            if (group.items.count == 1)
-                format = TGLocalized(@"SharedMedia.Photo_1");
-            else if (group.items.count == 2)
-                format = TGLocalized(@"SharedMedia.Photo_2");
-            else if (group.items.count >= 3 && group.items.count <= 10)
-                format = TGLocalized(@"SharedMedia.Photo_3_10");
-            else
-                format = TGLocalized(@"SharedMedia.Photo_any");
+            key = @"SharedMedia.Photo";
             break;
         case TGSharedMediaGroupContentTypeVideo:
-            if (group.items.count == 1)
-                format = TGLocalized(@"SharedMedia.Video_1");
-            else if (group.items.count == 2)
-                format = TGLocalized(@"SharedMedia.Video_2");
-            else if (group.items.count >= 3 && group.items.count <= 10)
-                format = TGLocalized(@"SharedMedia.Video_3_10");
-            else
-                format = TGLocalized(@"SharedMedia.Video_any");
+            key = @"SharedMedia.Video";
             break;
         case TGSharedMediaGroupContentTypeFile:
-            if (group.items.count == 1)
-                format = TGLocalized(@"SharedMedia.File_1");
-            else if (group.items.count == 2)
-                format = TGLocalized(@"SharedMedia.File_2");
-            else if (group.items.count >= 3 && group.items.count <= 10)
-                format = TGLocalized(@"SharedMedia.File_3_10");
-            else
-                format = TGLocalized(@"SharedMedia.File_any");
+            key = @"SharedMedia.File";
             break;
         case TGSharedMediaGroupContentTypeLink:
-            if (group.items.count == 1)
-                format = TGLocalized(@"SharedMedia.Link_1");
-            else if (group.items.count == 2)
-                format = TGLocalized(@"SharedMedia.Link_2");
-            else if (group.items.count >= 3 && group.items.count <= 10)
-                format = TGLocalized(@"SharedMedia.Link_3_10");
-            else
-                format = TGLocalized(@"SharedMedia.Link_any");
+            key = @"SharedMedia.Link";
             break;
         default:
-            if (group.items.count == 1)
-                format = TGLocalized(@"SharedMedia.Generic_1");
-            else if (group.items.count == 2)
-                format = TGLocalized(@"SharedMedia.Generic_2");
-            else if (group.items.count >= 3 && group.items.count <= 10)
-                format = TGLocalized(@"SharedMedia.Generic_3_10");
-            else
-                format = TGLocalized(@"SharedMedia.Generic_any");
+            key = @"SharedMedia.Generic";
             break;
     }
     
-    return [[NSString alloc] initWithFormat:format, [[NSString alloc] initWithFormat:@"%d", (int)group.items.count]];
+    return [effectiveLocalization() getPluralized:key count:(int32_t)group.items.count];
 }
 
 - (void)collectionView:(UICollectionView *)collectionView setupSectionHeaderView:(TGSharedMediaSectionHeaderView *)sectionHeaderView forSectionHeader:(TGSharedMediaSectionHeader *)sectionHeader
 {
+    sectionHeaderView.presentation = self.presentation;
+    
     if (collectionView == _collectionView)
     {
         TGSharedMediaGroup *group = _filteredItemGroups[sectionHeader.index];
@@ -1599,11 +2046,11 @@ typedef enum {
         NSString *filePath = nil;
         if (fileItem.documentMediaAttachment.documentId != 0)
         {
-            filePath = [TGPreparedLocalDocumentMessage localDocumentDirectoryForDocumentId:fileItem.documentMediaAttachment.documentId];
+            filePath = [TGPreparedLocalDocumentMessage localDocumentDirectoryForDocumentId:fileItem.documentMediaAttachment.documentId version:fileItem.documentMediaAttachment.version];
         }
         else
         {
-            filePath = [TGPreparedLocalDocumentMessage localDocumentDirectoryForLocalDocumentId:fileItem.documentMediaAttachment.localDocumentId];
+            filePath = [TGPreparedLocalDocumentMessage localDocumentDirectoryForLocalDocumentId:fileItem.documentMediaAttachment.localDocumentId version:fileItem.documentMediaAttachment.version];
         }
         
         filePath = [filePath stringByAppendingPathComponent:[fileItem.documentMediaAttachment safeFileName]];
@@ -1627,7 +2074,7 @@ typedef enum {
             else
             {
                 TGDocumentController *documentController = [[TGDocumentController alloc] initWithURL:[NSURL fileURLWithPath:filePath] messageId:[item messageId]];
-                
+
                 if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPhone)
                     [self.navigationController pushViewController:documentController animated:true];
                 else
@@ -1712,11 +2159,11 @@ typedef enum {
             }
             
             return nil;
-        } genericPeerGalleryModel:&model];
+        } genericPeerGalleryModel:&model previewMode:false];
         if (controller != nil)
         {
             _galleryModel = model;
-            TGOverlayControllerWindow *controllerWindow = [[TGOverlayControllerWindow alloc] initWithParentController:self contentController:controller];
+            TGOverlayControllerWindow *controllerWindow = [[TGOverlayControllerWindow alloc] initWithManager:[[TGLegacyComponentsContext shared] makeOverlayWindowManager] parentController:self contentController:controller];
             controllerWindow.hidden = false;
         }
     }
@@ -1726,10 +2173,20 @@ typedef enum {
         TGSharedMediaLinkItem *linkItem = (TGSharedMediaLinkItem *)item;
         if (linkItem.webPage.url.length != 0)
         {
-            if (linkItem.webPage.embedUrl.length != 0)
-                [self openEmbed:linkItem.webPage];
+            if (linkItem.webPage.embedUrl.length != 0 && ![linkItem.webPage.embedType isEqualToString:@"application/x-shockwave-flash"])
+            {
+                [self openEmbed:linkItem.webPage forMessageId:linkItem.messageId];
+            }
+            else if (linkItem.webPage.instantPage != 0)
+            {
+                NSString *fragment = nil;
+                TGInstantPageController *pageController = [[TGInstantPageController alloc] initWithWebPage:linkItem.webPage anchor:fragment.length == 0 ? nil : fragment peerId:_peerId messageId:linkItem.messageId];
+                [self.navigationController pushViewController:pageController animated:true];
+            }
             else
+            {
                 [[UIApplication sharedApplication] openURL:[NSURL URLWithString:linkItem.webPage.url]];
+            }
         }
         else if (linkItem.links.count != 0)
         {
@@ -1738,57 +2195,45 @@ typedef enum {
     }
 }
 
-- (void)openEmbed:(TGWebPageMediaAttachment *)webPage
+- (void)openEmbed:(TGWebPageMediaAttachment *)webPage forMessageId:(int32_t)messageId
 {
-    [self.view endEditing:true];
-    
-    __weak TGSharedMediaController *weakSelf = self;
-    _attachmentSheetWindow = [[TGAttachmentSheetWindow alloc] init];
-    _attachmentSheetWindow.dismissalBlock = ^
+    CGRect (^sourceRect)(void) = ^CGRect
     {
-        __strong TGSharedMediaController *strongSelf = weakSelf;
-        if (strongSelf == nil)
-            return;
+        CGRect rect = self.view.bounds;
+        for (NSIndexPath *indexPath in _collectionView.indexPathsForVisibleItems)
+        {
+            id<TGSharedMediaItem> item = nil;
+            TGSharedMediaCollectionView *collectionView = nil;
+            
+            if (_filteredSearchItemGroups == nil)
+            {
+                collectionView = _collectionView;
+                item = ((TGSharedMediaGroup *)_filteredItemGroups[indexPath.section]).items[indexPath.item];
+            }
+            else
+            {
+                collectionView = _searchCollectionView;
+                item = ((TGSharedMediaGroup *)_filteredSearchItemGroups[indexPath.section]).items[indexPath.item];
+            }
+            
+            if ([item isKindOfClass:[TGSharedMediaLinkItem class]])
+            {
+                TGSharedMediaLinkItem *linkItem = (TGSharedMediaLinkItem *)item;
+                if (linkItem.messageId == messageId)
+                {
+                    rect = [collectionView.collectionViewLayout layoutAttributesForItemAtIndexPath:indexPath].frame;
+                    rect = [self.view convertRect:rect fromView:collectionView];
+                    break;
+                }
+            }
+        }
         
-        strongSelf->_attachmentSheetWindow.rootViewController = nil;
-        strongSelf->_attachmentSheetWindow = nil;
+        return rect;
     };
     
-    NSMutableArray *items = [[NSMutableArray alloc] init];
+    [self.view endEditing:true];
     
-    TGAttachmentSheetEmbedItemView *embedView = [[TGAttachmentSheetEmbedItemView alloc] initWithWebPage:webPage];
-    [items addObject:embedView];
-    
-    [items addObject:[[TGAttachmentSheetButtonItemView alloc] initWithTitle:TGLocalized(@"Web.OpenExternal") pressed:^
-    {
-        __strong TGSharedMediaController *strongSelf = weakSelf;
-        if (strongSelf != nil)
-        {
-            [strongSelf->_attachmentSheetWindow dismissAnimated:true completion:nil];
-            [[UIApplication sharedApplication] openURL:[NSURL URLWithString:webPage.url]];
-        }
-    }]];
-    
-    [items addObject:[[TGAttachmentSheetButtonItemView alloc] initWithTitle:TGLocalized(@"Web.CopyLink") pressed:^
-    {
-        __strong TGSharedMediaController *strongSelf = weakSelf;
-        if (strongSelf != nil)
-        {
-            [strongSelf->_attachmentSheetWindow dismissAnimated:true completion:nil];
-            [[UIPasteboard generalPasteboard] setString:webPage.url];
-        }
-    }]];
-    
-    [items addObject:[[TGAttachmentSheetButtonItemView alloc] initWithTitle:TGLocalized(@"Common.Cancel") pressed:^ {
-        __strong TGSharedMediaController *strongSelf = weakSelf;
-        if (strongSelf != nil) {
-            [strongSelf->_attachmentSheetWindow dismissAnimated:true completion:nil];
-        }
-    }]];
-    
-    _attachmentSheetWindow.view.items = items;
-    _attachmentSheetWindow.windowLevel = UIWindowLevelNormal;
-    [_attachmentSheetWindow showAnimated:true completion:nil];
+    [TGEmbedMenu presentInParentController:self attachment:webPage peerId:_peerId messageId:messageId cancelPIP:false sourceView:self.view sourceRect:sourceRect];
 }
 
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView
@@ -1931,7 +2376,8 @@ typedef enum {
     {
         if (_editing)
             [self cancelPressed];
-        [self setRightBarButtonItem:nil];
+        if (_activityIndicatorView.hidden)
+            [self setRightBarButtonItem:nil];
     }
 }
 
@@ -1968,21 +2414,47 @@ typedef enum {
     return messages;
 }
 
-- (TGModernGalleryController *)createGalleryControllerForItem:(id<TGSharedMediaItem>)item hideItem:(void (^)(id<TGSharedMediaItem>))hideItem referenceViewForItem:(UIView *(^)(id<TGSharedMediaItem>))referenceViewForItem genericPeerGalleryModel:(__autoreleasing TGGenericPeerMediaGalleryModel **)genericPeerGalleryModel
+- (TGModernGalleryController *)createGalleryControllerForItem:(id<TGSharedMediaItem>)item hideItem:(void (^)(id<TGSharedMediaItem>))hideItem referenceViewForItem:(UIView *(^)(id<TGSharedMediaItem>))referenceViewForItem genericPeerGalleryModel:(__autoreleasing TGGenericPeerMediaGalleryModel **)genericPeerGalleryModel previewMode:(bool)previewMode
 {
-    TGModernGalleryController *modernGallery = [[TGModernGalleryController alloc] init];
+    TGModernGalleryController *modernGallery = [[TGModernGalleryController alloc] initWithContext:[TGLegacyComponentsContext shared]];
     TGGenericPeerMediaGalleryModel *model = [[TGGenericPeerMediaGalleryModel alloc] initWithPeerId:_peerId allowActions:_allowActions messages:[[self messagesForItemGroups:_filteredItemGroups].reverseObjectEnumerator allObjects] atMessageId:[item messageId]];
+    
+    bool canDelete = true;
+    if (TGPeerIdIsChannel(_peerId))
+    {
+        TGConversation *conversation = [TGDatabaseInstance() loadConversationWithId:_peerId];
+        bool isCreator = conversation.channelRole == TGChannelRoleCreator;
+        TGChannelAdminRights *adminRights = conversation.channelAdminRights;
+        TGChannelBannedRights *bannedRights = conversation.channelBannedRights;
+        
+        if (bannedRights.banSendMessages) {
+            canDelete = false;
+        } else {
+            canDelete = isCreator || adminRights.canDeleteMessages;
+        }
+    }
+    
+    model.disableDelete = !canDelete;
+        
     if (genericPeerGalleryModel)
         *genericPeerGalleryModel = model;
     modernGallery.model = model;
     
-    __weak TGSharedMediaController *weakSelf = self;
+    if (previewMode)
+        modernGallery.previewMode = previewMode;
     
+    __weak TGSharedMediaController *weakSelf = self;
+    __weak TGModernGalleryController *weakGallery = modernGallery;
     modernGallery.itemFocused = ^(id<TGModernGalleryItem> item)
     {
         __strong TGSharedMediaController *strongSelf = weakSelf;
+        __strong TGModernGalleryController *strongGallery = weakGallery;
+        
         if (strongSelf != nil && [item conformsToProtocol:@protocol(TGGenericPeerGalleryItem)])
         {
+            if (strongGallery.previewMode)
+                return;
+            
             id<TGGenericPeerGalleryItem> concreteItem = (id<TGGenericPeerGalleryItem>)item;
             id<TGSharedMediaItem> listItem = [strongSelf _findGalleryItem:concreteItem];
             if (hideItem)
@@ -1993,8 +2465,12 @@ typedef enum {
     modernGallery.beginTransitionIn = ^UIView *(id<TGModernGalleryItem> item, __unused TGModernGalleryItemView *itemView)
     {
         __strong TGSharedMediaController *strongSelf = weakSelf;
+        __strong TGModernGalleryController *strongGallery = weakGallery;
         if (strongSelf != nil && [item conformsToProtocol:@protocol(TGGenericPeerGalleryItem)])
         {
+            if (strongGallery.previewMode)
+                return nil;
+            
             id<TGGenericPeerGalleryItem> concreteItem = (id<TGGenericPeerGalleryItem>)item;
             id<TGSharedMediaItem> listItem = [strongSelf _findGalleryItem:concreteItem];
             if (referenceViewForItem)
@@ -2004,11 +2480,24 @@ typedef enum {
         return nil;
     };
     
+    modernGallery.finishedTransitionIn = ^(__unused id<TGModernGalleryItem>item, TGModernGalleryItemView *itemView)
+    {
+        __strong TGModernGalleryController *strongGallery = weakGallery;
+        if (strongGallery != nil && [itemView isKindOfClass:[TGModernGalleryNewVideoItemView class]])
+        {
+            if (strongGallery.previewMode)
+                [(TGModernGalleryNewVideoItemView *)itemView loadAndPlay];
+        }
+    };
+    
     modernGallery.beginTransitionOut = ^UIView *(id<TGModernGalleryItem> item, __unused TGModernGalleryItemView *itemView)
     {
         __strong TGSharedMediaController *strongSelf = weakSelf;
         if (strongSelf != nil && [item conformsToProtocol:@protocol(TGGenericPeerGalleryItem)])
         {
+            if ([itemView isKindOfClass:[TGModernGalleryNewVideoItemView class]])
+                [((TGModernGalleryNewVideoItemView *)itemView) stopForOutTransition]; 
+            
             id<TGGenericPeerGalleryItem> concreteItem = (id<TGGenericPeerGalleryItem>)item;
             id<TGSharedMediaItem> listItem = [strongSelf _findGalleryItem:concreteItem];
             if (referenceViewForItem)
@@ -2028,18 +2517,82 @@ typedef enum {
         }
     };
     
+    model.shareAction = ^(NSArray *messageIds, int64_t fromPeerId, NSArray *peerIds, NSString *caption)
+    {
+        __strong TGSharedMediaController *strongSelf = weakSelf;
+        if (strongSelf == nil)
+            return;
+        
+        NSMutableArray *finalPeerIds = [[NSMutableArray alloc] init];
+        for (NSNumber *peerId in peerIds)
+        {
+            if (peerId.int64Value == TGTelegraphInstance.clientUserId)
+            {
+                [strongSelf broadcastForwardMessages:messageIds caption:caption toPeerIds:@[ peerId ]];
+                continue;
+            }
+            [finalPeerIds addObject:peerId];
+        }
+        
+        for (NSNumber *messageId in messageIds)
+        {
+            int32_t mid = messageId.int32Value;
+            TGMessage *message = [TGDatabaseInstance() loadMessageWithMid:mid peerId:fromPeerId];
+            bool isInlineBotMessage = false;
+            for (TGDocumentMediaAttachment *attachment in message.mediaAttachments)
+            {
+                if (attachment.type == TGViaUserAttachmentType)
+                {
+                    isInlineBotMessage = true;
+                    break;
+                }
+            }
+            
+            if ((!TGPeerIdIsChannel(strongSelf->_peerId) || strongSelf.isChannelGroup) && !isInlineBotMessage)
+            {
+                for (TGMediaAttachment *attachment in message.mediaAttachments)
+                {
+                    if ([attachment isKindOfClass:[TGImageMediaAttachment class]])
+                    {
+                        [[TGShareSignals sharePhoto:(TGImageMediaAttachment *)attachment toPeerIds:finalPeerIds caption:caption] startWithNext:nil];
+                        break;
+                    }
+                    else if ([attachment isKindOfClass:[TGVideoMediaAttachment class]])
+                    {
+                        [[TGShareSignals shareVideo:(TGVideoMediaAttachment *)attachment toPeerIds:finalPeerIds caption:caption] startWithNext:nil];
+                        break;
+                    }
+                    else if ([attachment isKindOfClass:[TGDocumentMediaAttachment class]])
+                    {
+                        [[TGShareSignals shareDocument:(TGDocumentMediaAttachment *)attachment toPeerIds:finalPeerIds caption:caption] startWithNext:nil];
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                [strongSelf broadcastForwardMessages:@[ @([message mid]) ] caption:caption toPeerIds:finalPeerIds];
+            }
+        }
+    };
+    
     return modernGallery;
 }
 
 - (void)_updateEditing:(bool)animated
 {
+    if (iosMajorVersion() >= 7)
+        self.navigationController.interactivePopGestureRecognizer.enabled = !_editing;
+    
     if (_editing)
     {
         if (_selectionPanelView == nil)
         {
-            _selectionPanelView = [[TGSharedMediaSelectionPanelView alloc] initWithFrame:CGRectMake(0.0f, self.view.frame.size.height, self.view.frame.size.width, 45.0f)];
-            _selectionPanelView.shareEnabled = _allowActions;
+            _selectionPanelView = [[TGSharedMediaSelectionPanelView alloc] initWithFrame:CGRectMake(0.0f, self.view.frame.size.height, self.view.frame.size.width, 45.0f + self.controllerSafeAreaInset.bottom)];
+            _selectionPanelView.presentation = self.presentation;
+            _selectionPanelView.forwardEnabled = _allowActions;
             _selectionPanelView.deleteEnabled = !TGPeerIdIsChannel(_peerId) || _channelAllowDelete;
+            _selectionPanelView.shareEnabled = _allowActions;
             _selectionPanelView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleTopMargin;
             __weak TGSharedMediaController *weakSelf = self;
             _selectionPanelView.deleteSelectedItems = ^
@@ -2047,9 +2600,9 @@ typedef enum {
                 __strong TGSharedMediaController *strongSelf = weakSelf;
                 if (strongSelf != nil)
                 {
-                    NSString *messageText = [[NSString alloc] initWithFormat:TGLocalized([TGStringUtils integerValueFormat:@"SharedMedia.DeleteItemsConfirmation_" value:strongSelf->_selectedMessageIds.count]), [[NSString alloc] initWithFormat:@"%d", (int)strongSelf->_selectedMessageIds.count]];
+                    NSString *messageText = nil;//[[NSString alloc] initWithFormat:TGLocalized([TGStringUtils integerValueFormat:@"SharedMedia.DeleteItemsConfirmation_" value:strongSelf->_selectedMessageIds.count]), [[NSString alloc] initWithFormat:@"%d", (int)strongSelf->_selectedMessageIds.count]];
                     
-                    [[[TGActionSheet alloc] initWithTitle:messageText actions:@[
+                    [[[TGCustomActionSheet alloc] initWithTitle:messageText actions:@[
                         [[TGActionSheetAction alloc] initWithTitle:TGLocalized(@"Common.Delete") action:@"delete" type:TGActionSheetActionTypeDestructive],
                         [[TGActionSheetAction alloc] initWithTitle:TGLocalized(@"Common.Cancel") action:@"cancel" type:TGActionSheetActionTypeCancel]
                     ] actionBlock:^(__unused id target, NSString *action)
@@ -2063,6 +2616,12 @@ typedef enum {
                     } target:strongSelf] showInView:strongSelf.view];
                 }
             };
+            _selectionPanelView.forwardSelectedItems = ^
+            {
+                __strong TGSharedMediaController *strongSelf = weakSelf;
+                if (strongSelf != nil)
+                    [strongSelf _forwardSelectedItems];
+            };
             _selectionPanelView.shareSelectedItems = ^
             {
                 __strong TGSharedMediaController *strongSelf = weakSelf;
@@ -2072,35 +2631,41 @@ typedef enum {
             [self.view addSubview:_selectionPanelView];
         }
         _selectionPanelView.hidden = false;
-        CGRect selectionPanelFrame = CGRectMake(0.0f, self.view.frame.size.height - 45.0f, self.view.frame.size.width, 45.0f);
+        CGRect selectionPanelFrame = CGRectMake(0.0f, self.view.frame.size.height - 45.0f - self.controllerSafeAreaInset.bottom, self.view.frame.size.width, 45.0f + self.controllerSafeAreaInset.bottom);
         if (animated)
         {
             [UIView animateWithDuration:0.3 delay:0.0 options:[TGViewController preferredAnimationCurve] << 16 animations:^
             {
                 _selectionPanelView.frame = selectionPanelFrame;
-                self.explicitTableInset = UIEdgeInsetsMake(200.0f, 0.0f, 200.0f + 45.0f, 0.0f);
-                self.explicitScrollIndicatorInset = self.explicitTableInset;
+                self.explicitTableInset = UIEdgeInsetsMake(200.0f + [self additionalTopInset], 0.0f, 200.0f + 45.0f, 0.0f);
+                UIEdgeInsets scrollIndicatorInset = self.explicitTableInset;
+                scrollIndicatorInset.right -= self.controllerSafeAreaInset.right;
+                self.explicitScrollIndicatorInset = scrollIndicatorInset;
             } completion:nil];
         }
         else
         {
             _selectionPanelView.frame = selectionPanelFrame;
-            self.explicitTableInset = UIEdgeInsetsMake(200.0f, 0.0f, 200.0f + 45.0f, 0.0f);
-            self.explicitScrollIndicatorInset = self.explicitTableInset;
+            self.explicitTableInset = UIEdgeInsetsMake(200.0f + [self additionalTopInset], 0.0f, 200.0f + 45.0f, 0.0f);
+            UIEdgeInsets scrollIndicatorInset = self.explicitTableInset;
+            scrollIndicatorInset.right -= self.controllerSafeAreaInset.right;
+            self.explicitScrollIndicatorInset = scrollIndicatorInset;
         }
     }
     else
     {
         if (_selectionPanelView != nil)
         {
-            CGRect selectionPanelFrame = CGRectMake(0.0f, self.view.frame.size.height, self.view.frame.size.width, 45.0f);
+            CGRect selectionPanelFrame = CGRectMake(0.0f, self.view.frame.size.height, self.view.frame.size.width, 45.0f + self.controllerSafeAreaInset.bottom);
             if (animated)
             {
                 [UIView animateWithDuration:0.3 animations:^
                 {
                     _selectionPanelView.frame = selectionPanelFrame;
-                    self.explicitTableInset = UIEdgeInsetsMake(200.0f, 0.0f, 200.0f, 0.0f);
-                    self.explicitScrollIndicatorInset = self.explicitTableInset;
+                    self.explicitTableInset = UIEdgeInsetsMake(200.0f + [self additionalTopInset], 0.0f, 200.0f, 0.0f);
+                    UIEdgeInsets scrollIndicatorInset = self.explicitTableInset;
+                    scrollIndicatorInset.right -= self.controllerSafeAreaInset.right;
+                    self.explicitScrollIndicatorInset = scrollIndicatorInset;
                 } completion:^(BOOL finished)
                 {
                     if (finished)
@@ -2111,8 +2676,10 @@ typedef enum {
             {
                 _selectionPanelView.frame = selectionPanelFrame;
                 _selectionPanelView.hidden = true;
-                self.explicitTableInset = UIEdgeInsetsMake(200.0f, 0.0f, 200.0f, 0.0f);
-                self.explicitScrollIndicatorInset = self.explicitTableInset;
+                self.explicitTableInset = UIEdgeInsetsMake(200.0f + [self additionalTopInset], 0.0f, 200.0f, 0.0f);
+                UIEdgeInsets scrollIndicatorInset = self.explicitTableInset;
+                scrollIndicatorInset.right -= self.controllerSafeAreaInset.right;
+                self.explicitScrollIndicatorInset = scrollIndicatorInset;
             }
         }
     }
@@ -2129,7 +2696,7 @@ typedef enum {
         CGFloat lastOrigin = 0.0f;
         NSTimeInterval lastDelay = 0.0;
         NSTimeInterval delayIncrement = 0.0115;
-        if (_mode == TGSharedMediaControllerModeFile || _mode == TGSharedMediaControllerModeLink || _mode == TGSharedMediaControllerModeAudio)
+        if (_mode == TGSharedMediaControllerModeFile || _mode == TGSharedMediaControllerModeLink || _mode == TGSharedMediaControllerModeAudio || _mode == TGSharedMediaControllerModeVoiceRound)
             delayIncrement /= 2.0;
         
         for (TGSharedMediaItemView *itemView in [_collectionView.visibleCells sortedArrayUsingComparator:^NSComparisonResult(UIView *view1, UIView *view2)
@@ -2166,7 +2733,7 @@ typedef enum {
     }
 }
 
-- (void)_shareSelectedItems
+- (void)_forwardSelectedItems
 {
     NSMutableArray *messages = [[NSMutableArray alloc] init];
 
@@ -2206,6 +2773,72 @@ typedef enum {
     }
     
     [self presentViewController:navigationController animated:true completion:nil];
+}
+
+- (void)_shareSelectedItems
+{
+    TGProgressWindow *progressWindow = [[TGProgressWindow alloc] init];
+    [progressWindow showWithDelay:0.2];
+    
+    NSMutableArray *messages = [[NSMutableArray alloc] init];
+    
+    for (TGSharedMediaGroup *group in _rawItemGroups)
+    {
+        for (id<TGSharedMediaItem> item in group.items)
+        {
+            if ([_selectedMessageIds containsObject:@([item messageId])]) {
+                TGMessage *message = [item message];
+                if (message.cid != _peerId) {
+                    message = [message copy];
+                    message.mid -= migratedMessageIdOffset;
+                    [messages addObject:message];
+                } else {
+                    [messages addObject:message];
+                }
+            }
+        }
+    }
+    
+    [messages sortUsingComparator:^NSComparisonResult(TGMessage *message1, TGMessage *message2)
+    {
+        if (ABS(message1.date - message2.date) < DBL_EPSILON)
+            return message1.mid > message2.mid ? NSOrderedAscending : NSOrderedDescending;
+        return message1.date > message2.date ? NSOrderedAscending : NSOrderedDescending;
+    }];
+    
+    __weak TGSharedMediaController *weakSelf = self;
+    [[[TGExternalShareSignals shareItemsForMessages:messages] onDispose:^
+    {
+        [progressWindow dismiss:true];
+    }] startWithNext:^(id next)
+    {
+        __strong TGSharedMediaController *strongSelf = weakSelf;
+        if (next == nil || strongSelf == nil)
+            return;
+        
+        UIActivityViewController *activityController = [[UIActivityViewController alloc] initWithActivityItems:next applicationActivities:nil];
+        [strongSelf presentViewController:activityController animated:true completion:^{
+            __strong TGSharedMediaController *strongSelf = weakSelf;
+            if (strongSelf != nil)
+                [strongSelf cancelPressed];
+        }];
+        if (iosMajorVersion() >= 8 && [UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad)
+        {
+            activityController.popoverPresentationController.sourceView = strongSelf.view;
+            activityController.popoverPresentationController.sourceRect = strongSelf.view.bounds;
+            activityController.popoverPresentationController.permittedArrowDirections = 0;
+        }
+        [progressWindow dismiss:true];
+    }];
+}
+
+- (void)broadcastForwardMessages:(NSArray<NSNumber *> *)messageIds caption:(NSString *)caption toPeerIds:(NSArray<NSNumber *> *)peerIds
+{
+    SSignal *signal = [TGSendMessageSignals forwardMessagesWithMessageIds:messageIds toPeerIds:peerIds fromPeerId:_peerId fromPeerAccessHash:_accessHash grouped:false];
+    if (caption.length != 0) {
+        signal = [[TGSendMessageSignals broadcastMessageWithText:caption toPeerIds:peerIds] then:signal];
+    }
+    [signal startWithNext:nil];
 }
 
 - (void)_deleteSelectedItems
@@ -2290,7 +2923,7 @@ typedef enum {
     
     CGAffineTransform selectedItemsTransform = CGAffineTransformIdentity;
     CGFloat selectedItemsAlpha = 0.0f;
-    if (_mode != TGSharedMediaControllerModeFile && _mode != TGSharedMediaControllerModeLink && _mode != TGSharedMediaControllerModeAudio)
+    if (_mode != TGSharedMediaControllerModeFile && _mode != TGSharedMediaControllerModeLink && _mode != TGSharedMediaControllerModeAudio && _mode != TGSharedMediaControllerModeVoiceRound)
     {
         selectedItemsTransform = CGAffineTransformMakeScale(0.01f, 0.01f);
         selectedItemsAlpha = 1.0f;
@@ -2586,13 +3219,16 @@ static id mediaIdForItem(id<TGSharedMediaItem> item)
         _searchDimView.hidden = false;
         _searchDimView.alpha = 0.0f;
         [_searchBar setShowsCancelButton:true animated:true];
+        _navbarExtensionMaskView.hidden = true;
         [UIView animateWithDuration:0.3 animations:^
         {
             _searchDimView.alpha = 1.0f;
+            _navbarExtensionClipView.transform = CGAffineTransformMakeTranslation(0.0f, -_navbarExtensionClipView.frame.size.height);
+            _segmentedControl.alpha = 0.0f;
         }];
         
         [self setNavigationBarHidden:true animated:true];
-        [_collectionView setContentOffset:CGPointMake(0.0f, -_collectionView.contentInset.top) animated:true];
+        [_collectionView setContentOffset:CGPointMake(0.0f, -_collectionView.contentInset.top + [self additionalTopInset]) animated:true];
         _collectionView.scrollEnabled = false;
         _selectionPanelView.hidden = true;
     }
@@ -2607,11 +3243,14 @@ static id mediaIdForItem(id<TGSharedMediaItem> item)
         [UIView animateWithDuration:0.3 animations:^
         {
             _searchDimView.alpha = 0.0f;
+            _navbarExtensionClipView.transform = CGAffineTransformIdentity;
+            _segmentedControl.alpha = 1.0f;
         } completion:^(BOOL finished)
         {
             if (finished)
             {
                 _searchDimView.hidden = true;
+                _navbarExtensionMaskView.hidden = false;
             }
         }];
         
@@ -2622,6 +3261,8 @@ static id mediaIdForItem(id<TGSharedMediaItem> item)
         
         [_searchBar resignFirstResponder];
         _selectionPanelView.hidden = false;
+        
+        [_collectionView setContentOffset:CGPointMake(0.0f, -_collectionView.contentInset.top) animated:true];
     }
 }
 
@@ -2829,6 +3470,254 @@ static id mediaIdForItem(id<TGSharedMediaItem> item)
         
         [self dismissViewControllerAnimated:true completion:nil];
     }
+}
+
+- (void)check3DTouch
+{
+    if (_checked3dTouch)
+        return;
+    
+    _checked3dTouch = true;
+    if (iosMajorVersion() >= 9)
+    {
+        if (self.traitCollection.forceTouchCapability == UIForceTouchCapabilityAvailable)
+        {
+            [self registerForPreviewingWithDelegate:(id)self sourceView:self.view];
+        }
+        else if (!TGIsPad())
+        {
+            __weak TGSharedMediaController *weakSelf = self;
+            _custom3dTouchHandle = [TGPreviewMenu setupPreviewControllerForView:self.view configurator:^TGItemPreviewController *(CGPoint gestureLocation)
+            {
+                __strong TGSharedMediaController *strongSelf = weakSelf;
+                if (strongSelf == nil)
+                    return nil;
+                
+                UIViewController *conversationController = [strongSelf previewingContext:nil viewControllerForLocation:gestureLocation];
+                if (conversationController == nil)
+                    return nil;
+                
+                TGItemMenuSheetPreviewView *previewView = [[TGItemMenuSheetPreviewView alloc] initWithContext:[TGLegacyComponentsContext shared] frame:CGRectZero];
+                
+                NSArray *previewActions = [conversationController previewActionItems];
+                NSMutableArray *actionItems = [[NSMutableArray alloc] init];
+                
+                __weak TGItemMenuSheetPreviewView *weakPreviewView = previewView;
+                void (^dismissBlock)(void) = ^
+                {
+                    __strong TGItemMenuSheetPreviewView *strongPreviewView = weakPreviewView;
+                    if (strongPreviewView != nil)
+                        [strongPreviewView performCommit];
+                };
+                
+                for (id action in previewActions)
+                {
+                    if ([action isKindOfClass:[UIPreviewAction class]])
+                    {
+                        UIPreviewAction *previewAction = (UIPreviewAction *)action;
+                        TGMenuSheetButtonItemView *itemView = [[TGMenuSheetButtonItemView alloc] initWithTitle:previewAction.title type:TGMenuSheetButtonTypeDefault action:^
+                        {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wnonnull"
+                            previewAction.handler(previewAction, nil);
+#pragma clang diagnostic pop
+                            dismissBlock();
+                        }];
+                        [actionItems addObject:itemView];
+                    }
+                }
+                
+                TGPreviewConversationItemView *itemView = [[TGPreviewConversationItemView alloc] initWithConversationController:conversationController];
+                [previewView setupWithMainItemViews:@[itemView] actionItemViews:actionItems];
+                
+                TGItemPreviewController *controller = [[TGItemPreviewController alloc] initWithContext:[TGLegacyComponentsContext shared] parentController:strongSelf previewView:previewView];
+                controller.sourcePointForItem = ^CGPoint(__unused id item)
+                {
+                    return CGPointZero;
+                };
+                
+                return controller;
+            }];
+            _custom3dTouchHandle.requiredPressDuration = 0.3;
+        }
+    }
+}
+
+- (UIViewController *)previewingContext:(id<UIViewControllerPreviewing>)previewingContext viewControllerForLocation:(CGPoint)location
+{
+    if (self.presentedViewController != nil) {
+        return nil;
+    }
+    
+    if (_editing && CGRectContainsPoint([_selectionPanelView convertRect:_selectionPanelView.bounds toView:self.view], location)) {
+        return nil;
+    }
+    
+    UICollectionView *collectionView = _searchCollectionContainer.hidden ? _collectionView : _searchCollectionView;
+    
+    CGPoint collectionPoint = [self.view convertPoint:location toView:collectionView];
+    for (UICollectionViewCell *cell in collectionView.visibleCells) {
+        if (CGRectContainsPoint(cell.frame, collectionPoint) && [cell isKindOfClass:[TGSharedMediaItemView class]]) {
+            id<TGSharedMediaItem> item = [(TGSharedMediaItemView *)cell item];
+    
+            __weak TGSharedMediaController *weakSelf = self;
+            NSArray<id<UIPreviewActionItem>> *(^previewActionItems)(void) = ^NSArray<id<UIPreviewActionItem>> *
+            {
+                return @[ [UIPreviewAction actionWithTitle:TGLocalized(@"SharedMedia.ViewInChat") style:UIPreviewActionStyleDefault handler:^(__unused UIPreviewAction * _Nonnull action, __unused UIViewController * _Nonnull previewViewController)
+                {
+                    __strong TGSharedMediaController *strongSelf = weakSelf;
+                    if (strongSelf != nil)
+                    {
+                        [[TGInterfaceManager instance] navigateToConversationWithId:strongSelf->_peerId conversation:nil performActions:nil atMessage:@{ @"mid": @(item.messageId), @"useExisting": @true } clearStack:true openKeyboard:false canOpenKeyboardWhileInTransition:false animated:true];
+                    }
+                }] ];
+            };
+            
+            TGDispatchAfter(0.1, dispatch_get_main_queue(), ^
+            {
+                [TGPreviewPresentationHelper stylePreviewActionSheet];
+            });
+            
+            if ([item isKindOfClass:[TGSharedMediaLinkItem class]])
+            {
+                TGSharedMediaLinkItemView *linkItemView = (TGSharedMediaLinkItemView *)cell;
+                NSURL *link = [linkItemView urlForLocation:[collectionView convertPoint:collectionPoint toView:linkItemView]];
+                if (link != nil)
+                {
+                    NSString *linkString = link.absoluteString;
+                    previewingContext.sourceRect = CGRectMake(location.x, location.y, 1.0f, 1.0f);
+                    
+                    if ([[linkString lowercaseString] hasPrefix:@"http://"] || [[linkString lowercaseString] hasPrefix:@"https://"] || [linkString rangeOfString:@"://"].location == NSNotFound)
+                    {
+                        if ([[link.scheme lowercaseString] hasPrefix:@"http"]) {
+                            TGSafariViewController *controller = [[TGSafariViewController alloc] initWithURL:link];
+                            controller.externalPreviewActionItems = previewActionItems;
+                            return controller;
+                        }
+                    }
+                }
+            }
+            else if ([item isKindOfClass:[TGSharedMediaImageItem class]] || [item isKindOfClass:[TGSharedMediaVideoItem class]])
+            {
+                previewingContext.sourceRect = [collectionView convertRect:cell.frame toView:self.view];
+                
+                TGModernGalleryController *controller = [self createGalleryControllerForItem:item hideItem:^(id<TGSharedMediaItem> item)
+                {
+                    __strong TGSharedMediaController *strongSelf = weakSelf;
+                    if (strongSelf != nil)
+                    {
+                        strongSelf->_hiddenItem = item;
+                        [strongSelf _updateHiddenItems];
+                    }
+                } referenceViewForItem:^UIView *(id<TGSharedMediaItem> item)
+                {
+                    if (item == nil)
+                        return nil;
+                    
+                    __strong TGSharedMediaController *strongSelf = weakSelf;
+                    if (strongSelf != nil)
+                    {
+                        for (TGSharedMediaItemView *itemView in [collectionView visibleCells])
+                        {
+                            if ([itemView.item isEqual:item])
+                                return [itemView transitionView];
+                        }
+                    }
+                    
+                    return nil;
+                } genericPeerGalleryModel:NULL previewMode:true];
+                
+                CGSize dimensions = CGSizeZero;
+                if ([item isKindOfClass:[TGSharedMediaImageItem class]])
+                    [((TGSharedMediaImageItem *)item).imageMediaAttachment.imageInfo imageUrlForLargestSize:&dimensions];
+                else if ([item isKindOfClass:[TGSharedMediaVideoItem class]])
+                    dimensions = ((TGSharedMediaVideoItem *)item).videoMediaAttachment.dimensions;
+                
+                CGSize screenSize = TGScreenSize();
+                controller.preferredContentSize = TGFitSize(dimensions, screenSize);
+                
+                controller.externalPreviewActionItems = previewActionItems;
+                return controller;
+            }
+
+            break;
+        }
+    }
+    
+    return nil;
+}
+
+- (void)previewingContext:(id<UIViewControllerPreviewing>)__unused previewingContext commitViewController:(UIViewController *)viewControllerToCommit
+{
+    if ([viewControllerToCommit isKindOfClass:[SFSafariViewController class]])
+    {
+        [self presentViewController:viewControllerToCommit animated:true completion:nil];
+    }
+    else if ([viewControllerToCommit isKindOfClass:[TGModernGalleryController class]])
+    {
+        TGModernGalleryController *controller = (TGModernGalleryController *)viewControllerToCommit;
+        [controller setPreviewMode:false];
+
+        TGOverlayControllerWindow *controllerWindow = [[TGOverlayControllerWindow alloc] initWithManager:[[TGLegacyComponentsContext shared] makeOverlayWindowManager] parentController:self contentController:controller];
+        controllerWindow.hidden = false;
+    }
+}
+
+- (int64_t)peerId
+{
+    return _peerId;
+}
+
+- (TGSharedMediaControllerMode)mode
+{
+    return _mode;
+}
+
+- (void)setMode:(TGSharedMediaControllerMode)mode
+{
+    [self setMode:mode filters:_currentFilters];
+}
+
+- (void)showOptionsForItem:(id<TGSharedMediaItem>)item
+{
+    TGMenuSheetController *controller = [[TGMenuSheetController alloc] initWithContext:[TGLegacyComponentsContext shared] dark:false];
+    controller.dismissesByOutsideTap = true;
+    controller.hasSwipeGesture = true;
+    
+    __weak TGMenuSheetController *weakController = controller;
+    __weak TGSharedMediaController *weakSelf = self;
+    TGMenuSheetButtonItemView *cancelItem = [[TGMenuSheetButtonItemView alloc] initWithTitle:TGLocalized(@"Common.Cancel") type:TGMenuSheetButtonTypeCancel action:^
+    {
+        __strong TGMenuSheetController *strongController = weakController;
+        if (strongController != nil)
+            [strongController dismissAnimated:true];
+    }];
+    
+    TGMenuSheetButtonItemView *viewItem = [[TGMenuSheetButtonItemView alloc] initWithTitle:TGLocalized(@"SharedMedia.ViewInChat") type:TGMenuSheetButtonTypeDefault action:^
+    {
+        __strong TGSharedMediaController *strongSelf = weakSelf;
+        if (strongSelf != nil)
+        {
+            [[TGInterfaceManager instance] navigateToConversationWithId:strongSelf->_peerId conversation:nil performActions:nil atMessage:@{ @"mid": @(item.messageId), @"useExisting": @true } clearStack:true openKeyboard:false canOpenKeyboardWhileInTransition:false animated:true];
+        }
+        
+        __strong TGMenuSheetController *strongController = weakController;
+        if (strongController != nil)
+            [strongController dismissAnimated:true];
+    }];
+    
+    [controller setItemViews:@[ viewItem, cancelItem ]];
+
+    
+//    controller.sourceRect = ^
+//    {
+//        __strong TGTelegraphUserInfoController *strongSelf = weakSelf;
+//        if (strongSelf == nil)
+//            return CGRectZero;
+//        
+//        return [strongSelf sourceRectForPhoneItem:item];
+//    };
+    [controller presentInViewController:self sourceView:self.view animated:true];
 }
 
 @end

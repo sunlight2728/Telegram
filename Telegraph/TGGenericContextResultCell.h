@@ -2,6 +2,8 @@
 
 #import "TGBotContextResult.h"
 
+@class TGConversationAssociatedInputPanelPallete;
+
 @interface TGGenericContextResultCellContent : UIView
 
 @property (nonatomic, strong, readonly) TGBotContextResult *result;
@@ -10,9 +12,10 @@
 
 @interface TGGenericContextResultCell : UITableViewCell
 
-@property (nonatomic, copy) void (^preview)(NSString *url, bool embed, CGSize embedSize);
+@property (nonatomic, copy) void (^preview)(TGBotContextResult *result);
 
-- (void)setResult:(TGBotContextResult *)result;
+@property (nonatomic, strong) TGConversationAssociatedInputPanelPallete *pallete;
+@property (nonatomic, strong) TGBotContextResult *result;
 
 - (TGGenericContextResultCellContent *)_takeContent;
 - (void)_putContent:(TGGenericContextResultCellContent *)content;

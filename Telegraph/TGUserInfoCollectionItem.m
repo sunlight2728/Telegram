@@ -1,9 +1,10 @@
 #import "TGUserInfoCollectionItem.h"
 
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGUserInfoCollectionItemView.h"
 
-#import "TGRemoteImageView.h"
-#import "TGDateUtils.h"
+#import <LegacyComponents/TGRemoteImageView.h>
 
 @interface TGUserInfoCollectionItem ()
 {
@@ -58,12 +59,12 @@
 
 - (NSString *)currentFirstName
 {
-    return (_updatingFirstName != nil || _updatingLastName != nil) ? _updatingFirstName : (_useRealName ? _user.realFirstName : _user.firstName);
+    return (_updatingFirstName != nil || _updatingLastName != nil) ? _updatingFirstName : (_useRealName ? _user.realFirstName : [_user.firstName stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]]);
 }
 
 - (NSString *)currentLastName
 {
-    return (_updatingFirstName != nil || _updatingLastName != nil) ? _updatingLastName : (_useRealName ? _user.realLastName : _user.lastName);
+    return (_updatingFirstName != nil || _updatingLastName != nil) ? _updatingLastName : (_useRealName ? _user.realLastName : [_user.lastName stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]]);
 }
 
 - (void)bindView:(TGUserInfoCollectionItemView *)view
@@ -72,8 +73,11 @@
     
     view.itemHandle = _actionHandle;
     
+    [view setMultilineName:_multilineName];
+    [view setDisableAvatarPlaceholder:_disableAvatarPlaceholder];
     [view setAvatarOffset:_avatarOffset];
     [view setNameOffset:_nameOffset];
+    view.customProperties = _user.customProperties;
     [view setFirstName:[self currentFirstName] lastName:[self currentLastName] uidForPlaceholderCalculation:_user.uid];
     view.isVerified = _user.isVerified;
     
@@ -82,7 +86,7 @@
         if (_hasUpdatingAvatar)
             [view setAvatarImage:_updatingAvatar animated:false];
         else
-            [view setAvatarUri:_user.photoUrlSmall animated:false synchronous:_firstBind];
+            [view setAvatarUri:_user.photoFullUrlSmall animated:false synchronous:_firstBind];
     }
     
     if (_automaticallyManageUserPresence)
@@ -104,6 +108,8 @@
     
     [view setEditing:_editing animated:false];
     
+    [view setShowCall:_showCall];
+    
     _firstBind = false;
 }
 
@@ -112,6 +118,19 @@
     ((TGUserInfoCollectionItemView *)[self boundView]).itemHandle = nil;
     
     [super unbindView];
+}
+
+- (void)setDisableAvatarPlaceholder:(bool)disableAvatarPlaceholder
+{
+    _disableAvatarPlaceholder = disableAvatarPlaceholder;
+    
+    [(TGUserInfoCollectionItemView *)[self boundView] setDisableAvatarPlaceholder:disableAvatarPlaceholder];
+}
+
+- (void)setMultilineName:(bool)multilineName
+{
+    _multilineName = multilineName;
+    [(TGUserInfoCollectionItemView *)[self boundView] setMultilineName:multilineName];
 }
 
 - (void)setUser:(TGUser *)user animated:(bool)animated
@@ -127,15 +146,21 @@
     if ([self boundView] != nil)
     {
         TGUserInfoCollectionItemView *view = (TGUserInfoCollectionItemView *)[self boundView];
+        view.customProperties = _user.customProperties;
         
         [view setFirstName:[self currentFirstName] lastName:[self currentLastName] uidForPlaceholderCalculation:_user.uid];
         
         if (!_disableAvatar)
         {
             if (_hasUpdatingAvatar)
-                [view setAvatarImage:_updatingAvatar animated:animated];
+            {
+                if (_updatingAvatar != nil)
+                    [view setAvatarImage:_updatingAvatar animated:animated];
+            }
             else
-                [view setAvatarUri:_user.photoUrlSmall animated:animated synchronous:false];
+            {
+                [view setAvatarUri:_user.photoFullUrlSmall animated:animated synchronous:false];
+            }
         }
         
         if (_automaticallyManageUserPresence)
@@ -198,11 +223,41 @@
                 if (_hasUpdatingAvatar)
                     [view setAvatarImage:_updatingAvatar animated:false];
                 else
-                    [view setAvatarUri:_user.photoUrlSmall animated:false synchronous:false];
+                    [view setAvatarUri:_user.photoFullUrlSmall animated:false synchronous:false];
             }
             
             [view setUpdatingAvatar:_hasUpdatingAvatar animated:true];
         }
+    }
+}
+
+- (void)resetUpdatingAvatar:(NSString *)url
+{
+    _updatingAvatar = nil;
+    _hasUpdatingAvatar = false;
+    
+    if ([self boundView] != nil)
+    {
+        TGUserInfoCollectionItemView *view = (TGUserInfoCollectionItemView *)[self boundView];
+     
+        if (!_disableAvatar)
+        {
+            if (url != nil)
+                [view setAvatarUri:url animated:false synchronous:false];
+        }
+        
+        [view setUpdatingAvatar:_hasUpdatingAvatar animated:true];
+    }
+}
+
+- (void)setHasUpdatingAvatar:(bool)hasUpdatingAvatar
+{
+    _hasUpdatingAvatar = hasUpdatingAvatar;
+    
+    if ([self boundView] != nil)
+    {
+        TGUserInfoCollectionItemView *view = (TGUserInfoCollectionItemView *)[self boundView];
+        [view setUpdatingAvatar:_hasUpdatingAvatar animated:true];
     }
 }
 
@@ -227,12 +282,17 @@
     {
         if (accentColored != NULL)
             *accentColored = true;
-        return TGLocalizedStatic(@"Presence.online");
+        return TGLocalized(@"Presence.online");
     }
     if (presence.lastSeen != 0)
         return [TGDateUtils stringForRelativeLastSeen:presence.lastSeen];
     
     return TGLocalized(@"Presence.offline");
+}
+
+- (id)avatarView
+{
+    return [(TGUserInfoCollectionItemView *)[self boundView] avatarView];
 }
 
 - (id)visibleAvatarView
@@ -241,6 +301,11 @@
         return [((TGUserInfoCollectionItemView *)self.view) avatarView];
     
     return nil;
+}
+
+- (void)setAvatarHidden:(bool)hidden animated:(bool)animated
+{
+    [((TGUserInfoCollectionItemView *)self.view) setAvatarHidden:hidden animated:animated];
 }
 
 - (void)makeNameFieldFirstResponder
@@ -266,9 +331,15 @@
     return _editingLastName;
 }
 
+- (void)setShowCall:(bool)showCall
+{
+    _showCall = showCall;
+    [((TGUserInfoCollectionItemView *)self.view) setShowCall:showCall];
+}
+
 - (void)actionStageActionRequested:(NSString *)action options:(id)options
 {
-    if ([action isEqualToString:@"avatarTapped"])
+    if ([action isEqualToString:@"avatarTapped"] || [action isEqualToString:@"callTapped"])
     {
         [_interfaceHandle requestAction:action options:options];
     }

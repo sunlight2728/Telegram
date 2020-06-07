@@ -19,16 +19,22 @@
     return self;
 }
 
-- (void)setAvailableSpaceAbove:(CGFloat)__unused availableSpaceAbove
-{
+- (void)setContentAreaHeight:(CGFloat)__unused contentAreaHeight {
 }
 
-- (void)adjustForOrientation:(UIInterfaceOrientation)__unused orientation keyboardHeight:(CGFloat)__unused keyboardHeight duration:(NSTimeInterval)__unused duration animationCurve:(int)__unused animationCurve
-{
+- (void)adjustForSize:(CGSize)__unused size keyboardHeight:(CGFloat)__unused keyboardHeight duration:(NSTimeInterval)__unused duration animationCurve:(int)__unused animationCurve contentAreaHeight:(CGFloat)__unused contentAreaHeight safeAreaInset:(UIEdgeInsets)__unused safeAreaInset {
 }
 
-- (void)changeOrientationToOrientation:(UIInterfaceOrientation)__unused orientation keyboardHeight:(CGFloat)__unused keyboardHeight duration:(NSTimeInterval)__unused duration
+- (void)adjustForSize:(CGSize)size keyboardHeight:(CGFloat)keyboardHeight duration:(NSTimeInterval)duration animationCurve:(int)animationCurve contentAreaHeight:(CGFloat)contentAreaHeight safeAreaInset:(UIEdgeInsets)safeAreaInset dismissOffset:(CGFloat)__unused dismissOffset {
+    [self adjustForSize:size keyboardHeight:keyboardHeight duration:duration animationCurve:animationCurve contentAreaHeight:contentAreaHeight safeAreaInset:safeAreaInset];
+}
+
+- (void)changeToSize:(CGSize)__unused size keyboardHeight:(CGFloat)__unused keyboardHeight duration:(NSTimeInterval)__unused duration contentAreaHeight:(CGFloat)__unused contentAreaHeight safeAreaInset:(UIEdgeInsets)__unused safeAreaInset {
+}
+
+- (CGFloat)currentHeight
 {
+    return self.frame.size.height;
 }
 
 @end

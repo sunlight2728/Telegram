@@ -8,20 +8,33 @@
 
 #import "TGModernConversationInputPanel.h"
 
+#import <SSignalKit/SSignalKit.h>
+#import <LegacyComponents/TGModernButton.h>
+
 @class HPGrowingTextView;
 @class TGModernConversationInputTextPanel;
 @class TGDocumentMediaAttachment;
 @class TGModernConversationAssociatedInputPanel;
 @class TGBotReplyMarkup;
+@class TGBotReplyMarkupButton;
 @class TGViewController;
+@class TGUser;
+@class TGModernConversationInputMicButton;
+@class TLInputMedia;
+@class TGPreparedMessage;
 
 @interface TGMessageEditingContext: NSObject <NSCoding>
 
 @property (nonatomic, strong, readonly) NSString *text;
-@property (nonatomic, readonly) int32_t messageId;
+@property (nonatomic, strong, readonly) NSArray *entities;
 @property (nonatomic, readonly) bool isCaption;
+@property (nonatomic, readonly) bool hasMedia;
+@property (nonatomic, readonly) int64_t cid;
+@property (nonatomic, readonly) int32_t messageId;
 
-- (instancetype)initWithText:(NSString *)text isCaption:(bool)isCaption messageId:(int32_t)messageId;
++ (NSAttributedString *)attributedStringForText:(NSString *)text entities:(NSArray *)entities fontSize:(CGFloat)fontSize;
+
+- (instancetype)initWithText:(NSString *)text entities:(NSArray *)entities isCaption:(bool)isCaption hasMedia:(bool)hasMedia cid:(int64_t)cid messageId:(int32_t)messageId;
 
 @end
 
@@ -30,33 +43,46 @@
 - (void)inputTextPanelHasIndicatedTypingActivity:(TGModernConversationInputTextPanel *)inputTextPanel;
 - (void)inputTextPanelHasCancelledTypingActivity:(TGModernConversationInputTextPanel *)inputTextPanel;
 - (void)inputPanelRequestedSendMessage:(TGModernConversationInputTextPanel *)inputTextPanel text:(NSString *)text;
+- (void)inputPanelRequestedSendMessage:(TGModernConversationInputTextPanel *)inputTextPanel text:(NSString *)text entities:(NSArray *)entities media:(TLInputMedia *)media preparedMessage:(TGPreparedMessage *)preparedMessage;
 - (void)inputPanelRequestedAttachmentsMenu:(TGModernConversationInputTextPanel *)inputTextPanel;
 - (void)inputPanelRequestedSendImages:(TGModernConversationInputTextPanel *)inputTextPanel images:(NSArray *)images;
 - (void)inputPanelRequestedSendData:(TGModernConversationInputTextPanel *)inputTextPanel data:(NSData *)data;
 - (void)inputPanelRequestedSendSticker:(TGModernConversationInputTextPanel *)inputTextPanel sticker:(TGDocumentMediaAttachment *)sticker;
 - (void)inputPanelRequestedSendGif:(TGModernConversationInputTextPanel *)inputTextPanel document:(TGDocumentMediaAttachment *)document;
-- (void)inputPanelRequestedActivateCommand:(TGModernConversationInputTextPanel *)inputTextPanel command:(NSString *)command userId:(int32_t)userId messageId:(int32_t)messageId;
+- (void)inputPanelRequestedActivateCommand:(TGModernConversationInputTextPanel *)inputTextPanel button:(TGBotReplyMarkupButton *)button userId:(int32_t)userId messageId:(int32_t)messageId;
 - (void)inputPanelRequestedToggleCommandKeyboard:(TGModernConversationInputTextPanel *)inputTextPanel showCommandKeyboard:(bool)showCommandKeyboard;
 - (void)inputPanelTextChanged:(TGModernConversationInputTextPanel *)inputTextPanel text:(NSString *)text;
 - (void)inputPanelMentionEntered:(TGModernConversationInputTextPanel *)inputTextPanel mention:(NSString *)mention startOfLine:(bool)startOfLine;
 - (void)inputPanelMentionTextEntered:(TGModernConversationInputTextPanel *)inputTextPanel mention:(NSString *)mention text:(NSString *)text;
 - (void)inputPanelHashtagEntered:(TGModernConversationInputTextPanel *)inputTextPanel hashtag:(NSString *)hashtag;
 - (void)inputPanelCommandEntered:(TGModernConversationInputTextPanel *)inputTextPanel command:(NSString *)hashtag;
+- (void)inputPanelAlphacodeEntered:(TGModernConversationInputTextPanel *)inputTextPanel alphacode:(NSString *)alphacode;
 - (void)inputPanelLinkParsed:(TGModernConversationInputTextPanel *)inputTextPanel link:(NSString *)link probablyComplete:(bool)probablyComplete;
 - (bool)isInputPanelTextEnabled:(TGModernConversationInputTextPanel *)inputTextPanel;
 - (void)inputPanelFocused:(TGModernConversationInputTextPanel *)inputTextPanel;
 
+- (void)inputPanelExpandedKeyboard:(TGModernConversationInputTextPanel *)inputTextPanel expanded:(bool)expanded;
+
 - (bool)inputPanelAudioRecordingEnabled:(TGModernConversationInputTextPanel *)inputTextPanel;
-- (void)inputPanelAudioRecordingStart:(TGModernConversationInputTextPanel *)inputTextPanel completion:(void (^)())completion;
+- (void)inputPanelAudioRecordingStart:(TGModernConversationInputTextPanel *)inputTextPanel video:(bool)video completion:(void (^)())completion;
 - (void)inputPanelAudioRecordingCancel:(TGModernConversationInputTextPanel *)inputTextPanel;
 - (void)inputPanelAudioRecordingComplete:(TGModernConversationInputTextPanel *)inputTextPanel;
+- (void)inputPanelAudioButtonInteractionUpdate:(TGModernConversationInputTextPanel *)inputTextPanel value:(CGPoint)value;
 - (NSTimeInterval)inputPanelAudioRecordingDuration:(TGModernConversationInputTextPanel *)inputTextPanel;
+- (void)inputPanelRecordingModeChanged:(TGModernConversationInputTextPanel *)inputTextPanel video:(bool)video;
+- (void)inputPanelRecordingLocked:(TGModernConversationInputTextPanel *)inputTextPanel video:(bool)video;
+- (void)inputPanelRecordingRequestedLockedAction:(TGModernConversationInputTextPanel *)inputTextPanel;
+- (void)inputPanelRecordingStopped:(TGModernConversationInputTextPanel *)inputTextPanel;
 
 - (bool)inputPanelSendShouldBeAlwaysEnabled:(TGModernConversationInputTextPanel *)inputTextPanel;
 
 - (TGViewController *)inputPanelParentViewController:(TGModernConversationInputTextPanel *)inputTextPanel;
 
 - (void)inputPanelToggleBroadcastMode:(TGModernConversationInputTextPanel *)inputTextPanel;
+
+- (void)inputPanelRequestedFastCamera:(TGModernConversationInputTextPanel *)inputTextPanel;
+- (void)inputPanelPannedFastCamera:(TGModernConversationInputTextPanel *)inputTextPanel location:(CGPoint)location;
+- (void)inputPanelReleasedFastCamera:(TGModernConversationInputTextPanel *)inputTextPanel location:(CGPoint)location;
 
 @end
 
@@ -65,12 +91,19 @@
 @property (nonatomic, strong) UIImageView *fieldBackground;
 @property (nonatomic, strong) UIButton *sendButton;
 @property (nonatomic, strong) UIButton *attachButton;
+@property (nonatomic, strong) TGModernConversationInputMicButton *micButton;
+@property (nonatomic, strong) UIButton *broadcastButton;
+
+@property (nonatomic, weak) UIScrollView *scrollView;
 
 @property (nonatomic, strong) UIView *inputFieldClippingContainer;
 @property (nonatomic, strong) HPGrowingTextView *inputField;
 @property (nonatomic, strong) UIImageView *inputFieldPlaceholder;
 
 @property (nonatomic, strong) NSString *contextPlaceholder;
+@property (nonatomic) TGUser *contextBotMode;
+@property (nonatomic) bool contextBotInputMode;
+@property (nonatomic) NSString *mentionTextMode;
 
 @property (nonatomic, readonly) bool changingKeyboardMode;
 @property (nonatomic) bool enableKeyboard;
@@ -87,7 +120,23 @@
 @property (nonatomic) bool inputDisabled;
 @property (nonatomic) bool displayProgress;
 
+@property (nonatomic) bool keepInputPanel;
+
+@property (nonatomic) bool videoMessageAvailable;
+@property (nonatomic) bool videoMessage;
+
+@property (nonatomic, assign) bool ignoreNextMicButtonEvent;
+@property (nonatomic, assign) bool lockImmediately;
+@property (nonatomic, readonly) bool isLocked;
+
+@property (nonatomic, readonly) bool isCustomKeyboardExpanded;
+
 @property (nonatomic, strong) TGMessageEditingContext *messageEditingContext;
+
+@property (nonatomic, strong) SSignal *channelInfoSignal;
+
+@property (nonatomic, copy) bool (^canOpenStickersPanel)();
+@property (nonatomic, copy) bool (^canRecordMedia)();
 
 - (instancetype)initWithFrame:(CGRect)frame accessoryView:(UIView *)panelAccessoryView;
 
@@ -95,10 +144,12 @@
 
 - (void)audioRecordingStarted;
 - (void)audioRecordingFinished;
+- (void)recordingFinished;
+- (void)recordingStopped;
 
 - (void)shakeControls;
 
-- (void)replaceMention:(NSString *)mention;
+- (void)replaceMention:(NSString *)mention username:(bool)username userId:(int32_t)userId;
 - (void)replaceHashtag:(NSString *)hashtag;
 
 - (void)startMention;
@@ -109,11 +160,14 @@
 
 - (CGRect)attachmentButtonFrame;
 - (CGRect)stickerButtonFrame;
+- (TGModernButton *)stickerButton;
+- (CGRect)micButtonFrame;
 - (CGRect)broadcastModeButtonFrame;
 
-- (void)setAssociatedStickerList:(NSArray *)stickerList stickerSelected:(void (^)(TGDocumentMediaAttachment *))stickerSelected;
+- (void)setAssociatedStickerList:(NSDictionary *)stickerList stickerSelected:(void (^)(TGDocumentMediaAttachment *))stickerSelected;
 - (void)setAssociatedPanel:(TGModernConversationAssociatedInputPanel *)associatedPanel animated:(bool)animated;
 - (TGModernConversationAssociatedInputPanel *)associatedPanel;
+- (bool)associatedPanelVisible;
 
 - (void)setPrimaryExtendedPanel:(TGModernConversationAssociatedInputPanel *)extendedPanel animated:(bool)animated;
 - (void)setPrimaryExtendedPanel:(TGModernConversationAssociatedInputPanel *)extendedPanel animated:(bool)animated skipHeightAnimation:(bool)skipHeightAnimation;
@@ -125,13 +179,35 @@
 + (NSString *)linkCandidateInText:(NSString *)text;
 
 + (void)replaceMention:(NSString *)mention inputField:(HPGrowingTextView *)inputField;
++ (void)replaceMention:(NSString *)mention inputField:(HPGrowingTextView *)inputField username:(bool)username userId:(int32_t)userId;
 + (void)replaceHashtag:(NSString *)hashtag inputField:(HPGrowingTextView *)inputField;
-
-- (void)adjustCustomKeyboardForWidth:(CGFloat)width;
 
 - (void)animateRecordingIn;
 - (void)addMicLevel:(CGFloat)level;
 
 - (void)setMessageEditingContext:(TGMessageEditingContext *)messageEditingContext animated:(bool)animated;
+
+- (void)resign;
+
+- (void)updateModeButtonVisibility:(bool)animated reset:(bool)reset;
+
+- (CGFloat)customKeyboardHeight;
+- (bool)isCustomKeyboardActive;
+- (void)setCustomKeyboardExpanded:(bool)expanded animated:(bool)animated;
+
+- (void)willDisappear;
+- (bool)isActive;
+
+- (void)prepareForResultPreviewAppearance:(bool)keepAssociatedPanel;
+- (void)prepareForResultPreviewDismissal:(bool)restoreFocus;
+- (bool)willRestoreFocus;
+
+- (void)setChannelInfoSignal:(SSignal *)signal;
+
+- (NSInteger)textCaretPosition;
+
+- (UIView *)keyboardSnapshotView;
+
+- (CGFloat)fontSize;
 
 @end

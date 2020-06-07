@@ -2,6 +2,9 @@
 
 #import "TLMetaClassStore.h"
 
+//messages.botResults#947ca848 flags:# gallery:flags.0?true query_id:long next_offset:flags.1?string switch_pm:flags.2?InlineBotSwitchPM results:Vector<BotInlineResult> cache_time:int users:Vector<User> = messages.BotResults;
+
+
 @implementation TLMessages_BotResults$botResults
 
 - (void)TLserialize:(NSOutputStream *)__unused os
@@ -21,6 +24,14 @@
         result.next_offset = [is readString];
     }
     
+    if (flags & (1 << 2)) {
+        int32_t signature = [is readInt32];
+        result.switch_pm = TLMetaClassStore::constructObject(is, signature, environment, nil, error);
+        if (error != nil && *error != nil) {
+            return nil;
+        }
+    }
+    
     {
         [is readInt32];
         
@@ -29,12 +40,36 @@
         for (int32_t i = 0; i < count; i++) {
             int32_t signature = [is readInt32];
             id item = TLMetaClassStore::constructObject(is, signature, environment, nil, error);
+            if (error != nil && *error != nil) {
+                return nil;
+            }
             if (item != nil) {
                 [items addObject:item];
             }
         }
         
         result.results = items;
+    }
+    
+    result.cache_time = [is readInt32];
+    
+    {
+        [is readInt32];
+        
+        NSMutableArray *items = [[NSMutableArray alloc] init];
+        int32_t count = [is readInt32];
+        for (int32_t i = 0; i < count; i++) {
+            int32_t signature = [is readInt32];
+            id item = TLMetaClassStore::constructObject(is, signature, environment, nil, error);
+            if (error != nil && *error != nil) {
+                return nil;
+            }
+            if (item != nil) {
+                [items addObject:item];
+            }
+        }
+        
+        result.users = items;
     }
     
     return result;

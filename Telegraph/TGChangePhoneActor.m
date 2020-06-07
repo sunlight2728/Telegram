@@ -2,12 +2,13 @@
 
 #import "TGTelegramNetworking.h"
 #import <MTProtoKit/MTRequest.h>
+#import <MTProtoKit/MTRpcError.h>
 
 #import "TL/TLMetaScheme.h"
 
 #import "TGUserDataRequestBuilder.h"
 
-#import "ActionStage.h"
+#import <LegacyComponents/ActionStage.h>
 #import "TGSignInRequestBuilder.h"
 
 @implementation TGChangePhoneActor

@@ -1,17 +1,15 @@
 #import "TGReplyHeaderModel.h"
 
+#import <LegacyComponents/LegacyComponents.h>
+
 #import <CoreText/CoreText.h>
 
 #import "TGModernColorViewModel.h"
 #import "TGModernTextViewModel.h"
 
-#import "TGUser.h"
-#import "TGConversation.h"
-
-#import "TGImageUtils.h"
-#import "TGFont.h"
-
 #import "TGReusableLabel.h"
+
+#import "TGPresentation.h"
 
 @interface TGReplyHeaderModel ()
 {
@@ -59,33 +57,33 @@ static CTFontRef textFont()
     return font;
 }
 
-static UIColor *colorForTitle(bool incoming)
-{
-    static UIColor *incomingColor = nil;
-    static UIColor *outgoingColor = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^
-    {
-        incomingColor = UIColorRGB(0x0b8bed);
-        outgoingColor = UIColorRGB(0x00a700);
-    });
-    return incoming ? incomingColor : outgoingColor;
-}
+//static UIColor *colorForTitle(bool incoming)
+//{
+//    static UIColor *incomingColor = nil;
+//    static UIColor *outgoingColor = nil;
+//    static dispatch_once_t onceToken;
+//    dispatch_once(&onceToken, ^
+//    {
+//        incomingColor = UIColorRGB(0x0b8bed);
+//        outgoingColor = UIColorRGB(0x00a700);
+//    });
+//    return incoming ? incomingColor : outgoingColor;
+//}
+//
+//static UIColor *colorForLine(bool incoming)
+//{
+//    static UIColor *incomingColor = nil;
+//    static UIColor *outgoingColor = nil;
+//    static dispatch_once_t onceToken;
+//    dispatch_once(&onceToken, ^
+//    {
+//        incomingColor = UIColorRGB(0x3ca7fe);
+//        outgoingColor = UIColorRGB(0x29cc10);
+//    });
+//    return incoming ? incomingColor : outgoingColor;
+//}
 
-static UIColor *colorForLine(bool incoming)
-{
-    static UIColor *incomingColor = nil;
-    static UIColor *outgoingColor = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^
-    {
-        incomingColor = UIColorRGB(0x3ca7fe);
-        outgoingColor = UIColorRGB(0x29cc10);
-    });
-    return incoming ? incomingColor : outgoingColor;
-}
-
-- (instancetype)initWithPeer:(id)peer incoming:(bool)incoming text:(NSString *)text truncateTextInTheMiddle:(bool)truncateTextInTheMiddle textColor:(UIColor *)textColor leftInset:(CGFloat)leftInset system:(bool)system
+- (instancetype)initWithPeer:(id)peer incoming:(bool)incoming text:(NSString *)text truncateTextInTheMiddle:(bool)truncateTextInTheMiddle textColor:(UIColor *)textColor leftInset:(CGFloat)leftInset system:(bool)system presentation:(TGPresentation *)presentation
 {
     self = [super init];
     if (self != nil)
@@ -93,7 +91,8 @@ static UIColor *colorForLine(bool incoming)
         _leftInset = leftInset;
         _system = system;
         
-        _lineModel = [[TGModernColorViewModel alloc] initWithColor:system ? [UIColor whiteColor] : colorForLine(incoming)];
+        UIColor *lineColor = incoming ? presentation.pallete.chatIncomingLineColor : presentation.pallete.chatOutgoingLineColor;
+        _lineModel = [[TGModernColorViewModel alloc] initWithColor:system ? presentation.pallete.chatSystemTextColor : lineColor cornerRadius:1.0f];
         [self addSubmodel:_lineModel];
         
         NSString *title = @"";
@@ -103,30 +102,18 @@ static UIColor *colorForLine(bool incoming)
             title = ((TGConversation *)peer).chatTitle;
         }
         
+        UIColor *titleColor = incoming ? presentation.pallete.chatIncomingAccentColor : presentation.pallete.chatOutgoingAccentColor;
         _nameModel = [[TGModernTextViewModel alloc] initWithText:title font:nameFont()];
-        _nameModel.textColor = system ? [UIColor whiteColor] : colorForTitle(incoming);
+        _nameModel.textColor = system ? presentation.pallete.chatSystemTextColor : titleColor;
         [self addSubmodel:_nameModel];
         
         _textModel = [[TGModernTextViewModel alloc] initWithText:text font:textFont()];
         if (truncateTextInTheMiddle)
             _textModel.layoutFlags = TGReusableLabelTruncateInTheMiddle;
-        _textModel.textColor = system ? [UIColor whiteColor] : textColor;
+        _textModel.textColor = system ? presentation.pallete.chatSystemTextColor : textColor;
         [self addSubmodel:_textModel];
     }
     return self;
-}
-
-+ (UIColor *)colorForMediaText:(bool)incoming
-{
-    static UIColor *incomingColor = nil;
-    static UIColor *outgoingColor = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^
-    {
-        incomingColor = UIColorRGB(0x979797);
-        outgoingColor = UIColorRGB(0x00a700);
-    });
-    return incoming ? incomingColor : outgoingColor;
 }
 
 + (CGFloat)thumbnailCornerRadius
@@ -160,9 +147,11 @@ static UIColor *colorForLine(bool incoming)
     [_nameModel layoutForContainerSize:maxTextSize];
     [_textModel layoutForContainerSize:maxTextSize];
     
+    CGFloat additionalOffset = _system ? 1.0f : 0.0f;
+    
     CGRect nameFrame = _nameModel.frame;
     nameFrame.origin.x = leftInset;
-    nameFrame.origin.y = 3.0f;
+    nameFrame.origin.y = 3.0f + additionalOffset;;
     _nameModel.frame = nameFrame;
     
     CGRect textFrame = _textModel.frame;

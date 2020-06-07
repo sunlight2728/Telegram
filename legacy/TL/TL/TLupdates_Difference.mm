@@ -20,7 +20,7 @@
     return 0;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)__unused metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)__unused metaObject
 {
     TGLog(@"TLbuildFromMetaObject is not implemented for base type");
     return nil;
@@ -47,7 +47,7 @@
     return (int32_t)0xe47016d4;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)metaObject
 {
     TLupdates_Difference$updates_differenceEmpty *object = [[TLupdates_Difference$updates_differenceEmpty alloc] init];
     object.date = metaObject->getInt32((int32_t)0xb76958ba);
@@ -87,7 +87,7 @@
     return (int32_t)0xc92fa56d;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)metaObject
 {
     TLupdates_Difference$updates_difference *object = [[TLupdates_Difference$updates_difference alloc] init];
     object.n_new_messages = metaObject->getArray((int32_t)0xe7cf9f7c);
@@ -155,7 +155,7 @@
     return (int32_t)0xb6d9f085;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)metaObject
 {
     TLupdates_Difference$updates_differenceSlice *object = [[TLupdates_Difference$updates_differenceSlice alloc] init];
     object.n_new_messages = metaObject->getArray((int32_t)0xe7cf9f7c);
@@ -204,6 +204,39 @@
         value.type = TLConstructedValueTypeObject;
         value.nativeObject = self.intermediate_state;
         values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0xc976b11c, value));
+    }
+}
+
+
+@end
+
+@implementation TLupdates_Difference$updates_differenceTooLong : TLupdates_Difference
+
+
+- (int32_t)TLconstructorSignature
+{
+    return (int32_t)0x4afe8f6d;
+}
+
+- (int32_t)TLconstructorName
+{
+    return (int32_t)0x3105285b;
+}
+
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)metaObject
+{
+    TLupdates_Difference$updates_differenceTooLong *object = [[TLupdates_Difference$updates_differenceTooLong alloc] init];
+    object.pts = metaObject->getInt32((int32_t)0x4fc5f572);
+    return object;
+}
+
+- (void)TLfillFieldsWithValues:(std::map<int32_t, TLConstructedValue> *)values
+{
+    {
+        TLConstructedValue value;
+        value.type = TLConstructedValueTypePrimitiveInt32;
+        value.primitive.int32Value = self.pts;
+        values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0x4fc5f572, value));
     }
 }
 

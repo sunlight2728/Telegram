@@ -279,7 +279,7 @@
         {
             self.map.hidden = false;
             
-            CGSize size = CGSizeMake(100, 100);
+            CGSize size;
             NSValue *imageSizeValue = mapGroup[TGNeoMessageMediaSize];
             if (imageSizeValue != nil)
             {
@@ -437,7 +437,6 @@
         }
         else if ([attachment isKindOfClass:[TGBridgeForwardedMessageMediaAttachment class]])
         {
-            hasForwardHeader = true;
         }
         else if ([attachment isKindOfClass:[TGBridgeReplyMessageMediaAttachment class]])
         {

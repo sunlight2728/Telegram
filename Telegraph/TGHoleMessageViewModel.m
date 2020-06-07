@@ -1,7 +1,6 @@
 #import "TGHoleMessageViewModel.h"
 
-#import "TGUser.h"
-#import "TGMessage.h"
+#import <LegacyComponents/LegacyComponents.h>
 
 #import "TGTelegraphConversationMessageAssetsSource.h"
 
@@ -15,9 +14,9 @@
 #import "TGModernRemoteImageView.h"
 
 #import "TGReusableLabel.h"
-#import "TGDoubleTapGestureRecognizer.h"
+#import <LegacyComponents/TGDoubleTapGestureRecognizer.h>
 
-#import "TGStringUtils.h"
+#import "TGPresentation.h"
 
 @interface TGHoleMessageViewModel () <UIGestureRecognizerDelegate> {
     TGModernImageViewModel *_backgroundModel;
@@ -41,7 +40,7 @@
         _mid = message.mid;
         _message = message;
         
-        _backgroundModel = [[TGModernImageViewModel alloc] initWithImage:[[TGTelegraphConversationMessageAssetsSource instance] systemMessageBackground]];
+        _backgroundModel = [[TGModernImageViewModel alloc] initWithImage:context.presentation.images.chatSystemBackground];
         _backgroundModel.skipDrawInContext = true;
         [self addSubmodel:_backgroundModel];
         
@@ -50,7 +49,7 @@
         [self addSubmodel:_contentModel];
         
         _textModel = [[TGModernTextViewModel alloc] initWithText:[self actionTextForMessage:message] font:[[TGTelegraphConversationMessageAssetsSource instance] messageActionTitleFont]];
-        _textModel.textColor = [UIColor whiteColor];
+        _textModel.textColor = context.presentation.pallete.chatSystemTextColor;
         _textModel.alignment = NSTextAlignmentCenter;
         [_contentModel addSubmodel:_textModel];
     }
@@ -60,7 +59,7 @@
 - (NSString *)actionTextForMessage:(TGMessage *)message {
     NSString *actionText = @"";
     if (message.hole != nil) {
-        actionText = TGLocalizedStatic(@"Channel.NotificationLoading");
+        actionText = TGLocalized(@"Channel.NotificationLoading");
 #ifdef DEBUG
         actionText = [actionText stringByAppendingString:[[NSString alloc] initWithFormat:@" (%d ... %d)", message.hole.minId, message.hole.maxId]];
 #endif

@@ -1,18 +1,26 @@
 #import "TGMusicPlayerController.h"
 
-#import "TGMusicPlayerCompleteView.h"
+#import <LegacyComponents/LegacyComponents.h>
+#import "TGLegacyComponentsContext.h"
+
+#import "TGMusicPlayerFullView.h"
 #import "TGTelegraph.h"
 
 #import "TGPreparedLocalDocumentMessage.h"
 
-@interface TGMusicPlayerController ()
+#import "TGInterfaceManager.h"
+#import "TGSharedMediaController.h"
+
+#import "TGShareMenu.h"
+#import "TGSendMessageSignals.h"
+
+#import "TGAudioMediaAttachment+Telegraph.h"
+
+@interface TGMusicPlayerController () <UIGestureRecognizerDelegate>
 {
-    TGMusicPlayerCompleteView *_view;
-    UIBarButtonItem *_shareItem;
-    
+    TGMusicPlayerFullView *_view;
     SMetaDisposable *_statusDisposable;
 }
-
 @end
 
 @implementation TGMusicPlayerController
@@ -22,10 +30,6 @@
     self = [super init];
     if (self != nil)
     {
-        [self setLeftBarButtonItem:[[UIBarButtonItem alloc] initWithTitle:TGLocalized(@"Common.Close") style:UIBarButtonItemStylePlain target:self action:@selector(closePressed)]];
-        _shareItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemAction target:self action:@selector(sharePressed)];
-        [self setRightBarButtonItem:_shareItem];
-        _shareItem.enabled = true;
         _statusDisposable = [[SMetaDisposable alloc] init];
     }
     return self;
@@ -39,75 +43,149 @@
 {
     [super loadView];
     
-    self.view.backgroundColor = [UIColor whiteColor];
+    self.view.backgroundColor = [UIColor clearColor];
     
     __weak TGMusicPlayerController *weakSelf = self;
-    _view = [[TGMusicPlayerCompleteView alloc] initWithFrame:self.view.bounds setTitle:^(NSString *title)
+    _view = [[TGMusicPlayerFullView alloc] initWithFrame:self.view.bounds context:[TGLegacyComponentsContext shared] presentation:self.presentation];
+    _view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    _view.actionsPressed = ^
     {
         __strong TGMusicPlayerController *strongSelf = weakSelf;
         if (strongSelf != nil)
-            strongSelf.title = title;
-    } actionsEnabled:^(bool enabled) {
+            [strongSelf sharePressed];
+    };
+    _view.dismissed = ^
+    {
         __strong TGMusicPlayerController *strongSelf = weakSelf;
-        if (strongSelf != nil) {
-            strongSelf->_shareItem.enabled = enabled;
-        }
-    }];
-    _view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        if (strongSelf != nil)
+            [strongSelf dismiss];
+    };
     [self.view addSubview:_view];
     
     if (![self _updateControllerInset:false])
         [self controllerInsetUpdated:UIEdgeInsetsZero];
 }
 
-- (void)controllerInsetUpdated:(UIEdgeInsets)previousInset
+- (void)viewWillAppear:(BOOL)animated
 {
-    _view.topInset = self.controllerInset.top;
-    
-    [super controllerInsetUpdated:previousInset];
+    [super viewWillAppear:animated];
+    [_view layoutSubviews];
 }
 
-- (void)closePressed
+- (void)dismiss
 {
-    [self.presentingViewController dismissViewControllerAnimated:true completion:nil];
+    [self removeFromParentViewController];
+    [self.view removeFromSuperview];
 }
-         
-- (void)sharePressed {
-    if (iosMajorVersion() >= 8) {
-        __weak TGMusicPlayerController *weakSelf = self;
-        [_statusDisposable setDisposable:[[[[TGTelegraphInstance.musicPlayer playingStatus] take:1] deliverOn:[SQueue mainQueue]] startWithNext:^(TGMusicPlayerStatus *status) {
-            __strong TGMusicPlayerController *strongSelf = weakSelf;
-            if (strongSelf != nil) {
-                if (status.downloadedStatus.downloaded) {
-                    NSString *path = nil;
-                    if ([status.item.media isKindOfClass:[TGDocumentMediaAttachment class]]) {
-                        TGDocumentMediaAttachment *document = status.item.media;
-                        if (document.documentId != 0) {
-                            path = [[TGPreparedLocalDocumentMessage localDocumentDirectoryForDocumentId:document.documentId] stringByAppendingPathComponent:[document safeFileName]];
-                        } else {
-                            path = [[TGPreparedLocalDocumentMessage localDocumentDirectoryForLocalDocumentId:document.localDocumentId] stringByAppendingPathComponent:[document safeFileName]];
-                        }
-                    } else if ([status.item.media isKindOfClass:[TGAudioMediaAttachment class]]) {
-                        TGAudioMediaAttachment *audio = status.item.media;
-                        path = [audio localFilePath];
-                    }
-                    
-                    if (path != nil && [[NSFileManager defaultManager] fileExistsAtPath:path]) {
-                        NSURL *url = [NSURL fileURLWithPath:path];
-                        NSArray *dataToShare = @[url];
-                        UIActivityViewController *activityViewController = [[UIActivityViewController alloc] initWithActivityItems:dataToShare applicationActivities:nil];
-                        if (iosMajorVersion() >= 8 && [UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad)
-                        {
-                            //activityViewController.popoverPresentationController.sourceView = sourceView;
-                            //activityViewController.popoverPresentationController.sourceRect = sourceView.bounds;
-                            activityViewController.popoverPresentationController.barButtonItem = _shareItem;
-                        }
-                        [self presentViewController:activityViewController animated:true completion:nil];
-                    }
-                }
+
+- (void)dismissAnimated:(bool)animated
+{
+    if (animated)
+        [_view dismissAnimated:true completion:nil];
+    else
+        [self dismiss];
+}
+
+- (void)sharePressed
+{
+    __weak TGMusicPlayerController *weakSelf = self;
+    [_statusDisposable setDisposable:[[[[TGTelegraphInstance.musicPlayer playingStatus] take:1] deliverOn:[SQueue mainQueue]] startWithNext:^(TGMusicPlayerStatus *status) {
+        __strong TGMusicPlayerController *strongSelf = weakSelf;
+        if (strongSelf == nil)
+            return;
+        
+        NSString *path = nil;
+        bool inSecretChat = false;
+        if ([status.item.media isKindOfClass:[TGDocumentMediaAttachment class]])
+        {
+            TGDocumentMediaAttachment *document = status.item.media;
+            inSecretChat = (document.documentId == 0 && document.accessHash == 0);
+            if (document.documentId != 0)
+            {
+                path = [[TGPreparedLocalDocumentMessage localDocumentDirectoryForDocumentId:document.documentId version:document.version] stringByAppendingPathComponent:[document safeFileName]];
             }
-        }]];
-    }
+            else
+            {
+                path = [[TGPreparedLocalDocumentMessage localDocumentDirectoryForLocalDocumentId:document.localDocumentId version:document.version] stringByAppendingPathComponent:[document safeFileName]];
+            }
+        }
+        else if ([status.item.media isKindOfClass:[TGAudioMediaAttachment class]])
+        {
+            TGAudioMediaAttachment *audio = status.item.media;
+            path = [audio localFilePath];
+        }
+        
+        void (^shareAction)(NSArray *, NSString *) = ^(NSArray *peerIds, NSString *caption)
+        {
+            if (![status.item.media isKindOfClass:[TGDocumentMediaAttachment class]])
+                return;
+            
+            TGDocumentMediaAttachment *document = (TGDocumentMediaAttachment *)status.item.media;
+            [[TGShareSignals shareDocument:document toPeerIds:peerIds caption:caption] startWithNext:nil];
+        };
+        
+        if (inSecretChat)
+            shareAction = nil;
+        
+        SSignal *externalSignal = status.downloadedStatus.downloaded ? [SSignal single:[NSURL fileURLWithPath:path]] : nil;
+    
+        CGRect (^sourceRect)(void) = ^CGRect
+        {
+            return [strongSelf->_view.actionsButton convertRect:strongSelf->_view.actionsButton.bounds toView:strongSelf->_view];
+        };
+        
+        [TGShareMenu presentInParentController:self menuController:nil buttonTitle:status.item.conversationId != 0 ? TGLocalized(@"SharedMedia.ViewInChat") : nil buttonAction:^
+        {
+            if (![status.item.key isKindOfClass:[NSNumber class]])
+                return;
+            
+            int32_t messageId = [(NSNumber *)status.item.key int32Value];
+            [[TGInterfaceManager instance] navigateToConversationWithId:status.item.conversationId conversation:nil performActions:nil atMessage:@{ @"mid": @(messageId), @"useExisting": @true } clearStack:true openKeyboard:false canOpenKeyboardWhileInTransition:false animated:true];
+            
+            __strong TGMusicPlayerController *strongSelf = weakSelf;
+            if (strongSelf != nil)
+                [strongSelf->_view dismissAnimated:true completion:nil];
+        } shareAction:shareAction externalShareItemSignal:externalSignal sourceView:strongSelf->_view sourceRect:sourceRect barButtonItem:nil];
+    }]];
+}
+
+- (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)interfaceOrientation
+{
+    if (!TGIsPad())
+        return interfaceOrientation == UIInterfaceOrientationPortrait;
+    
+    return [super shouldAutorotateToInterfaceOrientation:interfaceOrientation];
+}
+
+- (BOOL)shouldAutorotate
+{
+    if (!TGIsPad())
+        return false;
+    
+    return [super shouldAutorotate];
+}
+
+- (UIInterfaceOrientationMask)supportedInterfaceOrientations
+{
+    if (!TGIsPad())
+        return UIInterfaceOrientationMaskPortrait;
+    
+    return [super supportedInterfaceOrientations];
+}
+
+- (UIInterfaceOrientation)preferredInterfaceOrientationForPresentation
+{
+    if (!TGIsPad())
+        return UIInterfaceOrientationPortrait;
+    
+    return [super preferredInterfaceOrientationForPresentation];
+}
+
+- (void)controllerInsetUpdated:(UIEdgeInsets)previousInset
+{
+    [super controllerInsetUpdated:previousInset];
+    
+    _view.safeAreaInset = self.controllerSafeAreaInset;
 }
 
 @end

@@ -32,6 +32,10 @@
     view.deleteStickerPack = _deleteStickerPack;
     view.addStickerPack = _addStickerPack;
     [view setStickerPack:_stickerPack];
+    [view setUnread:_unread];
+    [view setStatus:_status];
+    [view setSearchStatus:_searchStatus];
+    [view setIsChecked:_isChecked];
 }
 
 - (void)unbindView
@@ -51,5 +55,29 @@
     _stickerPack = stickerPack;
     [((TGStickerPackCollectionItemView *)self.boundView) setStickerPack:_stickerPack];
 }
+
+- (void)setSearchStatus:(TGStickerPackItemSearchStatus)searchStatus
+{
+    _searchStatus = searchStatus;
+    [((TGStickerPackCollectionItemView *)self.boundView) setSearchStatus:_searchStatus];
+}
+
+- (void)setUnread:(bool)unread {
+    _unread = unread;
+    [((TGStickerPackCollectionItemView *)self.boundView) setUnread:_unread];
+}
+
+- (void)setStatus:(TGStickerPackItemStatus)status {
+    _status = status;
+    [((TGStickerPackCollectionItemView *)self.boundView) setStatus:status];
+}
+
+- (void)setIsChecked:(bool)isChecked
+{
+    _isChecked = isChecked;
+
+    [(TGStickerPackCollectionItemView *)[self boundView] setIsChecked:_isChecked];
+}
+
 
 @end

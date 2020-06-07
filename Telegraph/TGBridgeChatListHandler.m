@@ -1,11 +1,12 @@
 #import "TGBridgeChatListHandler.h"
+
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGBridgeChatListSubscription.h"
 #import "TGBridgeServer.h"
 
 #import "TGChatListSignals.h"
-#import "TGConversation.h"
 #import "TGUserSignal.h"
-#import "TGUser.h"
 
 #import "TGBridgeChat+TGConversation.h"
 #import "TGBridgeUser+TGUser.h"
@@ -18,7 +19,9 @@
     {
         TGBridgeChatListSubscription *chatListSubscription = (TGBridgeChatListSubscription *)subscription;
         
-        return [[server serviceSignalForKey:@"chatList" producer:nil] mapToSignal:^SSignal *(NSArray *chats)
+        return [[[server server] mapToSignal:^SSignal *(TGBridgeServer *server) {
+            return [server serviceSignalForKey:@"chatList" producer:nil];
+        }] mapToSignal:^SSignal *(NSArray *chats)
         {
             NSMutableArray *bridgeChats = [[NSMutableArray alloc] init];
             

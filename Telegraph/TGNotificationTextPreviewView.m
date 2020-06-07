@@ -1,11 +1,13 @@
 #import "TGNotificationTextPreviewView.h"
 
-#import "TGMessage.h"
-#import "TGConversation.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import "TGScrollIndicatorView.h"
 
 @interface TGNotificationTextPreviewView () <UIScrollViewDelegate>
 {
     UIScrollView *_scrollView;
+    TGScrollIndicatorView *_scrollIndicator;
 }
 @end
 
@@ -33,6 +35,11 @@
                         }
                     }
                     break;
+                } else if ([attachment isKindOfClass:[TGGameMediaAttachment class]]) {
+                    text = [@"🎮 " stringByAppendingString:((TGGameMediaAttachment *)attachment).title];
+                } else if ([attachment isKindOfClass:[TGInvoiceMediaAttachment class]]) {
+                    text = [@"" stringByAppendingString:((TGInvoiceMediaAttachment *)attachment).title];
+                } else if ([attachment isKindOfClass:[TGActionMediaAttachment class]]) {
                 }
             }
         }
@@ -46,6 +53,11 @@
         _scrollView.userInteractionEnabled = false;
         _scrollView.scrollEnabled = false;
         [self addSubview:_scrollView];
+        
+        _scrollIndicator = [[TGScrollIndicatorView alloc] init];
+        _scrollIndicator.color = UIColorRGBA(0xb2b2b2, 0.6f);
+        [_scrollIndicator setHidden:true animated:false];
+        [_scrollView addSubview:_scrollIndicator];
         
         if (_replyHeader != nil)
             [_scrollView addSubview:_replyHeader];
@@ -72,7 +84,16 @@
 
 - (CGFloat)maxContentHeight
 {
-    return 160;
+    static dispatch_once_t onceToken;
+    static CGFloat height = 0;
+    dispatch_once(&onceToken, ^
+    {
+        NSString *string = @" \n\n\n\n\n\n\n\n\n\n ";
+        CGFloat textHeight = [string sizeWithFont:_textLabel.font constrainedToSize:CGSizeMake(100.0f, CGFLOAT_MAX) lineBreakMode:NSLineBreakByWordWrapping].height;
+        textHeight = ceil(textHeight - textHeight / 8.0f);
+        height = textHeight;
+    });
+    return height;
 }
 
 - (void)_layoutHeaders
@@ -95,6 +116,19 @@
 {
     if (_scrollView.isTracking)
         _isIdle = false;
+    
+    [_scrollIndicator updateScrollViewDidScroll];
+}
+
+- (void)scrollViewDidEndDecelerating:(UIScrollView *)__unused scrollView
+{
+    [_scrollIndicator updateScrollViewDidEndScrolling];
+}
+
+- (void)scrollViewDidEndDragging:(UIScrollView *)__unused scrollView willDecelerate:(BOOL)decelerate
+{
+    if (!decelerate)
+        [_scrollIndicator updateScrollViewDidEndScrolling];
 }
 
 - (void)layoutSubviews
@@ -105,7 +139,7 @@
     CGSize contentSize = CGSizeMake(_textLabel.frame.size.width + 10.0f, _textHeight + _headerHeight);
     CGFloat maxContentHeight = [self maxContentHeight];
     
-    CGFloat maxScrollHeight = MIN(maxContentHeight, contentSize.height);
+    CGFloat maxScrollHeight = self.unnlimitedHeight ? contentSize.height : MIN(maxContentHeight, contentSize.height);
     CGFloat scrollHeight = _collapsedTextHeight + (maxScrollHeight - _collapsedTextHeight) * progress;
     
     if (!CGSizeEqualToSize(_scrollView.contentSize, contentSize))
@@ -117,8 +151,8 @@
     CGFloat textOffset = (_textEndPos - _textStartPos) * progress + titleOffset;
     _textLabel.frame = CGRectMake(0, textOffset, _textLabel.frame.size.width, (_expandProgress > FLT_EPSILON) ? _textHeight : _collapsedTextHeight);
     
-    bool contentClipped = (contentSize.height > maxContentHeight);
-    _scrollView.showsVerticalScrollIndicator = contentClipped;
+    bool contentClipped = !self.unnlimitedHeight && (contentSize.height > maxContentHeight);
+    [_scrollIndicator setHidden:!contentClipped animated:false];
     _scrollView.userInteractionEnabled = contentClipped;
 }
 

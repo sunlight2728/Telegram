@@ -1,15 +1,9 @@
-/*
- * This is the source code of Telegram for iOS v. 1.1
- * It is licensed under GNU GPL v. 2 or later.
- * You should have received a copy of the license in this archive (see LICENSE).
- *
- * Copyright Peter Iakovlev, 2013.
- */
-
 #import "TGCreateGroupController.h"
 
-#import "ActionStage.h"
-#import "SGraphObjectNode.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/ActionStage.h>
+#import <LegacyComponents/SGraphObjectNode.h>
 
 #import "TGDatabase.h"
 
@@ -21,17 +15,15 @@
 #import "TGHeaderCollectionItem.h"
 #import "TGCommentCollectionItem.h"
 
-#import "TGProgressWindow.h"
+#import <LegacyComponents/TGProgressWindow.h>
 
-#import "TGAlertView.h"
+#import "TGCustomAlertView.h"
 
 #import "TGChannelManagementSignals.h"
 #import "TGButtonCollectionItem.h"
 #import "TGVariantCollectionItem.h"
 
 #import "TGGroupInfoSelectContactController.h"
-#import "TGNavigationBar.h"
-#import "TGNavigationController.h"
 
 #import "TGChannelAboutSetupController.h"
 #import "TGChannelLinkSetupController.h"
@@ -42,11 +34,9 @@
 
 #import "TGSetupChannelAfterCreationController.h"
 
-#import "UIDevice+PlatformInfo.h"
-#import "TGImageUtils.h"
-#import "TGActionSheet.h"
+#import <LegacyComponents/UIDevice+PlatformInfo.h>
 
-#import "TGRemoteImageView.h"
+#import <LegacyComponents/TGRemoteImageView.h>
 
 #import "TGUploadFileSignals.h"
 
@@ -54,9 +44,12 @@
 
 #import "TGGroupManagementSignals.h"
 
-#import "TGMediaAvatarMenuMixin.h"
+#import <LegacyComponents/TGMediaAvatarMenuMixin.h>
+#import "TGWebSearchController.h"
 
 #import "TGTelegramNetworking.h"
+
+#import "TGLegacyComponentsContext.h"
 
 @interface TGCreateGroupController () <TGGroupInfoSelectContactControllerDelegate, ASWatcher>
 {
@@ -219,7 +212,20 @@
                 }];
             }];
             
-            [[[createAndUpdatePhoto deliverOn:[SQueue mainQueue]] onDispose:^{
+            SSignal *createAndCheckUsernames = [createAndUpdatePhoto mapToSignal:^SSignal *(NSDictionary *dict) {
+                TGConversation *conversation = dict[@"conversation"];
+                return [[[TGGroupManagementSignals conversationsToBeRemovedToAssignPublicUsernames:conversation.conversationId accessHash:conversation.accessHash] catch:^SSignal *(__unused id error) {
+                    return [SSignal single:@[]];
+                }] map:^id(NSArray *conversationsToDeleteForPublicUsernames) {
+                    NSMutableDictionary *updatedDict = [[NSMutableDictionary alloc] initWithDictionary:dict];
+                    if (conversationsToDeleteForPublicUsernames != nil) {
+                        updatedDict[@"conversationsToDeleteForPublicUsernames"] = conversationsToDeleteForPublicUsernames;
+                    }
+                    return updatedDict;
+                }];
+            }];
+            
+            [[[createAndCheckUsernames deliverOn:[SQueue mainQueue]] onDispose:^{
                 TGDispatchOnMainThread(^{
                     [progressWindow dismiss:true];
                 });
@@ -229,7 +235,7 @@
                 
                 __strong TGCreateGroupController *strongSelf = weakSelf;
                 if (strongSelf != nil) {
-                    TGSetupChannelAfterCreationController *setupController = [[TGSetupChannelAfterCreationController alloc] initWithConversation:conversation exportedLink:link];
+                    TGSetupChannelAfterCreationController *setupController = [[TGSetupChannelAfterCreationController alloc] initWithConversation:conversation exportedLink:link modal:false conversationsToDeleteForPublicUsernames:dict[@"conversationsToDeleteForPublicUsernames"] checkConversationsToDeleteForPublicUsernames:false];
                     
                     NSMutableArray *viewControllers = [[NSMutableArray alloc] initWithArray:strongSelf.navigationController.viewControllers];
                     if (viewControllers.count != 1) {
@@ -283,7 +289,7 @@
                     
                     __strong TGCreateGroupController *strongSelf = weakSelf;
                     if (strongSelf != nil) {
-                        TGSetupChannelAfterCreationController *setupController = [[TGSetupChannelAfterCreationController alloc] initWithConversation:conversation exportedLink:link];
+                        TGSetupChannelAfterCreationController *setupController = [[TGSetupChannelAfterCreationController alloc] initWithConversation:conversation exportedLink:link modal:false conversationsToDeleteForPublicUsernames:@[] checkConversationsToDeleteForPublicUsernames:false];
                         
                         NSMutableArray *viewControllers = [[NSMutableArray alloc] initWithArray:strongSelf.navigationController.viewControllers];
                         if (viewControllers.count != 1) {
@@ -341,7 +347,7 @@
                         errorText = TGLocalized(@"Privacy.GroupsAndChannels.InviteToChannelMultipleError");
                     }
                     
-                    [[[TGAlertView alloc] initWithTitle:nil message:errorText cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil] show];
+                    [TGCustomAlertView presentAlertWithTitle:nil message:errorText cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil];
                 } completed:^{
                 }];
             }
@@ -436,7 +442,7 @@
 - (void)setGroupPhotoPressed
 {
     __weak TGCreateGroupController *weakSelf = self;
-    _avatarMixin = [[TGMediaAvatarMenuMixin alloc] initWithParentController:self hasDeleteButton:([_groupInfoItem staticAvatar] != nil)];
+    _avatarMixin = [[TGMediaAvatarMenuMixin alloc] initWithContext:[TGLegacyComponentsContext shared] parentController:self hasDeleteButton:([_groupInfoItem staticAvatar] != nil) saveEditedPhotos:TGAppDelegateInstance.saveEditedPhotos saveCapturedMedia:TGAppDelegateInstance.saveCapturedMedia];
     _avatarMixin.didFinishWithImage = ^(UIImage *image)
     {
         __strong TGCreateGroupController *strongSelf = weakSelf;
@@ -463,6 +469,36 @@
         
         strongSelf->_avatarMixin = nil;
     };
+    _avatarMixin.requestSearchController = ^TGViewController *(TGMediaAssetsController *assetsController) {
+        __strong TGCreateGroupController *strongSelf = weakSelf;
+        if (strongSelf == nil)
+            return nil;
+        
+        TGWebSearchController *searchController = [[TGWebSearchController alloc] initWithContext:[TGLegacyComponentsContext shared] forAvatarSelection:true embedded:true allowGrouping:false];
+        searchController.presentation = strongSelf.presentation;
+        
+        __weak TGMediaAssetsController *weakAssetsController = assetsController;
+        __weak TGWebSearchController *weakController = searchController;
+        searchController.avatarCompletionBlock = ^(UIImage *image) {
+            __strong TGMediaAssetsController *strongAssetsController = weakAssetsController;
+            if (strongAssetsController.avatarCompletionBlock == nil)
+                return;
+            
+            strongAssetsController.avatarCompletionBlock(image);
+        };
+        searchController.dismiss = ^
+        {
+            __strong TGWebSearchController *strongController = weakController;
+            if (strongController == nil)
+                return;
+            
+            [strongController dismissEmbeddedAnimated:true];
+        };
+        searchController.parentNavigationController = assetsController;
+        [searchController presentEmbeddedInController:assetsController animated:true];
+        
+        return searchController;
+    };
     [_avatarMixin present];
 }
 
@@ -482,7 +518,7 @@
     UIImage *avatarImage = filter(image);
     
     [_groupInfoItem setStaticAvatar:avatarImage];
-    [_uploadedPhotoFile set:[TGUploadFileSignals uploadedFileWithData:imageData]];
+    [_uploadedPhotoFile set:[TGUploadFileSignals uploadedFileWithData:imageData mediaTypeTag:TGNetworkMediaTypeTagImage]];
 }
 
 - (void)_commitDeleteAvatar

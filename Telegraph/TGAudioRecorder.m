@@ -1,22 +1,13 @@
-/*
- * This is the source code of Telegram for iOS v. 1.1
- * It is licensed under GNU GPL v. 2 or later.
- * You should have received a copy of the license in this archive (see LICENSE).
- *
- * Copyright Peter Iakovlev, 2013.
- */
-
 #import "TGAudioRecorder.h"
-#import "ASQueue.h"
+#import <LegacyComponents/ASQueue.h>
 #import "TGTimer.h"
+
+#import <LegacyComponents/LegacyComponents.h>
 
 #import <AVFoundation/AVFoundation.h>
 #import <AudioToolbox/AudioToolbox.h>
 
 #import "TGAppDelegate.h"
-
-#import "TGAccessChecker.h"
-#import "TGAlertView.h"
 
 #define TGUseModernAudio true
 
@@ -33,6 +24,9 @@
     
     TGOpusAudioRecorder *_modernRecorder;
     AVAudioPlayer *_tonePlayer;
+    id _activityHolder;
+    
+    SMetaDisposable *_activityDisposable;
 }
 
 @end
@@ -45,6 +39,8 @@
     if (self != nil)
     {
         _modernRecorder = [[TGOpusAudioRecorder alloc] initWithFileEncryption:fileEncryption];
+        
+        _activityDisposable = [[SMetaDisposable alloc] init];
         
         [[TGAudioRecorder audioRecorderQueue] dispatchOnQueue:^
         {
@@ -63,6 +59,7 @@
 - (void)dealloc
 {
     [self cleanup];
+    [_activityDisposable dispose];
 }
 
 - (void)setMicLevel:(void (^)(CGFloat))micLevel {
@@ -115,7 +112,15 @@ static void playSoundCompleted(__unused SystemSoundID ssID, __unused void *clien
 
 - (void)startWithSpeaker:(bool)speaker1 completion:(void (^)())completion
 {
-    static SystemSoundID soundId;
+    __weak TGAudioRecorder *weakSelf = self;
+    [_activityDisposable setDisposable:[[[SSignal complete] delay:0.3 onQueue:[SQueue mainQueue]] startWithNext:nil error:nil completed:^{
+        __strong TGAudioRecorder *strongSelf = weakSelf;
+        if (strongSelf != nil && strongSelf->_requestActivityHolder) {
+            strongSelf->_activityHolder = strongSelf->_requestActivityHolder();
+        }
+    }]];
+    
+    __unused static SystemSoundID soundId;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^
     {
@@ -182,7 +187,7 @@ static void playSoundCompleted(__unused SystemSoundID ssID, __unused void *clien
             }
             else
             {
-                [TGAccessChecker checkMicrophoneAuthorizationStatusForIntent:TGMicrophoneAccessIntentVoice alertDismissCompletion:nil];
+                [[[LegacyComponentsGlobals provider] accessChecker] checkMicrophoneAuthorizationStatusForIntent:TGMicrophoneAccessIntentVoice alertDismissCompletion:nil];
             }
         };
         
@@ -247,6 +252,7 @@ static void playSoundCompleted(__unused SystemSoundID ssID, __unused void *clien
 
 - (void)cancel
 {
+    [_activityDisposable dispose];
     _stopped = true;
     [[TGAudioRecorder audioRecorderQueue] dispatchOnQueue:^
     {
@@ -256,6 +262,7 @@ static void playSoundCompleted(__unused SystemSoundID ssID, __unused void *clien
 
 - (void)finish:(void (^)(TGDataItem *, NSTimeInterval, TGLiveUploadActorData *, TGAudioWaveform *))completion
 {
+    [_activityDisposable dispose];
     _stopped = true;
     [[TGAudioRecorder audioRecorderQueue] dispatchOnQueue:^
     {

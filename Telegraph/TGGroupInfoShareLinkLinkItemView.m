@@ -1,6 +1,8 @@
 #import "TGGroupInfoShareLinkLinkItemView.h"
 
-#import "TGFont.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import "TGPresentation.h"
 
 @interface TGGroupInfoShareLinkLinkItemView ()
 {
@@ -25,6 +27,13 @@
         [self.contentView addSubview:_label];
     }
     return self;
+}
+
+- (void)setPresentation:(TGPresentation *)presentation
+{
+    [super setPresentation:presentation];
+    
+    _label.textColor = presentation.pallete.collectionMenuTextColor;
 }
 
 - (void)setText:(NSString *)text

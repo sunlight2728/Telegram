@@ -21,7 +21,7 @@
 
 - (int)layerVersion
 {
-    return 38;
+    return 59;
 }
 
 - (int32_t)TLconstructorSignature
@@ -36,7 +36,7 @@
     return 0;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)__unused metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)__unused metaObject
 {
     TGLog(@"TLbuildFromMetaObject is not implemented for base type");
     return nil;
@@ -55,7 +55,7 @@
 
 - (int32_t)TLconstructorSignature
 {
-    return (int32_t)0x8a8ec2da;
+    return (int32_t)0xafa92846;
 }
 
 - (int32_t)TLconstructorName
@@ -63,11 +63,12 @@
     return (int32_t)0xa186939b;
 }
 
-- (id<TLObject>)TLbuildFromMetaObject:(std::tr1::shared_ptr<TLMetaObject>)metaObject
+- (id<TLObject>)TLbuildFromMetaObject:(std::shared_ptr<TLMetaObject>)metaObject
 {
     TLRPCmessages_getHistory$messages_getHistory *object = [[TLRPCmessages_getHistory$messages_getHistory alloc] init];
     object.peer = metaObject->getObject((int32_t)0x9344c37d);
     object.offset_id = metaObject->getInt32((int32_t)0x1120a8cd);
+    object.offset_date = metaObject->getInt32((int32_t)0xe37adfc2);
     object.add_offset = metaObject->getInt32((int32_t)0xb3d4dff0);
     object.limit = metaObject->getInt32((int32_t)0xb8433fca);
     object.max_id = metaObject->getInt32((int32_t)0xe2c00ace);
@@ -88,6 +89,12 @@
         value.type = TLConstructedValueTypePrimitiveInt32;
         value.primitive.int32Value = self.offset_id;
         values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0x1120a8cd, value));
+    }
+    {
+        TLConstructedValue value;
+        value.type = TLConstructedValueTypePrimitiveInt32;
+        value.primitive.int32Value = self.offset_date;
+        values->insert(std::pair<int32_t, TLConstructedValue>((int32_t)0xe37adfc2, value));
     }
     {
         TLConstructedValue value;

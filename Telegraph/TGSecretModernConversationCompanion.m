@@ -1,17 +1,18 @@
 #import "TGSecretModernConversationCompanion.h"
 
-#import "ActionStage.h"
-#import "SGraphObjectNode.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/ActionStage.h>
+#import <LegacyComponents/SGraphObjectNode.h>
 
 #import "TGInterfaceManager.h"
 #import "TGTelegraph.h"
-#import "TGActionSheet.h"
 #import "TGAlertView.h"
-#import "TGNavigationBar.h"
 #import "TGSecretChatUserInfoController.h"
 
 #import "TGMessageModernConversationItem.h"
-#import "TGMessage.h"
+
+#import "TGModernViewContext.h"
 
 #import "TGModernConversationController.h"
 #import "TGModernConversationTitleIcon.h"
@@ -24,19 +25,19 @@
 #import "TGAppDelegate.h"
 #import "TGDialogListController.h"
 #import "TGTelegraphDialogListCompanion.h"
-#import "TGPopoverController.h"
 
-#import "TGModernGalleryController.h"
-
-#import "TGSecretTimerValueController.h"
-
-#import "TGStringUtils.h"
+#import <LegacyComponents/TGModernGalleryController.h>
 
 #import "TGModernConversationUpgradeStateTitlePanel.h"
 
 #import "TGModernSendSecretMessageActor.h"
 
 #import "TGPickerSheet.h"
+#import <LegacyComponents/TGSecretTimerMenu.h>
+
+#import "TGLegacyComponentsContext.h"
+
+#import "TGPresentation.h"
 
 @interface TGSecretModernConversationCompanion () <TGSecretModernConversationAccessoryTimerViewDelegate>
 {
@@ -61,9 +62,9 @@
 
 @implementation TGSecretModernConversationCompanion
 
-- (instancetype)initWithEncryptedConversationId:(int64_t)encryptedConversationId accessHash:(int64_t)accessHash conversationId:(int64_t)conversationId uid:(int)uid activity:(NSString *)activity mayHaveUnreadMessages:(bool)mayHaveUnreadMessages
+- (instancetype)initWithConversation:(TGConversation *)conversation encryptedConversationId:(int64_t)encryptedConversationId accessHash:(int64_t)accessHash uid:(int)uid activity:(NSString *)activity mayHaveUnreadMessages:(bool)mayHaveUnreadMessages
 {
-    self = [super initWithConversationId:conversationId uid:uid activity:activity mayHaveUnreadMessages:mayHaveUnreadMessages];
+    self = [super initWithConversation:conversation uid:uid activity:activity mayHaveUnreadMessages:mayHaveUnreadMessages];
     if (self != nil)
     {
         _encryptedConversationId = encryptedConversationId;
@@ -94,7 +95,7 @@
     _selfDestructTimer = [TGDatabaseInstance() messageLifetimeForPeerId:_conversationId];
     _selfDestructTimerView.timerValue = _selfDestructTimer;
     
-    [self updateLayer:[TGDatabaseInstance() peerLayer:_conversationId]];\
+    [self updateLayer:[TGDatabaseInstance() peerLayer:_conversationId]];
     
     [super loadInitialState];
     
@@ -102,15 +103,7 @@
     lockIcon.bounds = CGRectMake(0.0f, 0.0f, 16, 16);
     lockIcon.offsetWeight = 0.5f;
     lockIcon.imageOffset = CGPointMake(3.0f, 5.0f);
-    
-    static UIImage *lockImage = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^
-    {
-        lockImage = [UIImage imageNamed:@"ModernConversationTitleIconLock.png"];
-    });
-    
-    lockIcon.image = lockImage;
+    lockIcon.image = self.controller.presentation.images.chatTitleEncryptedIcon;
     lockIcon.iconPosition = TGModernConversationTitleIconPositionBeforeTitle;
     
     [self setAdditionalTitleIcons:@[lockIcon]];
@@ -140,6 +133,11 @@
     return false;
 }
 
+- (bool)allowMessageExternalSharing
+{
+    return false;
+}
+
 - (bool)allowReplies {
     return [self layer] >= 45;
 }
@@ -148,9 +146,13 @@
     return [self layer] >= 45;
 }
 
+- (bool)allowCaptionEntities {
+    return false;
+}
+
 - (bool)allowContactSharing
 {
-    return false;
+    return true;
 }
 
 - (bool)allowVenueSharing
@@ -161,6 +163,16 @@
 - (bool)allowCaptionedMedia
 {
     return [self layer] >= 45;
+}
+
+- (bool)allowCaptionedDocuments
+{
+    return [self layer] >= 45;
+}
+
+- (bool)allowVideoMessages
+{
+    return [super allowVideoMessages] && [self layer] >= 66;
 }
 
 - (bool)encryptUploads
@@ -194,7 +206,7 @@
 
 - (TGModernConversationEmptyListPlaceholderView *)_conversationEmptyListPlaceholder
 {
-    TGSecretConversationEmptyListView *placeholder = [[TGSecretConversationEmptyListView alloc] initWithIncoming:_encryptedConversationIsIncoming userName:_encryptedConversationUserName];
+    TGSecretConversationEmptyListView *placeholder = [[TGSecretConversationEmptyListView alloc] initWithIncoming:_encryptedConversationIsIncoming userName:_encryptedConversationUserName presentation:self.viewContext.presentation];
     
     return placeholder;
 }
@@ -204,6 +216,7 @@
     if (_selfDestructTimerView == nil)
     {
         _selfDestructTimerView = [[TGSecretModernConversationAccessoryTimerView alloc] init];
+        _selfDestructTimerView.presentation = self.controller.presentation;
         _selfDestructTimerView.delegate = self;
         _selfDestructTimerView.timerValue = _selfDestructTimer;
     }
@@ -213,6 +226,8 @@
 
 - (void)accessoryTimerViewPressed:(TGSecretModernConversationAccessoryTimerView *)__unused accessoryTimerView
 {
+    TGModernConversationController *controller = self.controller;
+    
     NSMutableArray *timerValues = [[NSMutableArray alloc] init];
     [timerValues addObject:@(0)];
     for (int i = 1; i < 16; i++)
@@ -225,37 +240,33 @@
     [timerValues addObject:@(1 * 60 * 60 * 24)];
     [timerValues addObject:@(1 * 60 * 60 * 24 * 7)];
     
-    NSUInteger selectedIndex = 5;
+    NSUInteger value = 7;
     if (_selfDestructTimer != 0)
     {
-        NSInteger closestMatchIndex = 5;
-        NSInteger index = -1;
+        NSInteger closestValue = 7;
         for (NSNumber *nValue in timerValues)
         {
-            index++;
-            if ([nValue intValue] != 0 && ABS([nValue intValue] - _selfDestructTimer) < ABS([timerValues[closestMatchIndex] intValue] - _selfDestructTimer))
-            {
-                closestMatchIndex = index;
-            }
+            if ([nValue intValue] != 0 && ABS([nValue intValue] - _selfDestructTimer) < ABS(closestValue - _selfDestructTimer))
+                closestValue = nValue.intValue;
         }
-        selectedIndex = closestMatchIndex;
+        value = closestValue;
     }
+    
+    [controller.view endEditing:true];
     
     __weak TGSecretModernConversationCompanion *weakSelf = self;
-    _pickerSheet = [[TGPickerSheet alloc] initWithItems:timerValues selectedIndex:selectedIndex action:^(NSNumber *timerValue)
+    [TGSecretTimerMenu presentInParentController:controller context:[TGLegacyComponentsContext shared] dark:false description:nil values:timerValues value:@(value) completed:^(NSNumber *value)
     {
         __strong TGSecretModernConversationCompanion *strongSelf = weakSelf;
-        [strongSelf _commitSetSelfDestructTimer:[timerValue intValue]];
-    }];
-    
-    TGModernConversationController *controller = self.controller;
-    if (TGAppDelegateInstance.rootController.currentSizeClass == UIUserInterfaceSizeClassRegular)
+        [strongSelf _commitSetSelfDestructTimer:[value intValue]];
+    } dismissed:nil sourceView:controller.view sourceRect:^
     {
-        CGRect windowRect = [_selfDestructTimerView convertRect:_selfDestructTimerView.bounds toView:controller.view];
-        [_pickerSheet showFromRect:windowRect inView:controller.view];
-    }
-    else
-        [_pickerSheet show];
+        __strong TGSecretModernConversationCompanion *strongSelf = weakSelf;
+        if (strongSelf == nil)
+            return CGRectZero;
+        
+        return [strongSelf->_selfDestructTimerView convertRect:strongSelf->_selfDestructTimerView.bounds toView:controller.view];
+    }];
 }
 
 - (void)_commitSetSelfDestructTimer:(int)value
@@ -267,12 +278,6 @@
         
         if (_selfDestructTimer > 0 && _selfDestructTimer <= 60 && [self layer] < 17)
         {
-            TGUser *user = [TGDatabaseInstance() loadUser:_uid];
-            TGDispatchOnMainThread(^
-            {
-                NSString *text = [[NSString alloc] initWithFormat:TGLocalized(@"Compatibility.SecretMediaVersionTooLow"), user.displayFirstName, user.displayFirstName];
-                [[[TGAlertView alloc] initWithTitle:text message:nil cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil] show];
-            });
         }
         
         [TGDatabaseInstance() setMessageLifetimeForPeerId:_conversationId encryptedConversationId:_encryptedConversationId messageLifetime:value writeToActionQueue:true];
@@ -282,7 +287,7 @@
 
 - (bool)shouldDisplayContactLinkPanel
 {
-    return false;
+    return true;
 }
 
 #pragma mark -
@@ -320,7 +325,7 @@
         }
         
         TGModernConversationController *controller = self.controller;
-        [controller setCustomInputPanel:panel];
+        [controller setDefaultInputPanel:panel];
     }
 }
 
@@ -329,6 +334,12 @@
     self.layer = layer;
     
     [self updateDebugPanel];
+    
+    TGDispatchOnMainThread(^
+    {
+        TGModernConversationController *controller = self.controller;
+        [controller updateFeaturesAvailability];
+    });
 }
 
 - (void)updateDebugPanel
@@ -425,9 +436,6 @@
 {
     [ActionStageInstance() watchForPaths:@[
         [[NSString alloc] initWithFormat:@"/tg/conversation/(%lld)/conversation", _conversationId],
-        [[NSString alloc] initWithFormat:@"/tg/conversation/(%lld)/readByDateMessages", _conversationId],
-        [[NSString alloc] initWithFormat:@"/tg/conversation/(%lld)/messageFlagChanges", _conversationId],
-        [[NSString alloc] initWithFormat:@"/tg/conversation/messageViewDateChanges"],
         [[NSString alloc] initWithFormat:@"/tg/encrypted/messageLifetime/(%" PRId64 ")", _conversationId],
         [[NSString alloc] initWithFormat:@"/tg/peerLayerUpdates/(%" PRId64 ")", _conversationId]
     ] watcher:self];
@@ -497,71 +505,10 @@
     }];
 }
 
-- (void)markMessagesAsViewed:(NSArray *)messageIds
+- (void)controllerWantsToSendContact:(TGUser *)contactUser asReplyToMessageId:(int32_t)replyMessageId botContextResult:(TGBotContextResultAttachment *)botContextResult botReplyMarkup:(TGBotReplyMarkup *)botReplyMarkup
 {
-    [TGDatabaseInstance() dispatchOnDatabaseThread:^
-    {
-        NSMutableArray *readMesageIds = [[NSMutableArray alloc] init];
-        
-        for (NSNumber *nMessageId in messageIds)
-        {
-            TGMessage *message = [TGDatabaseInstance() loadMessageWithMid:[nMessageId intValue] peerId:_conversationId];
-            if (!message.outgoing && message.messageLifetime > 0 && message.messageLifetime <= 60 && message.layer >= 17)
-            {
-                bool initiatedCountdown = false;
-                [TGDatabaseInstance() messageCountdownLocalTime:[nMessageId intValue] enqueueIfNotQueued:true initiatedCountdown:&initiatedCountdown];
-                if (initiatedCountdown)
-                    [readMesageIds addObject:nMessageId];
-            }
-        }
-        
-        if (readMesageIds.count != 0)
-        {
-            [ActionStageInstance() requestActor:@"/tg/service/synchronizeserviceactions/(settings)" options:nil watcher:TGTelegraphInstance];
-        }
-    } synchronous:false];
-}
-
-#pragma mark -
-
-- (TGMessageModernConversationItem *)_updateMediaStatusData:(TGMessageModernConversationItem *)item
-{
-    if (item->_message.mediaAttachments.count != 0)
-    {
-        bool canBeRead = false;
-        for (TGMediaAttachment *attachment in item->_message.mediaAttachments)
-        {
-            switch (attachment.type)
-            {
-                case TGImageMediaAttachmentType:
-                case TGVideoMediaAttachmentType:
-                    canBeRead = item->_message.messageLifetime > 0 && item->_message.messageLifetime <= 60;
-                    break;
-                case TGAudioMediaAttachmentType:
-                    canBeRead = true;
-                    break;
-                case TGDocumentMediaAttachmentType:
-                    for (id attribute in ((TGDocumentMediaAttachment *)attachment).attributes) {
-                        if ([attribute isKindOfClass:[TGDocumentAttributeAudio class]]) {
-                            canBeRead = ((TGDocumentAttributeAudio *)attribute).isVoice;
-                            break;
-                        }
-                    }
-                    break;
-                default:
-                    break;
-            }
-        }
-        if (canBeRead) {
-            int flags = [TGDatabaseInstance() secretMessageFlags:item->_message.mid];
-            NSTimeInterval viewDate = [TGDatabaseInstance() messageCountdownLocalTime:item->_message.mid enqueueIfNotQueued:false initiatedCountdown:NULL];
-            
-            if (flags != 0 || ABS(viewDate - DBL_EPSILON) > 0.0)
-                [self _setMessageFlagsAndViewDate:item->_message.mid flags:flags viewDate:viewDate];
-        }
-    }
-    
-    return [super _updateMediaStatusData:item];
+    contactUser.customProperties = nil;
+    [super controllerWantsToSendContact:contactUser asReplyToMessageId:replyMessageId botContextResult:botContextResult botReplyMarkup:botReplyMarkup];
 }
 
 #pragma mark -
@@ -591,59 +538,13 @@
 
 - (void)actionStageResourceDispatched:(NSString *)path resource:(id)resource arguments:(id)arguments
 {
-    if ([path isEqualToString:[[NSString alloc] initWithFormat:@"/tg/conversation/(%lld)/readByDateMessages", _conversationId]])
-    {
-        int maxDate = [resource[@"maxDate"] intValue];
-        
-        [TGModernConversationCompanion dispatchOnMessageQueue:^
-        {
-            NSMutableArray *messageIds = [[NSMutableArray alloc] init];
-            
-            for (TGMessageModernConversationItem *messageItem in _items)
-            {
-                if (messageItem->_message.deliveryState == TGMessageDeliveryStateDelivered)
-                {
-                    if (messageItem->_additionalDate != 0)
-                    {
-                        if (messageItem->_additionalDate <= maxDate)
-                            [messageIds addObject:[[NSNumber alloc] initWithInt:messageItem->_message.mid]];
-                    }
-                    else if (messageItem->_message.date <= maxDate)
-                        [messageIds addObject:[[NSNumber alloc] initWithInt:messageItem->_message.mid]];
-                }
-            }
-            
-            if (messageIds.count != 0)
-                [self _updateMessagesRead:messageIds];
-        }];
-    }
-    else if ([path isEqualToString:[[NSString alloc] initWithFormat:@"/tg/conversation/(%lld)/conversation", _conversationId]])
+    if ([path isEqualToString:[[NSString alloc] initWithFormat:@"/tg/conversation/(%lld)/conversation", _conversationId]])
     {
         TGDispatchOnMainThread(^
         {
             _conversation = ((SGraphObjectNode *)resource).object;
             [self _updateEncryptionState:_conversation.encryptedData.handshakeState];
             [self updateDebugPanel];
-        });
-    }
-    else if ([path isEqualToString:[[NSString alloc] initWithFormat:@"/tg/conversation/(%lld)/messageFlagChanges", _conversationId]])
-    {
-        TGDispatchOnMainThread(^
-        {
-            [(NSMutableDictionary *)resource enumerateKeysAndObjectsUsingBlock:^(NSNumber *nMessageId, NSNumber *nFlags, __unused BOOL *stop)
-            {
-                [self _setMessageFlags:(int32_t)[nMessageId intValue] flags:[nFlags intValue]];
-            }];
-        });
-    }
-    else if ([path isEqualToString:[[NSString alloc] initWithFormat:@"/tg/conversation/messageViewDateChanges"]])
-    {
-        TGDispatchOnMainThread(^
-        {
-            [(NSMutableDictionary *)resource enumerateKeysAndObjectsUsingBlock:^(NSNumber *nMessageId, NSNumber *nViewDate, __unused BOOL *stop)
-            {
-                [self _setMessageViewDate:(int32_t)[nMessageId intValue] viewDate:[nViewDate doubleValue]];
-            }];
         });
     }
     else if ([path hasPrefix:@"/tg/encrypted/messageLifetime/"])
@@ -664,12 +565,36 @@
 
 - (void)controllerDidChangeInputText:(NSString *)inputText
 {
-    if (self.layer >= 23)
+    if ([self layer] >= 23)
         [super controllerDidChangeInputText:inputText];
 }
 
 - (bool)allowExternalContent {
     return true;
+}
+
+- (bool)allowSelfDescructingMedia {
+    return false;
+}
+
+- (bool)allowLiveLocations {
+    return false;
+}
+
+- (bool)messageSearchByUserAvailable {
+    return false;
+}
+
+- (bool)messageSearchByDateAvailable {
+    return false;
+}
+
+- (bool)supportsLiveLocations {
+    return false;
+}
+
+- (bool)allowMediaGrouping {
+    return [self layer] >= 73;
 }
 
 @end

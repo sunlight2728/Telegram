@@ -1,5 +1,8 @@
 #import <SSignalKit/SSignalKit.h>
 
+@class TGMediaAttachment;
+@class TGMediaOriginInfo;
+
 @interface TGDownloadMessage : NSObject
 
 @property (nonatomic, readonly) int64_t peerId;
@@ -13,5 +16,12 @@
 @interface TGDownloadMessagesSignal : NSObject
 
 + (SSignal *)downloadMessages:(NSArray *)messages;
++ (SSignal *)mediaStickerpacks:(TGMediaAttachment *)attachment;
+
++ (SSignal *)earliestUnseenMentionMessageId:(int64_t)peerId accessHash:(int64_t)accessHash;
++ (SSignal *)clearUnseenMentions:(int64_t)peerId;
+
++ (SSignal *)updatedOriginInfo:(TGMediaOriginInfo *)origin identifier:(int64_t)identifier;
++ (SSignal *)remoteOriginInfo:(TGMediaOriginInfo *)origin;
 
 @end

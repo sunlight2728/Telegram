@@ -1,14 +1,10 @@
-/*
- * This is the source code of Telegram for iOS v. 1.1
- * It is licensed under GNU GPL v. 2 or later.
- * You should have received a copy of the license in this archive (see LICENSE).
- *
- * Copyright Peter Iakovlev, 2013.
- */
 
 #import "TGUpdateConfigActor.h"
 
-#import "ActionStage.h"
+#import <MTProtoKit/MTProtoKit.h>
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/ActionStage.h>
 
 #import "TGTelegraph.h"
 
@@ -24,7 +20,13 @@
 
 #import "TGTelegramNetworking.h"
 
+#import "TGLocalizationSignals.h"
+#import "TGNetworkSettings.h"
+
 static NSTimeInterval configInvalidationDate = 0.0;
+
+static bool sharedExperimentalPasscodeBlurDisabled = false;
+static bool sharedExperimentalPasscodeBlurDisabledInitialized = false;
 
 @interface TGUpdateConfigActor () <ASWatcher>
 {
@@ -117,6 +119,9 @@ static NSTimeInterval configInvalidationDate = 0.0;
             [self addCancelToken:request.internalId];
             [[TGTelegramNetworking instance] addRequest:request];
         }
+        
+        [ActionStageInstance() requestActor:[NSString stringWithFormat:@"/tg/peerSettings/(%d,cached)", INT_MAX - 1] options:[NSDictionary dictionaryWithObject:[NSNumber numberWithLongLong:INT_MAX - 1] forKey:@"peerId"] watcher:self];
+        [ActionStageInstance() requestActor:[NSString stringWithFormat:@"/tg/peerSettings/(%d,cached)", INT_MAX - 2] options:[NSDictionary dictionaryWithObject:[NSNumber numberWithLongLong:INT_MAX - 2] forKey:@"peerId"] watcher:self];
     }
 }
 
@@ -138,14 +143,16 @@ static NSTimeInterval configInvalidationDate = 0.0;
 
 - (void)inviteTextRequestSuccess:(TLhelp_InviteText *)inviteText
 {
-    TGDispatchOnMainThread(^
-    {
-        if (inviteText.message.length != 0)
+    if ([inviteText isKindOfClass:[TLhelp_InviteText class]]) {
+        TGDispatchOnMainThread(^
         {
-            [[NSUserDefaults standardUserDefaults] setObject:inviteText.message forKey:@"TG_inviteText"];
-            [[NSUserDefaults standardUserDefaults] synchronize];
-        }
-    });
+            if (inviteText.message.length != 0)
+            {
+                [[NSUserDefaults standardUserDefaults] setObject:inviteText.message forKey:@"TG_inviteText"];
+                [[NSUserDefaults standardUserDefaults] synchronize];
+            }
+        });
+    }
     
     _inviteReceived = true;
     [self _maybeComplete];
@@ -157,8 +164,38 @@ static NSTimeInterval configInvalidationDate = 0.0;
     [self _maybeComplete];
 }
 
++ (BOOL)cachedExperimentalPasscodeBlurDisabled {
+    if (sharedExperimentalPasscodeBlurDisabledInitialized) {
+        return sharedExperimentalPasscodeBlurDisabled;
+    } else {
+        NSData *data = [TGDatabaseInstance() customProperty:@"experimentalPasscodeBlurDisabled"];
+        int32_t experimentalPasscodeBlurDisabled = 0;
+        if (data.length == 4) {
+            [data getBytes:&experimentalPasscodeBlurDisabled];
+        }
+        sharedExperimentalPasscodeBlurDisabled = experimentalPasscodeBlurDisabled != 0;
+        sharedExperimentalPasscodeBlurDisabledInitialized = true;
+        return sharedExperimentalPasscodeBlurDisabled;
+    }
+}
+
 - (void)configRequestSuccess:(TLConfig *)config
 {
+    int32_t experimentalPasscodeBlurDisabled = 0;
+    if (config.flags & (1 << 28)) {
+        experimentalPasscodeBlurDisabled = true;
+        [TGDatabaseInstance() setCustomProperty:@"experimentalPasscodeBlurDisabled" value:[NSData dataWithBytes:&experimentalPasscodeBlurDisabled length:4]];
+    }
+    
+    sharedExperimentalPasscodeBlurDisabled = experimentalPasscodeBlurDisabled != 0;
+    sharedExperimentalPasscodeBlurDisabledInitialized = true;
+    
+    NSData *phoneCallsEnabledData = [TGDatabaseInstance() customProperty:@"phoneCallsEnabled"];
+    int32_t previousPhoneCallsEnabled = false;
+    if (phoneCallsEnabledData.length == 4) {
+        [phoneCallsEnabledData getBytes:&previousPhoneCallsEnabled];
+    }
+    
     int32_t maxChatParticipants = MAX(100, config.chat_size_max);
     [TGDatabaseInstance() setCustomProperty:@"maxChatParticipants" value:[NSData dataWithBytes:&maxChatParticipants length:4]];
     
@@ -168,8 +205,102 @@ static NSTimeInterval configInvalidationDate = 0.0;
     int32_t maxSavedGifs = config.saved_gifs_limit;
     [TGDatabaseInstance() setCustomProperty:@"maxSavedGifs" value:[NSData dataWithBytes:&maxSavedGifs length:4]];
     
+    int32_t maxSavedStickers = config.stickers_recent_limit;
+    [TGDatabaseInstance() setCustomProperty:@"maxSavedStickers" value:[NSData dataWithBytes:&maxSavedStickers length:4]];
+    
+    int32_t maxFavedStickers = config.stickers_faved_limit;
+    [TGDatabaseInstance() setCustomProperty:@"maxFavedStickers" value:[NSData dataWithBytes:&maxFavedStickers length:4]];
+    
     int32_t maxChannelMessageEditTime = config.edit_time_limit;
     [TGDatabaseInstance() setCustomProperty:@"maxChannelMessageEditTime" value:[NSData dataWithBytes:&maxChannelMessageEditTime length:4]];
+    
+    int32_t groupMaxRevokeTime = config.revoke_time_limit;
+    [TGDatabaseInstance() setCustomProperty:@"groupMaxRevokeTime" value:[NSData dataWithBytes:&groupMaxRevokeTime length:4]];
+    
+    int32_t privateMaxRevokeTime = config.revoke_pm_time_limit;
+    [TGDatabaseInstance() setCustomProperty:@"privateMaxRevokeTime" value:[NSData dataWithBytes:&privateMaxRevokeTime length:4]];
+    
+    int32_t privateRevokeInboxAvailable = config.flags & (1 << 6);
+    [TGDatabaseInstance() setCustomProperty:@"privateRevokeInboxAvailable" value:[NSData dataWithBytes:&privateRevokeInboxAvailable length:4]];
+		
+    int32_t phoneCallsEnabled = config.flags & (1 << 1);
+    [TGDatabaseInstance() setCustomProperty:@"phoneCallsEnabled" value:[NSData dataWithBytes:&phoneCallsEnabled length:4]];
+    
+    int32_t phoneCallsP2PContacts = config.flags & (1 << 3);
+    [TGDatabaseInstance() setCustomProperty:@"phoneCallsP2PContacts" value:[NSData dataWithBytes:&phoneCallsP2PContacts length:4]];
+    
+    int32_t callReceiveTimeout = config.call_receive_timeout_ms;
+    [TGDatabaseInstance() setCustomProperty:@"callReceiveTimeout" value:[NSData dataWithBytes:&callReceiveTimeout length:4]];
+    
+    int32_t callRingTimeout = config.call_ring_timeout_ms;
+    [TGDatabaseInstance() setCustomProperty:@"callRingTimeout" value:[NSData dataWithBytes:&callRingTimeout length:4]];
+    
+    int32_t callConnectTimeout = config.call_connect_timeout_ms;
+    [TGDatabaseInstance() setCustomProperty:@"callConnectTimeout" value:[NSData dataWithBytes:&callConnectTimeout length:4]];
+    
+    int32_t callPacketTimeout = config.call_packet_timeout_ms;
+    [TGDatabaseInstance() setCustomProperty:@"callPacketTimeout" value:[NSData dataWithBytes:&callPacketTimeout length:4]];
+    
+    int32_t maxPinnedChats = config.pinned_dialogs_count_max;
+    [TGDatabaseInstance() setCustomProperty:@"maxPinnedChats" value:[NSData dataWithBytes:&maxPinnedChats length:4]];
+    
+    if (phoneCallsEnabled != previousPhoneCallsEnabled) {
+        TGLog(@"phoneCallsEnabled changed to %d", phoneCallsEnabled);
+        
+        [TGDatabaseInstance() clearCachedUserLinks];
+        
+        bool enabled = (phoneCallsEnabled != 0);
+        [ActionStageInstance() dispatchResource:@"/tg/calls/enabled" resource:[[SGraphObjectNode alloc] initWithObject:@(enabled)]];
+    }
+    
+    [TGDatabaseInstance() setSuggestedLocalizationCode:config.suggested_lang_code];
+    
+    if (config.lang_pack_version != currentNativeLocalization().version) {
+        [TGTelegraphInstance.disposeOnLogout add:[[TGLocalizationSignals pollLocalization] startWithNext:nil]];
+    }
+    
+    TGNetworkSettings *networkSettings = [[TGNetworkSettings alloc] initWithReducedBackupDiscoveryTimeout:config.flags & (1 << 8)];
+    NSData *networkSettingsData = [NSKeyedArchiver archivedDataWithRootObject:networkSettings];
+    [TGDatabaseInstance() setCustomProperty:@"networkSettingsData" value:networkSettingsData];
+    
+    if (networkSettings.reducedBackupDiscoveryTimeout) {
+        [[[TGTelegramNetworking instance] context] updateApiEnvironment:^MTApiEnvironment *(MTApiEnvironment *current) {
+            current = [current withUpdatedNetworkSettings:[[MTNetworkSettings alloc] initWithReducedBackupDiscoveryTimeout:networkSettings.reducedBackupDiscoveryTimeout]];
+            return current;
+        }];
+    }
+    
+    int32_t webFileDatacenterId = config.webfile_dc_id;
+    [TGDatabaseInstance() setCustomProperty:@"webFileDatacenterId" value:[NSData dataWithBytes:&webFileDatacenterId length:4]];
+    
+    int32_t blockedMode = config.flags & (1 << 8);
+    [TGDatabaseInstance() setCustomProperty:@"blockedMode" value:[NSData dataWithBytes:&blockedMode length:4]];
+    
+    if (config.flags & (1 << 9)) {
+        [TGDatabaseInstance() setCustomProperty:@"gifSearchUsername" value:[config.gif_search_username dataUsingEncoding:NSUTF8StringEncoding]];
+    } else {
+        [TGDatabaseInstance() setCustomProperty:@"gifSearchUsername" value:nil];
+    }
+    
+    if (config.flags & (1 << 10)) {
+        [TGDatabaseInstance() setCustomProperty:@"venueSearchUsername" value:[config.venue_search_username dataUsingEncoding:NSUTF8StringEncoding]];
+    } else {
+        [TGDatabaseInstance() setCustomProperty:@"venueSearchUsername" value:nil];
+    }
+    
+    if (config.flags & (1 << 11)) {
+        [TGDatabaseInstance() setCustomProperty:@"imageSearchUsername" value:[config.img_search_username dataUsingEncoding:NSUTF8StringEncoding]];
+    } else {
+        [TGDatabaseInstance() setCustomProperty:@"imageSearchUsername" value:nil];
+    }
+    
+    int32_t captionLengthMax = config.caption_length_max;
+    [TGDatabaseInstance() setCustomProperty:@"captionLengthMax" value:[NSData dataWithBytes:&captionLengthMax length:4]];
+    
+    int32_t messageLengthMax = config.message_length_max;
+    [TGDatabaseInstance() setCustomProperty:@"messageLengthMax" value:[NSData dataWithBytes:&messageLengthMax length:4]];
+    
+    [TGDatabaseInstance() setCustomProperty:@"meUrlPrefix" value:[config.me_url_prefix dataUsingEncoding:NSUTF8StringEncoding]];
     
     //[TGApplicationFeatures setLargeGroupMemberCountLimit:(NSUInteger)config.chat_big_size];
     
@@ -212,8 +343,8 @@ static NSTimeInterval configInvalidationDate = 0.0;
 {
     [_timer invalidate];
     
-    NSTimeInterval timeout = MAX(60.0, configInvalidationDate - [[TGTelegramNetworking instance] approximateRemoteTime])
-    ;
+    NSTimeInterval timeout = MAX(60.0, configInvalidationDate - [[TGTelegramNetworking instance] approximateRemoteTime]);
+    
     __weak TGUpdateConfigActor *weakSelf = self;
     _timer = [[TGTimer alloc] initWithTimeout:timeout repeat:false completion:^
     {

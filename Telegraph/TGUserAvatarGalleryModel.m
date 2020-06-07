@@ -1,23 +1,32 @@
 #import "TGUserAvatarGalleryModel.h"
 
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGUserAvatarGalleryItem.h"
 
-#import "ActionStage.h"
+#import <LegacyComponents/ActionStage.h>
 #import "TGDatabase.h"
 
-#import "TGImageMediaAttachment.h"
+#import "TGImageInfo+Telegraph.h"
+
 #import "TGGenericPeerMediaGalleryDefaultHeaderView.h"
 #import "TGGenericPeerMediaGalleryActionsAccessoryView.h"
+#import "TGGenericPeerMediaGalleryDefaultFooterView.h"
 
-#import "TGActionSheet.h"
-#import "TGProgressWindow.h"
+#import "TGGenericPeerGalleryGroupItem.h"
 
-#import "TGAccessChecker.h"
-#import "TGMediaAssetsLibrary.h"
+#import "TGCustomActionSheet.h"
+#import <LegacyComponents/TGProgressWindow.h>
+
+#import <LegacyComponents/TGMediaAssetsLibrary.h>
 
 @interface TGUserAvatarGalleryModel () <ASWatcher>
 {
     int64_t _peerId;
+    
+    TGGenericPeerMediaGalleryDefaultFooterView *_footerView;
+    NSMutableDictionary *_groupedItems;
+    NSArray *_groupItems;
 }
 
 @property (nonatomic, strong) ASHandle *actionHandle;
@@ -35,22 +44,10 @@
         
         _peerId = peerId;
         
-        __block NSArray *imageMediaList = nil;
-        [TGDatabaseInstance() dispatchOnDatabaseThread:^
-        {
-            [TGDatabaseInstance() loadPeerProfilePhotos:_peerId completion:^(NSArray *photosArray)
-            {
-                imageMediaList = photosArray;
-            }];
-        } synchronous:true];
+        _groupedItems = [[NSMutableDictionary alloc] init];
         
-        if (false && imageMediaList.count != 0)
-            [self _replaceItemsFromImageMediaList:imageMediaList focusOnFirst:true];
-        else
-        {
-            TGUserAvatarGalleryItem *firstItem = [self itemForImageId:0 accessHash:0 legacyThumbnailUrl:currentAvatarLegacyThumbnailImageUri legacyUrl:currentAvatarLegacyImageUri imageSize:currentAvatarImageSize isCurrent:true];
-            [self _replaceItems:@[firstItem] focusingOnItem:firstItem];
-        }
+        TGUserAvatarGalleryItem *firstItem = [self itemForImageId:0 accessHash:0 legacyThumbnailUrl:currentAvatarLegacyThumbnailImageUri legacyUrl:currentAvatarLegacyImageUri imageSize:currentAvatarImageSize isCurrent:true];
+        [self _replaceItems:@[firstItem] focusingOnItem:firstItem];
     }
     return self;
 }
@@ -63,6 +60,9 @@
 
 - (void)_transitionCompleted
 {
+    if (_peerId == 777000 || _peerId == 333000)
+        return;
+    
     [ActionStageInstance() dispatchOnStageQueue:^
     {
         [ActionStageInstance() watchForPath:[[NSString alloc] initWithFormat:@"/tg/profilePhotos/(%" PRId64 ")", _peerId] watcher:self];
@@ -70,9 +70,10 @@
     }];
 }
 
-- (TGUserAvatarGalleryItem *)itemForImageId:(int64_t)__unused imageId accessHash:(int64_t)__unused accessHash legacyThumbnailUrl:(NSString *)legacyThumbnailUrl legacyUrl:(NSString *)legacyUrl imageSize:(CGSize)imageSize isCurrent:(bool)isCurrent
+- (TGUserAvatarGalleryItem *)itemForImageId:(int64_t)imageId accessHash:(int64_t)__unused accessHash legacyThumbnailUrl:(NSString *)legacyThumbnailUrl legacyUrl:(NSString *)legacyUrl imageSize:(CGSize)imageSize isCurrent:(bool)isCurrent
 {
-    return [[TGUserAvatarGalleryItem alloc] initWithLegacyThumbnailUrl:legacyThumbnailUrl legacyUrl:legacyUrl imageSize:imageSize isCurrent:isCurrent];
+    TGUserAvatarGalleryItem *item = [[TGUserAvatarGalleryItem alloc] initWithLegacyThumbnailUrl:legacyThumbnailUrl legacyUrl:legacyUrl imageId:imageId imageSize:imageSize isCurrent:isCurrent];
+    return item;
 }
 
 - (UIView<TGModernGalleryDefaultHeaderView> *)createDefaultHeaderView
@@ -95,6 +96,22 @@
     }];
 }
 
+- (UIView<TGModernGalleryDefaultFooterView> *)createDefaultFooterView
+{
+    _footerView = [[TGGenericPeerMediaGalleryDefaultFooterView alloc] init];
+    __weak TGUserAvatarGalleryModel *weakSelf = self;
+    _footerView.groupItemChanged = ^(TGGenericPeerGalleryGroupItem *item, bool synchronously)
+    {
+        __strong TGUserAvatarGalleryModel *strongSelf = weakSelf;
+        if (strongSelf == nil)
+            return;
+        
+        id<TGModernGalleryItem> galleryItem = strongSelf->_groupedItems[@(item.keyId)];
+        [strongSelf _focusOnItem:(id<TGModernGalleryItem>)galleryItem synchronously:synchronously];
+    };
+    return _footerView;
+}
+
 - (void)_replaceItemsFromImageMediaList:(NSArray *)imageMediaList focusOnFirst:(bool)focusOnFirst
 {
     NSArray *sortedResult = [(NSArray *)imageMediaList sortedArrayUsingComparator:^NSComparisonResult(TGImageMediaAttachment *imageMedia1, TGImageMediaAttachment *imageMedia2)
@@ -106,28 +123,68 @@
     
     NSMutableArray *updatedItems = [[NSMutableArray alloc] init];
     NSInteger index = -1;
+    NSMutableArray *items = [[NSMutableArray alloc] init];
     for (TGImageMediaAttachment *imageMedia in sortedResult)
     {
         index++;
         
         NSString *legacyThumbnailUrl = [imageMedia.imageInfo closestImageUrlWithSize:CGSizeMake(160.0f, 160.0f) resultingSize:NULL];
+        {
+            int datacenterId = 0;
+            int64_t volumeId = 0;
+            int localId = 0;
+            int64_t secret = 0;
+            if (extractFileUrlComponents(legacyThumbnailUrl, &datacenterId, &volumeId, &localId, &secret)) {
+                NSData *fileReference = [imageMedia.originInfo fileReferenceForVolumeId:volumeId localId:localId];
+                if (fileReference != nil)
+                    legacyThumbnailUrl = [legacyThumbnailUrl stringByAppendingFormat:@"_%@", [fileReference stringByEncodingInHex]];
+            }
+        }
         NSString *legacyUrl = [imageMedia.imageInfo closestImageUrlWithSize:CGSizeMake(640.0f, 640.0f) resultingSize:NULL];
+        {
+            int datacenterId = 0;
+            int64_t volumeId = 0;
+            int localId = 0;
+            int64_t secret = 0;
+            if (extractFileUrlComponents(legacyUrl, &datacenterId, &volumeId, &localId, &secret)) {
+                NSData *fileReference = [imageMedia.originInfo fileReferenceForVolumeId:volumeId localId:localId];
+                if (fileReference != nil)
+                    legacyUrl = [legacyUrl stringByAppendingFormat:@"_%@", [fileReference stringByEncodingInHex]];
+            }
+        }
         bool isCurrent = false;
         
         if (index == 0)
             isCurrent = true;
         
-        /*if (index == 0 && _firstItem != nil)
-        {
-            legacyThumbnailUrl = _firstItem.legacyThumbnailUrl;
-            legacyUrl = _firstItem.legacyUrl;
-        }*/
-        
         TGUserAvatarGalleryItem *item = [self itemForImageId:imageMedia.imageId accessHash:imageMedia.accessHash legacyThumbnailUrl:legacyThumbnailUrl legacyUrl:legacyUrl imageSize:CGSizeMake(640.0f, 640.0f) isCurrent:isCurrent];
         [updatedItems addObject:item];
+     
+        [items addObject:[[TGGenericPeerGalleryGroupItem alloc] initWithImageAttachment:imageMedia]];
+        _groupedItems[@(imageMedia.imageId)] = item;
     }
     
+    _groupItems = items;
+    if (items.count > 1)
+        [_footerView setGroupItems:items];
+    
     [self _replaceItems:updatedItems focusingOnItem:focusOnFirst ? updatedItems.firstObject : nil];
+}
+
+- (void)_commitDeletedGroupItem:(TGUserAvatarGalleryItem *)item
+{
+    NSMutableArray *updatedGroupItems = [_groupItems mutableCopy];
+    for (TGGenericPeerGalleryGroupItem *groupItem in updatedGroupItems)
+    {
+        if (groupItem.keyId == item.imageId)
+        {
+            [updatedGroupItems removeObject:groupItem];
+            break;
+        }
+    }
+    
+    _groupItems = updatedGroupItems;
+    [_footerView setGroupItems:updatedGroupItems];
 }
 
 - (void)actionStageResourceDispatched:(NSString *)path resource:(id)resource arguments:(id)__unused arguments
@@ -152,10 +209,16 @@
     }
 }
 
+- (void)_interItemTransitionProgressChanged:(CGFloat)progress
+{
+    [_footerView setInterItemTransitionProgress:progress];
+}
+
 - (UIView<TGModernGalleryDefaultFooterAccessoryView> *)createDefaultLeftAccessoryView
 {
     TGGenericPeerMediaGalleryActionsAccessoryView *accessoryView = [[TGGenericPeerMediaGalleryActionsAccessoryView alloc] init];
     __weak TGUserAvatarGalleryModel *weakSelf = self;
+    __weak TGGenericPeerMediaGalleryActionsAccessoryView *weakAccessoryView = accessoryView;
     accessoryView.action = ^(id<TGModernGalleryItem> item)
     {
         if ([item isKindOfClass:[TGUserAvatarGalleryItem class]])
@@ -177,12 +240,12 @@
                     }
                     [actions addObject:[[TGActionSheetAction alloc] initWithTitle:TGLocalized(@"Common.Cancel") action:@"cancel" type:TGActionSheetActionTypeCancel]];
                     
-                    [[[TGActionSheet alloc] initWithTitle:nil actions:actions actionBlock:^(__unused id target, NSString *action)
+                    [[[TGCustomActionSheet alloc] initWithTitle:nil actions:actions actionBlock:^(__unused id target, NSString *action)
                     {
                         __strong TGUserAvatarGalleryModel *strongSelf = weakSelf;
                         if ([action isEqualToString:@"save"])
                             [strongSelf _commitSaveItemToCameraRoll:item];
-                    } target:strongSelf] showInView:actionSheetView];
+                    } target:strongSelf] showFromRect:[weakAccessoryView convertRect:weakAccessoryView.bounds toView:actionSheetView] inView:actionSheetView animated:true];
                 }
             }
         }
@@ -216,7 +279,7 @@
     if (data == nil)
         return;
 
-    if (![TGAccessChecker checkPhotoAuthorizationStatusForIntent:TGPhotoAccessIntentSave alertDismissCompletion:nil])
+    if (![[[LegacyComponentsGlobals provider] accessChecker] checkPhotoAuthorizationStatusForIntent:TGPhotoAccessIntentSave alertDismissCompletion:nil])
         return;
     
     TGProgressWindow *progressWindow = [[TGProgressWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
@@ -224,7 +287,7 @@
     
     [[[[TGMediaAssetsLibrary sharedLibrary] saveAssetWithImageData:data] deliverOn:[SQueue mainQueue]] startWithNext:nil error:^(__unused id error)
     {
-        [TGAccessChecker checkPhotoAuthorizationStatusForIntent:TGPhotoAccessIntentSave alertDismissCompletion:nil];
+        [[[LegacyComponentsGlobals provider] accessChecker] checkPhotoAuthorizationStatusForIntent:TGPhotoAccessIntentSave alertDismissCompletion:nil];
         [progressWindow dismiss:true];
     } completed:^
     {

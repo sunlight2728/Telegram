@@ -1,6 +1,8 @@
 #import "TGSynchronizeServiceActionsActor.h"
 
-#import "ActionStage.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/ActionStage.h>
 
 #import "TGDatabase.h"
 
@@ -13,8 +15,6 @@
 
 #import "TGTelegramNetworking.h"
 #import <MTProtoKit/MTContext.h>
-
-#import "TGPeerIdAdapter.h"
 
 @interface TGSynchronizeServiceActionsActor ()
 
@@ -122,9 +122,26 @@
                     _currentActionType = action.type;
                     _currentActionRandomId = action.randomId;
                     
-                    TGChangeNotificationSettingsFutureAction *notificationSettingsAction = (TGChangeNotificationSettingsFutureAction *)action;
                     
-                    int peerSoundId = notificationSettingsAction.soundId;
+                    TGChangeNotificationSettingsFutureAction *notificationSettingsAction = (TGChangeNotificationSettingsFutureAction *)action;
+                    NSNumber *peerSoundId = notificationSettingsAction.soundId;
+                    NSNumber *peerMuteUntil = notificationSettingsAction.muteUntil;
+                    NSNumber *peerPreviewText = notificationSettingsAction.previewText;
+                    NSNumber *messagesMuted = notificationSettingsAction.messagesMuted;
+                    if (notificationSettingsAction.uniqueId == INT_MAX - 1 || notificationSettingsAction.uniqueId == INT_MAX - 2) {
+                        if (peerSoundId == nil)
+                            peerSoundId = @1;
+                        
+                        if (peerMuteUntil == nil)
+                            peerMuteUntil = @0;
+                        
+                        if (peerPreviewText == nil)
+                            peerPreviewText = @true;
+                        
+                        if (messagesMuted == nil)
+                            messagesMuted = @false;
+                    }
+                    
                     __block int64_t accessHash = 0;
                     
                     if (TGPeerIdIsChannel(notificationSettingsAction.uniqueId)) {
@@ -166,6 +183,7 @@
                     int64_t peerId = [TGDatabaseInstance() peerIdForEncryptedConversationId:settingsAction.uniqueId createIfNecessary:false];
                     
                     NSUInteger peerLayer = MIN([TGModernSendSecretMessageActor currentLayer], [TGDatabaseInstance() peerLayer:peerId]);
+                    peerLayer = MAX(peerLayer, 46);
                     
                     NSData *messageData = [TGModernSendSecretMessageActor decryptedServiceMessageActionWithLayer:peerLayer setTTL:settingsAction.messageLifetime randomId:settingsAction.messageRandomId];
                     
@@ -178,7 +196,6 @@
                     message.fromUid = TGTelegraphInstance.clientUserId;
                     message.toUid = peerId;
                     message.date = [[TGTelegramNetworking instance] approximateRemoteTime];
-                    message.unread = false;
                     message.outgoing = true;
                     message.cid = peerId;
                     
@@ -187,8 +204,7 @@
                     actionAttachment.actionData = [[NSDictionary alloc] initWithObjectsAndKeys:[[NSNumber alloc] initWithInt:settingsAction.messageLifetime], @"messageLifetime", nil];
                     message.mediaAttachments = @[actionAttachment];
                     
-                    static int messageActionId = 1000000;
-                    [[[TGConversationAddMessagesActor alloc] initWithPath:[NSString stringWithFormat:@"/tg/addmessage/(%dact)", messageActionId++]] execute:[NSDictionary dictionaryWithObjectsAndKeys:[[NSArray alloc] initWithObjects:message, nil], @"messages", nil]];
+                    [TGDatabaseInstance() transactionAddMessages:@[message] updateConversationDatas:nil notifyAdded:true];
                 }
                 else if ([action isKindOfClass:[TGChangePasslockSettingsFutureAction class]])
                 {
@@ -215,6 +231,7 @@
                     int64_t peerId = [TGDatabaseInstance() peerIdForEncryptedConversationId:serviceMessageAction.encryptedConversationId createIfNecessary:false];
                     
                     NSUInteger peerLayer = MIN([TGModernSendSecretMessageActor currentLayer], [TGDatabaseInstance() peerLayer:peerId]);
+                    peerLayer = MAX(peerLayer, 46);
                     
                     NSData *messageData = nil;
                     
@@ -256,6 +273,7 @@
                     int64_t peerId = [TGDatabaseInstance() peerIdForEncryptedConversationId:settingsAction.uniqueId createIfNecessary:false];
                     
                     NSUInteger peerLayer = [TGDatabaseInstance() peerLayer:peerId];
+                    peerLayer = MAX(peerLayer, 46);
                     
                     NSData *messageData = [TGModernSendSecretMessageActor decryptedServiceMessageActionWithLayer:MIN(peerLayer, [TGModernSendSecretMessageActor currentLayer]) notifyLayer:[TGModernSendSecretMessageActor currentLayer] randomId:settingsAction.messageRandomId];
                     

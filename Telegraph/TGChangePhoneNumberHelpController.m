@@ -1,9 +1,10 @@
 #import "TGChangePhoneNumberHelpController.h"
 
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGDatabase.h"
 #import "TGTelegraph.h"
-#import "TGPhoneUtils.h"
-#import "TGAlertView.h"
+#import "TGCustomAlertView.h"
 
 #import "TGChangePhoneNumberHelpView.h"
 
@@ -12,6 +13,8 @@
 #import "TGDebugController.h"
 
 #import "TGAppDelegate.h"
+
+#import "TGPresentation.h"
 
 @interface TGChangePhoneNumberHelpController ()
 {
@@ -48,13 +51,14 @@
 {
     [super loadView];
     
-    self.view.backgroundColor = UIColorRGB(0xefeff4);
+    self.view.backgroundColor = self.presentation.pallete.collectionMenuBackgroundColor;
     _view = [[TGChangePhoneNumberHelpView alloc] initWithFrame:self.view.bounds];
+    _view.presentation = self.presentation;
     _view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     __weak TGChangePhoneNumberHelpController *weakSelf = self;
     _view.changePhonePressed = ^
     {
-        [[[TGAlertView alloc] initWithTitle:nil message:TGLocalized(@"PhoneNumberHelp.Alert") cancelButtonTitle:TGLocalized(@"Common.Cancel") okButtonTitle:TGLocalized(@"Common.OK") completionBlock:^(bool okButtonPressed)
+        [TGCustomAlertView presentAlertWithTitle:nil message:TGLocalized(@"PhoneNumberHelp.Alert") cancelButtonTitle:TGLocalized(@"Common.Cancel") okButtonTitle:TGLocalized(@"Common.OK") completionBlock:^(bool okButtonPressed)
         {
             if (okButtonPressed)
             {
@@ -64,7 +68,7 @@
                     [strongSelf.navigationController pushViewController:[[TGChangePhoneNumberNumberController alloc] init] animated:true];
                 }
             }
-        }] show];
+        }];
     };
     
     _view.debugPressed = ^

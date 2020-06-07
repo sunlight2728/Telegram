@@ -1,5 +1,6 @@
-#import "TGModernConversationAssociatedInputPanel.h"
+#import <LegacyComponents/TGModernConversationAssociatedInputPanel.h>
 
+@class TGViewController;
 @class TGBotContextResults;
 @class TGBotContextResult;
 @class TGWebPageMediaAttachment;
@@ -9,7 +10,11 @@
 
 @interface TGModernConversationMediaContextResultsAssociatedPanel : TGModernConversationAssociatedInputPanel
 
+@property (nonatomic) int32_t botId;
+
+@property (nonatomic, weak) TGViewController *controller;
 @property (nonatomic, copy) void (^resultSelected)(TGBotContextResults *results, TGBotContextResult *result);
+@property (nonatomic, copy) void (^activateSwitchPm)(NSString *startParam);
 
 - (void)setResults:(TGBotContextResults *)results reload:(bool)reload;
 

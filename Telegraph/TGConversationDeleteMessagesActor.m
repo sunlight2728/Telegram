@@ -1,14 +1,14 @@
 #import "TGConversationDeleteMessagesActor.h"
 
-#import "ActionStage.h"
-#import "SGraphObjectNode.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/ActionStage.h>
+#import <LegacyComponents/SGraphObjectNode.h>
 
 #import "TGDatabase.h"
 #import "TGTelegraph.h"
 
 #import "TGDownloadManager.h"
-
-#import "TGPeerIdAdapter.h"
 
 @interface TGConversationDeleteMessagesActor () {
     int64_t _peerId;
@@ -39,11 +39,10 @@
     [[TGDownloadManager instance] cancelItemsWithMessageIdsInArray:messageIds groupId:_peerId];
  
     if (TGPeerIdIsChannel(_peerId)) {
-        [TGDatabaseInstance() addMessagesToChannel:_peerId messages:nil deleteMessages:messageIds unimportantGroups:nil addedHoles:nil removedHoles:nil removedUnimportantHoles:nil updatedMessageSortKeys:nil returnGroups:false keepUnreadCounters:false changedMessages:nil];
+        [TGDatabaseInstance() addMessagesToChannel:_peerId messages:nil deleteMessages:messageIds unimportantGroups:nil addedHoles:nil removedHoles:nil removedUnimportantHoles:nil updatedMessageSortKeys:nil returnGroups:false keepUnreadCounters:false skipFeedUpdate:false changedMessages:nil];
         [TGDatabaseInstance() enqueueDeleteChannelMessages:_peerId messageIds:messageIds];
     } else {
-        NSMutableDictionary *messagesByConversation = [[NSMutableDictionary alloc] init];
-        [TGDatabaseInstance() deleteMessages:messageIds populateActionQueue:true fillMessagesByConversationId:messagesByConversation];
+        [TGDatabaseInstance() transactionRemoveMessagesInteractive:@{@(_peerId): messageIds} keepDates:false removeMessagesInteractiveForEveryone:[options[@"forEveryone"] boolValue] updateConversationDatas:nil];
     }
 
     for (NSNumber *nMid in messageIds)

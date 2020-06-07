@@ -1,23 +1,16 @@
 #import "TGReusableLabel.h"
 
-#import "TGStringUtils.h"
+#import <LegacyComponents/LegacyComponents.h>
 
 #import <CoreText/CoreText.h>
 
-#import "NSObject+TGLock.h"
-
-#include <tr1/unordered_map>
-#include <tr1/unordered_set>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
-
-#import "TGDateUtils.h"
-#import "TGFont.h"
-
-#import "TGTextCheckingResult.h"
 
 @interface TGReusableLabelLayoutData ()
 {
-    std::tr1::unordered_map<int, std::tr1::unordered_map<int, int> > _lineOffsets;
+    std::unordered_map<int, std::unordered_map<int, int> > _lineOffsets;
     std::vector<TGLinePosition> _lineOrigins;
     
     std::vector<TGLinkData> _links;
@@ -31,14 +24,14 @@
 @property (nonatomic) CGFloat fontLineHeight;
 @property (nonatomic) CGFloat fontLineSpacing;
 
-- (std::tr1::unordered_map<int, std::tr1::unordered_map<int, int> > *)lineOffsets;
+- (std::unordered_map<int, std::unordered_map<int, int> > *)lineOffsets;
 
 @end
 
 @implementation TGReusableLabelLayoutData
 
 
-- (std::tr1::unordered_map<int, std::tr1::unordered_map<int, int> > *)lineOffsets
+- (std::unordered_map<int, std::unordered_map<int, int> > *)lineOffsets
 {
     return &_lineOffsets;
 }
@@ -53,7 +46,7 @@
     return &_links;
 }
 
-- (NSString *)linkAtPoint:(CGPoint)point topRegion:(CGRect *)topRegion middleRegion:(CGRect *)middleRegion bottomRegion:(CGRect *)bottomRegion
+- (NSString *)linkAtPoint:(CGPoint)point topRegion:(CGRect *)topRegion middleRegion:(CGRect *)middleRegion bottomRegion:(CGRect *)bottomRegion hiddenLink:(bool *)hiddenLink linkText:(NSString *__autoreleasing *)linkText
 {
     if (!_links.empty())
     {
@@ -67,6 +60,12 @@
                     *middleRegion = it->middleRegion;
                 if (bottomRegion != NULL)
                     *bottomRegion = it->bottomRegion;
+                if (hiddenLink) {
+                    *hiddenLink = it->hidden;
+                }
+                if (linkText) {
+                    *linkText = it->text;
+                }
                 return it->url;
             }
         }
@@ -239,12 +238,12 @@
 {
 }
 
-+ (TGReusableLabelLayoutData *)calculateLayout:(NSString *)text additionalAttributes:(NSArray *)additionalAttributes textCheckingResults:(NSArray *)textCheckingResults font:(CTFontRef)font textColor:(UIColor *)textColor frame:(CGRect)frame orMaxWidth:(float)maxWidth flags:(int)flags textAlignment:(NSTextAlignment)textAlignment outIsRTL:(bool *)outIsRTL
++ (TGReusableLabelLayoutData *)calculateLayout:(NSString *)text additionalAttributes:(NSArray *)additionalAttributes textCheckingResults:(NSArray *)textCheckingResults font:(CTFontRef)font textColor:(UIColor *)textColor linkColor:(UIColor *)linkColor frame:(CGRect)frame orMaxWidth:(float)maxWidth flags:(int)flags textAlignment:(NSTextAlignment)textAlignment outIsRTL:(bool *)outIsRTL
 {
-    return [self calculateLayout:text additionalAttributes:additionalAttributes textCheckingResults:textCheckingResults font:font textColor:textColor frame:frame orMaxWidth:maxWidth flags:flags textAlignment:textAlignment outIsRTL:outIsRTL additionalTrailingWidth:0.0f maxNumberOfLines:0 numberOfLinesToInset:0 linesInset:0.0f containsEmptyNewline:NULL additionalLineSpacing:0.0f ellipsisString:nil];
+    return [self calculateLayout:text additionalAttributes:additionalAttributes textCheckingResults:textCheckingResults font:font textColor:textColor linkColor:linkColor frame:frame orMaxWidth:maxWidth flags:flags textAlignment:textAlignment outIsRTL:outIsRTL additionalTrailingWidth:0.0f maxNumberOfLines:0 numberOfLinesToInset:0 linesInset:0.0f containsEmptyNewline:NULL additionalLineSpacing:0.0f ellipsisString:nil underlineAllLinks:false];
 }
 
-+ (TGReusableLabelLayoutData *)calculateLayout:(NSString *)text additionalAttributes:(NSArray *)additionalAttributes textCheckingResults:(NSArray *)textCheckingResults font:(CTFontRef)font textColor:(UIColor *)textColor frame:(CGRect)frame orMaxWidth:(float)maxWidth flags:(int)flags textAlignment:(NSTextAlignment)textAlignment outIsRTL:(bool *)outIsRTL additionalTrailingWidth:(CGFloat)additionalTrailingWidth maxNumberOfLines:(NSUInteger)maxNumberOfLines numberOfLinesToInset:(NSUInteger)numberOfLinesToInset linesInset:(CGFloat)linesInset containsEmptyNewline:(bool *)containsEmptyNewline additionalLineSpacing:(CGFloat)additionalLineSpacing ellipsisString:(NSString *)ellipsisString
++ (TGReusableLabelLayoutData *)calculateLayout:(NSString *)text additionalAttributes:(NSArray *)additionalAttributes textCheckingResults:(NSArray *)textCheckingResults font:(CTFontRef)font textColor:(UIColor *)textColor linkColor:(UIColor *)linkColor frame:(CGRect)frame orMaxWidth:(float)maxWidth flags:(int)flags textAlignment:(NSTextAlignment)textAlignment outIsRTL:(bool *)outIsRTL additionalTrailingWidth:(CGFloat)additionalTrailingWidth maxNumberOfLines:(NSUInteger)maxNumberOfLines numberOfLinesToInset:(NSUInteger)numberOfLinesToInset linesInset:(CGFloat)linesInset containsEmptyNewline:(bool *)containsEmptyNewline additionalLineSpacing:(CGFloat)additionalLineSpacing ellipsisString:(NSString *)ellipsisString underlineAllLinks:(bool)underlineAllLinks
 {
     if (font == NULL || text == nil)
         return nil;
@@ -300,16 +299,10 @@
         }
     }
     
-    static CGColorRef defaultLinkColor = nil;
-    if (defaultLinkColor == nil)
-        defaultLinkColor = (CGColorRef)CFRetain(UIColorRGB(0x004bad).CGColor);
-    
     CTFontRef boldFont = NULL;
     CTFontRef ultraBoldFont = NULL;
     CTFontRef italicFont = NULL;
     CTFontRef fixedFont = NULL;
-    
-    CGColorRef linkColor = defaultLinkColor;
     
     NSRange *pLinkRanges = NULL;
     int linkRangeActualCount = 0;
@@ -322,17 +315,30 @@
         for (id match in textCheckingResults)
         {
             NSRange linkRange = [match range];
+            if (linkRange.location == NSNotFound || linkRange.location + linkRange.length > string.length) {
+                continue;
+            }
+            
             
             bool useRange = false;
+            bool useRangeUnderline = false;
             
             if ([match isKindOfClass:[NSTextCheckingResult class]])
             {
                 NSString *url = ((NSTextCheckingResult *)match).resultType == NSTextCheckingTypePhoneNumber ? [[NSString alloc] initWithFormat:@"tel:%@", ((NSTextCheckingResult *)match).phoneNumber] : [((NSTextCheckingResult *)match).URL absoluteString];
-                layout.links->push_back(TGLinkData(linkRange, url));
+                bool hidden = [(NSTextCheckingResult *)match isTelegramHiddenLink];
+                NSString *linkText = nil;
+                if (linkRange.location < text.length) {
+                    NSRange fixedLinkRange = NSMakeRange(linkRange.location, MIN(text.length - linkRange.location, linkRange.location + linkRange.length));
+                    if (fixedLinkRange.length > 0) {
+                        linkText = [text substringWithRange:fixedLinkRange];
+                    }
+                }
+                layout.links->push_back(TGLinkData(linkRange, url, linkText, hidden));
                 
-                if (flags & TGReusableLabelLayoutHighlightLinks)
+                if (flags & TGReusableLabelLayoutHighlightLinks && linkColor != NULL)
                 {
-                    CFAttributedStringSetAttribute((CFMutableAttributedStringRef)string, CFRangeMake(linkRange.location, linkRange.length), kCTForegroundColorAttributeName, linkColor);
+                    CFAttributedStringSetAttribute((CFMutableAttributedStringRef)string, CFRangeMake(linkRange.location, linkRange.length), kCTForegroundColorAttributeName, linkColor.CGColor);
                     
                     if (enableUnderline) {
                         CFAttributedStringSetAttribute((CFMutableAttributedStringRef)string, CFRangeMake(linkRange.location, linkRange.length), kCTUnderlineStyleAttributeName, (CFNumberRef)underlineStyle);
@@ -351,12 +357,21 @@
                     {
                         url = [[NSString alloc] initWithFormat:@"mention://%@", ((TGTextCheckingResult *)match).contents];
                         useRange = true;
+                        useRangeUnderline = underlineAllLinks;
                         break;
                     }
                     case TGTextCheckingResultTypeHashtag:
                     {
-                        useRange = true;
                         url = [[NSString alloc] initWithFormat:@"hashtag://%@", ((TGTextCheckingResult *)match).contents];
+                        useRange = true;
+                        useRangeUnderline = underlineAllLinks;
+                        break;
+                    }
+                    case TGTextCheckingResultTypeCashtag:
+                    {
+                        url = [[NSString alloc] initWithFormat:@"cashtag://%@", ((TGTextCheckingResult *)match).contents];
+                        useRange = true;
+                        useRangeUnderline = underlineAllLinks;
                         break;
                     }
                     case TGTextCheckingResultTypeCommand:
@@ -365,6 +380,7 @@
                         {
                             useRange = true;
                             url = [[NSString alloc] initWithFormat:@"command://%@", ((TGTextCheckingResult *)match).contents];
+                            useRangeUnderline = underlineAllLinks;
                         }
                         break;
                     }
@@ -391,10 +407,19 @@
                     case TGTextCheckingResultTypeBold:
                     {
                         if (boldFont == nil) {
-                            boldFont = TGCoreTextMediumFontOfSize(fontSize);
+                            boldFont = TGCoreTextBoldFontOfSize(fontSize);
                         }
                         
                         CFAttributedStringSetAttribute((CFMutableAttributedStringRef)string, CFRangeMake(linkRange.location, linkRange.length), kCTFontAttributeName, boldFont);
+                        
+                        break;
+                    }
+                    case TGTextCheckingResultTypeColor:
+                    {
+                        if (((TGTextCheckingResult *)match).value != nil) {
+                            UIColor *color = ((TGTextCheckingResult *)match).value;
+                            CFAttributedStringSetAttribute((CFMutableAttributedStringRef)string, CFRangeMake(linkRange.location, linkRange.length), kCTForegroundColorAttributeName, color.CGColor);
+                        }
                         
                         break;
                     }
@@ -410,19 +435,9 @@
                     }
                     case TGTextCheckingResultTypeLink:
                     {
-                        NSString *url = ((TGTextCheckingResult *)match).contents;
-                        layout.links->push_back(TGLinkData(linkRange, url));
-                        
-                        if (flags & TGReusableLabelLayoutHighlightLinks)
-                        {
-                            CFAttributedStringSetAttribute((CFMutableAttributedStringRef)string, CFRangeMake(linkRange.location, linkRange.length), kCTForegroundColorAttributeName, linkColor);
-                            
-                            if (enableUnderline) {
-                                CFAttributedStringSetAttribute((CFMutableAttributedStringRef)string, CFRangeMake(linkRange.location, linkRange.length), kCTUnderlineStyleAttributeName, (CFNumberRef)underlineStyle);
-                            }
-                        }
-                        
+                        url = ((TGTextCheckingResult *)match).contents;
                         useRange = true;
+                        useRangeUnderline = ((TGTextCheckingResult *)match).highlightAsLink || underlineAllLinks;
                         
                         break;
                     }
@@ -430,11 +445,22 @@
                 
                 if (useRange)
                 {
-                    layout.links->push_back(TGLinkData(linkRange, url));
+                    NSString *linkText = nil;
+                    if (linkRange.location < text.length) {
+                        NSRange fixedLinkRange = NSMakeRange(linkRange.location, MIN(text.length - linkRange.location, linkRange.location + linkRange.length));
+                        if (fixedLinkRange.length > 0) {
+                            linkText = [text substringWithRange:fixedLinkRange];
+                        }
+                    }
+                    layout.links->push_back(TGLinkData(linkRange, url, linkText, false));
                 
-                    if (flags & TGReusableLabelLayoutHighlightLinks)
+                    if (flags & TGReusableLabelLayoutHighlightLinks && linkColor != NULL)
                     {
-                        CFAttributedStringSetAttribute((CFMutableAttributedStringRef)string, CFRangeMake(linkRange.location, linkRange.length), kCTForegroundColorAttributeName, linkColor);
+                        CFAttributedStringSetAttribute((CFMutableAttributedStringRef)string, CFRangeMake(linkRange.location, linkRange.length), kCTForegroundColorAttributeName, linkColor.CGColor);
+                        
+                        if (enableUnderline && useRangeUnderline) {
+                            CFAttributedStringSetAttribute((CFMutableAttributedStringRef)string, CFRangeMake(linkRange.location, linkRange.length), kCTUnderlineStyleAttributeName, (CFNumberRef)underlineStyle);
+                        }
                     }
                 }
             }
@@ -581,21 +607,16 @@
                 break;
         }
         
-        if (flags & TGReusableLabelLayoutDateSpacing)
+        if (additionalTrailingWidth > FLT_EPSILON)
         {
-            CGFloat dateSpacing = ((flags & TGReusableLabelLayoutExtendedDateSpacing) ? 61.0f : 52.0f) + (TGUse12hDateFormat() ? 10.0f : 0.0f) + additionalTrailingWidth;
-            if (flags & TGReusableLabelViewCountSpacing) {
-                dateSpacing += 40.0f;
-            }
-            
             if (textLines.count == 1)
             {
-                if (lastLineWidth + dateSpacing <= maxWidth)
+                if (lastLineWidth + additionalTrailingWidth <= maxWidth)
                 {
-                    rect.size.width += dateSpacing;
+                    rect.size.width += additionalTrailingWidth;
                     if (pLineOrigins->at(textLines.count - 1).alignment == 2)
                     {
-                        pLineOrigins->at(textLines.count - 1).horizontalOffset -= dateSpacing;
+                        pLineOrigins->at(textLines.count - 1).horizontalOffset -= additionalTrailingWidth;
                     }
                 }
                 else
@@ -607,19 +628,19 @@
             }
             else if (textLines.count != 0)
             {
-                if (rect.size.width - lastLineWidth < dateSpacing)
+                if (rect.size.width - lastLineWidth < additionalTrailingWidth)
                 {
-                    if (lastLineWidth + dateSpacing <= maxWidth)
+                    if (lastLineWidth + additionalTrailingWidth <= maxWidth)
                     {
                         if (pLineOrigins->at(textLines.count - 1).alignment == 2)
                         {
                             rect.size.height += fontLineHeight * 0.7f;
                             if (containsEmptyNewline)
                                 *containsEmptyNewline = true;
-                            rect.size.width = MAX(rect.size.width, dateSpacing - 12);
+                            rect.size.width = MAX(rect.size.width, additionalTrailingWidth - 12);
                         }
                         else
-                            rect.size.width = lastLineWidth + dateSpacing;
+                            rect.size.width = lastLineWidth + additionalTrailingWidth;
                     }
                     else
                     {
@@ -627,8 +648,8 @@
                         if (containsEmptyNewline)
                             *containsEmptyNewline = true;
                     
-                        if (rect.size.width < dateSpacing - 12)
-                            rect.size.width = dateSpacing - 12;
+                        if (rect.size.width < additionalTrailingWidth - 12)
+                            rect.size.width = additionalTrailingWidth - 12;
                     }
                 }
                 else
@@ -641,6 +662,11 @@
                     }
                 }
             }
+        }
+        
+        if ((flags & TGReusableLabelLayoutOffsetLastLine) && textLines.count != 0) {
+            pLineOrigins->at(textLines.count - 1).offset += 2.0f;
+            rect.size.height += 3.0f;
         }
         
         layout.size = CGSizeMake(CGFloor(rect.size.width), CGFloor(rect.size.height + fontLineHeight * 0.1f));
@@ -909,8 +935,8 @@
     if (pLineOrigins->size() >= 2)
         lineHeight = ABS(pLineOrigins->at(0).offset - pLineOrigins->at(1).offset);
     
-    CGFloat upperOriginBound = clipRect.origin.y;
-    CGFloat lowerOriginBound = clipRect.origin.y + clipRect.size.height + lineHeight;
+    CGFloat upperOriginBound = clipRect.origin.y - lineHeight;
+    CGFloat lowerOriginBound = clipRect.origin.y + clipRect.size.height + lineHeight + lineHeight;
     
     for (CFIndex lineIndex = linesRange.location; lineIndex < (CFIndex)(linesRange.location + linesRange.length); lineIndex++)
     {

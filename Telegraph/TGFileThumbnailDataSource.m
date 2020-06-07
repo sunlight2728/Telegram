@@ -1,20 +1,17 @@
 #import "TGFileThumbnailDataSource.h"
 
-#import "TGStringUtils.h"
+#import <LegacyComponents/LegacyComponents.h>
 
 #import "TGWorkerPool.h"
 #import "TGWorkerTask.h"
 #import "TGMediaPreviewTask.h"
 
-#import "TGMemoryImageCache.h"
+#import <LegacyComponents/TGMemoryImageCache.h>
 
-#import "TGImageUtils.h"
-#import "TGStringUtils.h"
-#import "TGRemoteImageView.h"
+#import <LegacyComponents/TGRemoteImageView.h>
 
-#import "TGImageBlur.h"
-#import "UIImage+TG.h"
-#import "NSObject+TGLock.h"
+#import <LegacyComponents/TGImageBlur.h>
+#import <LegacyComponents/UIImage+TG.h>
 
 #import "TGMediaStoreContext.h"
 
@@ -114,7 +111,23 @@ static ASQueue *taskManagementQueue()
                 
                 NSString *temporaryThumbnailImagePath = [fileDirectory stringByAppendingPathComponent:@"file-thumb.jpg"];
                 
-                [previewTask executeWithTargetFilePath:temporaryThumbnailImagePath uri:args[@"legacy-thumbnail-cache-url"] completion:^(bool success)
+                NSMutableDictionary *options = [[NSMutableDictionary alloc] init];
+                TGMediaOriginInfo *originInfo = nil;
+                if (args[@"origin_info"] != nil)
+                {
+                    originInfo = [TGMediaOriginInfo mediaOriginInfoWithStringRepresentation:args[@"origin_info"]];
+                }
+                else if (args[@"cid"] != nil)
+                {
+                    int64_t cid = [args[@"cid"] longLongValue];
+                    int32_t mid = [args[@"mid"] intValue];
+                    originInfo = [TGMediaOriginInfo mediaOriginInfoWithFileReference:nil fileReferences:nil cid:cid mid:mid];
+                }
+                
+                if (originInfo != nil)
+                    options[@"originInfo"] = originInfo;
+                
+                [previewTask executeWithTargetFilePath:temporaryThumbnailImagePath uri:args[@"legacy-thumbnail-cache-url"] options:options completion:^(bool success)
                 {
                     if (success)
                     {
@@ -412,7 +425,7 @@ static ASQueue *taskManagementQueue()
             if (thumbnailSourceImage != nil && !lowQualityThumbnail)
             {
                 NSData *thumbnailSourceData = UIImageJPEGRepresentation(thumbnailSourceImage, 0.8f);
-                [thumbnailSourceData writeToFile:thumbnailPath atomically:false];
+                [thumbnailSourceData writeToFile:thumbnailPath atomically:true];
             }
         }
     }

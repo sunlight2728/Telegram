@@ -1,5 +1,9 @@
 #import "TGTabletMainView.h"
 
+#import <LegacyComponents/LegacyComponents.h>
+
+#import "TGPresentation.h"
+
 @interface TGTabletMainView ()
 {
     UIView *_stripeView;
@@ -10,6 +14,7 @@
     UIView *_fakeNavigationBarSeparatorView;
     
     UIImageView *_blankLogoView;
+    CGFloat _bottomInset;
 }
 
 @end
@@ -29,14 +34,17 @@
         _fakeNavigationBarView.backgroundColor = UIColorRGBA(0xf7f7f7, 1.0f);
         [self addSubview:_fakeNavigationBarView];
         
-        CGFloat separatorHeight = [[UIScreen mainScreen] scale] > 1.0f + FLT_EPSILON ? 0.5f : 1.0f;
+        CGFloat separatorHeight = TGScreenPixel;
         _fakeNavigationBarSeparatorView = [[UIView alloc] initWithFrame:CGRectMake(detailViewContainerFrame.origin.x, 64.0f - separatorHeight, detailViewContainerFrame.size.width, separatorHeight)];
         _fakeNavigationBarSeparatorView.backgroundColor = UIColorRGB(0xb2b2b2);
         [self addSubview:_fakeNavigationBarSeparatorView];
         
-        _blankLogoView = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"DetailLogoBlank.png"]];
-        _blankLogoView.frame = CGRectMake(CGFloor(CGRectGetMidX(detailViewContainerFrame) - _blankLogoView.frame.size.width / 2.0f), CGFloor(CGRectGetMidY(detailViewContainerFrame) - _blankLogoView.frame.size.height / 2.0f) + 9.0f, _blankLogoView.frame.size.width, _blankLogoView.frame.size.height);
-        [self addSubview:_blankLogoView];
+        if (TGIsPad())
+        {
+            _blankLogoView = [[UIImageView alloc] initWithImage:TGTintedImage(TGImageNamed(@"DetailLogoBlank.png"), UIColorRGB(0xc8c7cc))];
+            _blankLogoView.frame = CGRectMake(CGFloor(CGRectGetMidX(detailViewContainerFrame) - _blankLogoView.frame.size.width / 2.0f), CGFloor(CGRectGetMidY(detailViewContainerFrame) - _blankLogoView.frame.size.height / 2.0f) + 9.0f, _blankLogoView.frame.size.width, _blankLogoView.frame.size.height);
+            [self addSubview:_blankLogoView];
+        }
         
         _detailViewContainer = [[UIView alloc] initWithFrame:detailViewContainerFrame];
         _detailViewContainer.clipsToBounds = true;
@@ -47,11 +55,32 @@
         _masterViewContainer.clipsToBounds = true;
         [self addSubview:_masterViewContainer];
         
-        _stripeView = [[UIView alloc] initWithFrame:CGRectMake(CGRectGetMaxX(masterViewContainerFrame), 0.0f, 1.0f, masterViewContainerFrame.size.height)];
-        _stripeView.backgroundColor = UIColorRGB(0x8e8e93);
+        _stripeView = [[UIView alloc] initWithFrame:CGRectMake(CGRectGetMaxX(masterViewContainerFrame), 0.0f, TGScreenPixel, masterViewContainerFrame.size.height)];
+        _stripeView.backgroundColor = UIColorRGBA(0x575757, 0.43f);
         [self addSubview:_stripeView];
     }
     return self;
+}
+
+- (void)setPresentation:(TGPresentation *)presentation
+{
+    _presentation = presentation;
+    
+    _fakeNavigationBarView.backgroundColor = presentation.pallete.barBackgroundColor;
+    _fakeNavigationBarSeparatorView.backgroundColor = presentation.pallete.barSeparatorColor;
+    
+    if (_blankLogoView != nil)
+        _blankLogoView.image = TGTintedImage(TGImageNamed(@"DetailLogoBlank.png"), presentation.pallete.barSeparatorColor);
+    
+    _stripeView.backgroundColor = presentation.pallete.padSeparatorColor;
+}
+
+- (void)updateBottomInset:(CGFloat)inset
+{
+    _bottomInset = inset;
+    
+    CGRect masterViewContainerFrame = [self rectForMasterViewForFrame:self.frame];
+    _stripeView.frame = CGRectMake(CGRectGetMaxX(masterViewContainerFrame), 0.0f, TGScreenPixel, masterViewContainerFrame.size.height - _bottomInset);
 }
 
 - (void)setFrame:(CGRect)frame
@@ -65,7 +94,7 @@
     CGRect masterViewContainerFrame = [self rectForMasterViewForFrame:frame];
     _masterViewContainer.frame = masterViewContainerFrame;
     
-    _stripeView.frame = CGRectMake(CGRectGetMaxX(masterViewContainerFrame), 0.0f, 1.0f, masterViewContainerFrame.size.height);
+    _stripeView.frame = CGRectMake(CGRectGetMaxX(masterViewContainerFrame), 0.0f, TGScreenPixel, masterViewContainerFrame.size.height - _bottomInset);
     
     masterViewContainerFrame.origin = CGPointZero;
     _masterView.frame = masterViewContainerFrame;

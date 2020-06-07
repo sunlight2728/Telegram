@@ -6,8 +6,10 @@
  * Copyright Peter Iakovlev, 2013.
  */
 
-#import "TGImageDataSource.h"
+#import <LegacyComponents/TGImageDataSource.h>
 
 @interface TGPhotoThumbnailDataSource : TGImageDataSource
+
++ (TGDataResource *)resultForUnavailableImage:(bool)isFlat cornerRadius:(int)cornerRadius position:(int)position;
 
 @end

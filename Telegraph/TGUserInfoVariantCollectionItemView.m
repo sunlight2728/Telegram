@@ -1,15 +1,8 @@
-/*
- * This is the source code of Telegram for iOS v. 1.1
- * It is licensed under GNU GPL v. 2 or later.
- * You should have received a copy of the license in this archive (see LICENSE).
- *
- * Copyright Peter Iakovlev, 2013.
- */
-
 #import "TGUserInfoVariantCollectionItemView.h"
 
-#import "TGFont.h"
-#import "TGImageUtils.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import "TGPresentation.h"
 
 @interface TGUserInfoVariantCollectionItemView ()
 {
@@ -31,7 +24,7 @@
     self = [super initWithFrame:frame];
     if (self != nil)
     {
-        self.selectionInsets = UIEdgeInsetsMake(TGIsRetina() ? 0.5f : 1.0f, 0.0f, 0.0f, 0.0f);
+        self.selectionInsets = UIEdgeInsetsMake(TGScreenPixel, 0.0f, 0.0f, 0.0f);
         
         _separatorLayer = [[CALayer alloc] init];
         _separatorLayer.backgroundColor = TGSeparatorColor().CGColor;
@@ -49,10 +42,20 @@
         _variantLabel.textColor = UIColorRGB(0x8e8e93);
         [self addSubview:_variantLabel];
         
-        _arrowView = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"ModernListsDisclosureIndicatorSmall.png"]];
+        _arrowView = [[UIImageView alloc] initWithFrame:CGRectMake(0.0f, 0.0f, 8.0f, 14.0f)];
         [self addSubview:_arrowView];
     }
     return self;
+}
+
+- (void)setPresentation:(TGPresentation *)presentation
+{
+    [super setPresentation:presentation];
+    
+    _titleLabel.textColor = presentation.pallete.collectionMenuTextColor;
+    _variantLabel.textColor = presentation.pallete.collectionMenuVariantColor;
+    _separatorLayer.backgroundColor = presentation.pallete.collectionMenuSeparatorColor.CGColor;
+    _arrowView.image = presentation.images.collectionMenuDisclosureIcon;
 }
 
 - (void)setTitle:(NSString *)title
@@ -92,24 +95,25 @@
     
     CGRect bounds = self.bounds;
     
-    CGFloat separatorHeight = TGIsRetina() ? 0.5f : 1.0f;
-    _separatorLayer.frame = CGRectMake(35.0f, bounds.size.height - separatorHeight, bounds.size.width - 35.0f, separatorHeight);
+    CGFloat separatorHeight = TGScreenPixel;
+    CGFloat separatorInset = 15.0f + self.safeAreaInset.left;
+    _separatorLayer.frame = CGRectMake(separatorInset, bounds.size.height - separatorHeight, bounds.size.width - separatorInset, separatorHeight);
     
-    CGFloat leftPadding = 35.0f + TGRetinaPixel;
+    CGFloat leftPadding = 15.0f + TGScreenPixel + self.safeAreaInset.left;
     
-    CGSize titleSize = [_titleLabel sizeThatFits:CGSizeMake(bounds.size.width - leftPadding - 10.0f, CGFLOAT_MAX)];
+    CGSize titleSize = [_titleLabel sizeThatFits:CGSizeMake(bounds.size.width - leftPadding - self.safeAreaInset.right - 10.0f, CGFLOAT_MAX)];
     _titleLabel.frame = CGRectMake(leftPadding, 12.0f, titleSize.width, titleSize.height);
     
-    CGSize variantSize = [_variantLabel sizeThatFits:CGSizeMake(bounds.size.width - leftPadding - 10.0f, CGFLOAT_MAX)];
-    _variantLabel.frame = CGRectMake(bounds.size.width - 34.0f - variantSize.width, 12.0f, variantSize.width, variantSize.height);
+    CGSize variantSize = [_variantLabel sizeThatFits:CGSizeMake(bounds.size.width - leftPadding - self.safeAreaInset.right - 10.0f, CGFLOAT_MAX)];
+    _variantLabel.frame = CGRectMake(bounds.size.width - 34.0f - variantSize.width - self.safeAreaInset.right, 12.0f, variantSize.width, variantSize.height);
     
     if (_variantImageView != nil)
     {
-        _variantImageView.frame = CGRectMake(bounds.size.width - 34.0f - _variantImageView.frame.size.width, CGFloor((bounds.size.height - _variantImageView.frame.size.height) / 2.0f), _variantImageView.frame.size.width, _variantImageView.frame.size.height);
+        _variantImageView.frame = CGRectMake(bounds.size.width - 34.0f - _variantImageView.frame.size.width - self.safeAreaInset.right, CGFloor((bounds.size.height - _variantImageView.frame.size.height) / 2.0f), _variantImageView.frame.size.width, _variantImageView.frame.size.height);
     }
     
     CGSize arrowSize = _arrowView.bounds.size;
-    _arrowView.frame = CGRectMake(bounds.size.width - 15.0f - arrowSize.width, 18.0f, arrowSize.width, arrowSize.height);
+    _arrowView.frame = CGRectMake(bounds.size.width - 15.0f - arrowSize.width - self.safeAreaInset.right, 15.0f, arrowSize.width, arrowSize.height);
 }
 
 @end

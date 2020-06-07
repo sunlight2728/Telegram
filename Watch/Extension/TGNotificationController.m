@@ -18,7 +18,7 @@
 #import "TGBridgeUser.h"
 #import "TGBridgeUserCache.h"
 
-#import "TGPeerIdAdapter.h"
+#import "TGBridgePeerIdAdapter.h"
 
 #import <WatchConnectivity/WatchConnectivity.h>
 
@@ -63,7 +63,7 @@
     int64_t peerId = (chatId != nil) ? [chatId integerValue] : [fromId integerValue];
     int32_t messageId = (int32_t)[mid integerValue];
     
-    NSString *defaultText = [NSString stringWithFormat:remoteNotification[@"aps"][@"alert"][@"loc-key"] array:remoteNotification[@"aps"][@"alert"][@"loc-args"]];
+    NSString *defaultText = remoteNotification[@"aps"][@"alert"]; //[NSString stringWithFormat:remoteNotification[@"aps"][@"alert"][@"loc-key"] array:remoteNotification[@"aps"][@"alert"][@"loc-args"]];
     [self processMessageWithId:messageId peerId:peerId defaultText:defaultText completion:completionHandler];
 }
 

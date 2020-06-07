@@ -1,7 +1,10 @@
 #import "TGUserInfoUsernameCollectionItemView.h"
 
-#import "TGImageUtils.h"
-#import "TGFont.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import "TGPresentation.h"
+
+#import <LegacyComponents/TGCheckButtonView.h>
 
 @interface TGUserInfoUsernameCollectionItemView ()
 {
@@ -9,8 +12,9 @@
     
     UILabel *_labelView;
     UILabel *_usernameLabel;
+    
+    TGCheckButtonView *_checkView;
 }
-
 @end
 
 @implementation TGUserInfoUsernameCollectionItemView
@@ -20,7 +24,7 @@
     self = [super initWithFrame:frame];
     if (self != nil)
     {
-        self.selectionInsets = UIEdgeInsetsMake(TGIsRetina() ? 0.5f : 1.0f, 0.0f, 0.0f, 0.0f);
+        self.selectionInsets = UIEdgeInsetsMake(TGScreenPixel, 0.0f, 0.0f, 0.0f);
         
         _separatorLayer = [[CALayer alloc] init];
         _separatorLayer.backgroundColor = TGSeparatorColor().CGColor;
@@ -41,6 +45,32 @@
     return self;
 }
 
+- (void)setPresentation:(TGPresentation *)presentation
+{
+    [super setPresentation:presentation];
+    
+    _labelView.textColor = presentation.pallete.collectionMenuTextColor;
+    _usernameLabel.textColor = presentation.pallete.collectionMenuAccentColor;
+    _separatorLayer.backgroundColor = presentation.pallete.collectionMenuSeparatorColor.CGColor;
+}
+
+- (void)setChecking:(bool)checking
+{
+    if (_checkView == nil)
+    {
+        _checkView = [[TGCheckButtonView alloc] initWithStyle:TGCheckButtonStyleDefaultBlue pallete:self.presentation.checkButtonPallete];
+        _checkView.userInteractionEnabled = false;
+        [self addSubview:_checkView];
+    }
+    _checkView.hidden = !checking;
+    [self setNeedsLayout];
+}
+
+- (void)setIsChecked:(bool)checked animated:(bool)animated
+{
+    [_checkView setSelected:checked animated:animated];
+}
+
 - (void)setLabel:(NSString *)label
 {
     _labelView.text = label;
@@ -53,22 +83,32 @@
     [self setNeedsLayout];
 }
 
+- (void)setLastInList:(bool)lastInList
+{
+    _separatorLayer.hidden = !lastInList;
+}
+
 - (void)layoutSubviews
 {
     [super layoutSubviews];
     
     CGRect bounds = self.bounds;
     
-    CGFloat separatorHeight = TGIsRetina() ? 0.5f : 1.0f;
-    _separatorLayer.frame = CGRectMake(35.0f, bounds.size.height - separatorHeight, bounds.size.width - 35.0f, separatorHeight);
+    bool hasCheck = _checkView != nil && !_checkView.hidden;
     
-    CGFloat leftPadding = 35.0f + TGRetinaPixel;
+    _checkView.frame = CGRectMake(14.0f + self.safeAreaInset.left, TGScreenPixelFloor((self.frame.size.height - _checkView.frame.size.height) / 2.0f), _checkView.frame.size.width, _checkView.frame.size.height);
     
-    CGSize labelSize = [_labelView sizeThatFits:CGSizeMake(bounds.size.width - leftPadding - 10.0f, CGFLOAT_MAX)];
+    CGFloat separatorHeight = TGScreenPixel;
+    CGFloat separatorInset = (hasCheck ? 60.0f : 15.0f) + self.safeAreaInset.left;
+    _separatorLayer.frame = CGRectMake(separatorInset, bounds.size.height - separatorHeight, bounds.size.width - separatorInset, separatorHeight);
+    
+    CGFloat leftPadding = (hasCheck ? 60.0f : 15.0f) + TGScreenPixel + self.safeAreaInset.left;
+    
+    CGSize labelSize = [_labelView sizeThatFits:CGSizeMake(bounds.size.width - leftPadding - self.safeAreaInset.right - 10.0f, CGFLOAT_MAX)];
     _labelView.frame = CGRectMake(leftPadding, 11.0f, labelSize.width, labelSize.height);
     
-    CGSize usernameSize = [_usernameLabel sizeThatFits:CGSizeMake(bounds.size.width - leftPadding - 10.0f, CGFLOAT_MAX)];
-    usernameSize.width = MIN(CGCeil(usernameSize.width), bounds.size.width - leftPadding - 10.0f);
+    CGSize usernameSize = [_usernameLabel sizeThatFits:CGSizeMake(bounds.size.width - leftPadding - self.safeAreaInset.right - 10.0f, CGFLOAT_MAX)];
+    usernameSize.width = MIN(CGCeil(usernameSize.width), bounds.size.width - leftPadding - self.safeAreaInset.right - 10.0f);
     usernameSize.height = CGCeil(usernameSize.height);
     _usernameLabel.frame = CGRectMake(leftPadding, 30.0f, usernameSize.width, usernameSize.height);
 }

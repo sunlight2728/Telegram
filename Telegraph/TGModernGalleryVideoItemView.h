@@ -6,7 +6,9 @@
  * Copyright Peter Iakovlev, 2013.
  */
 
-#import "TGModernGalleryItemView.h"
+#import <LegacyComponents/TGModernGalleryItemView.h>
+
+#import <LegacyComponents/TGModernGalleryZoomableItemView.h>
 
 @class TGImageView;
 @class AVPlayer;
@@ -20,8 +22,10 @@
 - (bool)shouldLoopVideo:(NSUInteger)currentLoopCount;
 
 - (void)play;
+- (void)loadAndPlay;
 - (void)hidePlayButton;
 - (void)stop;
+- (void)stopForOutTransition;
 
 - (void)_willPlay;
 

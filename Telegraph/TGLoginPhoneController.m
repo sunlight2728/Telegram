@@ -1,45 +1,34 @@
 #import "TGLoginPhoneController.h"
 
-#import "TGImageUtils.h"
-
-#import "TGToolbarButton.h"
-#import "TGPhoneUtils.h"
-
-#import "TGNavigationBar.h"
-#import "TGNavigationController.h"
+#import <LegacyComponents/LegacyComponents.h>
 
 #import "TGAppDelegate.h"
-
-#import "TGHacks.h"
-#import "TGStringUtils.h"
-#import "TGFont.h"
+#import "TGApplication.h"
 
 #import "TGInterfaceAssets.h"
 
 #import "TGLoginCodeController.h"
 #import "TGLoginCountriesController.h"
+#import "TGProxySetupController.h"
 
-#import "SGraphObjectNode.h"
+#import <LegacyComponents/SGraphObjectNode.h>
 
 #import "TGLoginProfileController.h"
 
 #import <CoreTelephony/CTCarrier.h>
 #import <CoreTelephony/CTTelephonyNetworkInfo.h>
 
-#import "TGProgressWindow.h"
+#import <LegacyComponents/TGProgressWindow.h>
 
 #import "TGHighlightableButton.h"
 #import "TGBackspaceTextField.h"
 
-#import "TGActivityIndicatorView.h"
-
 #import "TGSendCodeRequestBuilder.h"
 
 #import "TGAlertView.h"
+#import "TGCustomAlertView.h"
 
-#import "TGObserverProxy.h"
-
-#import "TGPhoneUtils.h"
+#import <LegacyComponents/TGObserverProxy.h>
 
 #import "TGUpdateStateRequestBuilder.h"
 
@@ -49,12 +38,12 @@
 
 @interface TGLoginPhoneController () <UITextFieldDelegate, MFMailComposeViewControllerDelegate>
 {
-    UIView *_grayBackground;
-    UIView *_separatorView;
     UILabel *_titleLabel;
     UILabel *_noticeLabel;
     UILabel *_termsOfServiceLabel;
     UIImageView *_inputBackgroundView;
+    
+    NSString *_countryId;
     
     TGObserverProxy *_keyValueStoreChangeProxy;
     bool _editedText;
@@ -146,10 +135,6 @@
     
     CGSize screenSize = [self referenceViewSizeForOrientation:UIInterfaceOrientationPortrait];
     
-    _grayBackground = [[UIView alloc] initWithFrame:CGRectMake(0.0f, 0.0f, screenSize.width, [TGViewController isWidescreen] ? 131.0f : 90.0f)];
-    _grayBackground.backgroundColor = UIColorRGB(0xf2f2f2);
-    [self.view addSubview:_grayBackground];
-    
     _titleLabel = [[UILabel alloc] init];
     _titleLabel.backgroundColor = [UIColor clearColor];
     _titleLabel.textColor = [UIColor blackColor];
@@ -161,7 +146,7 @@
     
     _noticeLabel = [[UILabel alloc] init];
     _noticeLabel.font = TGSystemFontOfSize(17.0f);
-    _noticeLabel.textColor = UIColorRGB(0x999999);
+    _noticeLabel.textColor = [UIColor blackColor];
     _noticeLabel.text = TGLocalized(@"Login.PhoneAndCountryHelp");
     _noticeLabel.backgroundColor = [UIColor clearColor];
     _noticeLabel.lineBreakMode = NSLineBreakByWordWrapping;
@@ -172,48 +157,8 @@
     _noticeLabel.frame = CGRectMake(CGFloor((screenSize.width - noticeSize.width) / 2.0f), [TGViewController isWidescreen] ? 274.0f : 214.0f, noticeSize.width, noticeSize.height);
     [self.view addSubview:_noticeLabel];
     
-    _termsOfServiceLabel = [[UILabel alloc] init];
-    _termsOfServiceLabel.font = TGSystemFontOfSize(TGIsPad() || [TGViewController hasLargeScreen] ? 16.0f : 14.0f);
-    _termsOfServiceLabel.textColor = [UIColor blackColor];
-    [_termsOfServiceLabel addGestureRecognizer:[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(termsOfServiceTapGesture:)]];
-    _termsOfServiceLabel.userInteractionEnabled = true;
-    
-    NSMutableString *rawTermsOfServiceString = [[NSMutableString alloc] initWithString:TGLocalized(@"Login.TermsOfServiceLabel")];
-    NSMutableAttributedString *termsOfServiceString = nil;
-    {
-        NSRange extractedRange = NSMakeRange(NSNotFound, 0);
-        
-        NSRange linkRange = [rawTermsOfServiceString rangeOfString:@"["];
-        if (linkRange.location != NSNotFound) {
-            [rawTermsOfServiceString replaceCharactersInRange:linkRange withString:@""];
-            
-            NSRange linkEndRange = [rawTermsOfServiceString rangeOfString:@"]"];
-            if (linkEndRange.location != NSNotFound) {
-                [rawTermsOfServiceString replaceCharactersInRange:linkEndRange withString:@""];
-                
-                extractedRange = NSMakeRange(linkRange.location, linkEndRange.location - linkRange.location);
-            }
-        }
-        
-        termsOfServiceString = [[NSMutableAttributedString alloc] initWithString:rawTermsOfServiceString attributes:@{NSFontAttributeName: _termsOfServiceLabel.font}];
-        if (extractedRange.location != NSNotFound) {
-            [termsOfServiceString addAttribute:NSForegroundColorAttributeName value:TGAccentColor() range:extractedRange];
-        }
-    }
-    
-    _termsOfServiceLabel.attributedText = termsOfServiceString;
-    _termsOfServiceLabel.backgroundColor = [UIColor clearColor];
-    _termsOfServiceLabel.lineBreakMode = NSLineBreakByWordWrapping;
-    _termsOfServiceLabel.textAlignment = NSTextAlignmentCenter;
-    _termsOfServiceLabel.contentMode = UIViewContentModeCenter;
-    _termsOfServiceLabel.numberOfLines = 0;
-    CGSize termsOfServiceSize = [_termsOfServiceLabel sizeThatFits:CGSizeMake(278.0f, CGFLOAT_MAX)];
-    _termsOfServiceLabel.frame = CGRectMake(CGFloor((screenSize.width - termsOfServiceSize.width) / 2.0f), [TGViewController isWidescreen] ? 274.0f : 214.0f, termsOfServiceSize.width, termsOfServiceSize.height);
-    [self.view addSubview:_termsOfServiceLabel];
-    _termsOfServiceLabel.hidden = !(TGIsPad() || [TGViewController isWidescreen] || [TGViewController hasLargeScreen]);
-    
-    UIImage *rawCountryImage = [UIImage imageNamed:@"ModernAuthCountryButton.png"];
-    UIImage *rawCountryImageHighlighted = [UIImage imageNamed:@"ModernAuthCountryButtonHighlighted.png"];
+    UIImage *rawCountryImage = TGImageNamed(@"ModernAuthCountryButton.png");
+    UIImage *rawCountryImageHighlighted = TGImageNamed(@"ModernAuthCountryButtonHighlighted.png");
     
     _countryButton = [[UIButton alloc] initWithFrame:CGRectMake(0, 0, screenSize.width, rawCountryImage.size.height)];
     _countryButton.exclusiveTouch = true;
@@ -228,9 +173,9 @@
     _countryButton.frame = CGRectMake(0.0f, [TGViewController isWidescreen] ? 131.0f : 90.0f, screenSize.width, rawCountryImage.size.height);
     [self.view addSubview:_countryButton];
     
-    UIImage *rawInputImage = [UIImage imageNamed:@"ModernAuthPhoneBackground.png"];
+    UIImage *rawInputImage = TGImageNamed(@"ModernAuthPhoneBackground.png");
     _inputBackgroundView = [[UIImageView alloc] initWithImage:[rawInputImage stretchableImageWithLeftCapWidth:(int)(rawInputImage.size.width / 2) topCapHeight:(int)(rawInputImage.size.height / 2)]];
-    _inputBackgroundView.frame = CGRectMake(0.0f, _countryButton.frame.origin.y + 57.0f, screenSize.width, rawInputImage.size.height + TGRetinaPixel);
+    _inputBackgroundView.frame = CGRectMake(0.0f, _countryButton.frame.origin.y + 57.0f, screenSize.width, rawInputImage.size.height + TGScreenPixel);
     [self.view addSubview:_inputBackgroundView];
     
     _inputBackgroundView.userInteractionEnabled = true;
@@ -244,7 +189,7 @@
     _countryCodeField.keyboardType = UIKeyboardTypeNumberPad;
     _countryCodeField.delegate = self;
     _countryCodeField.contentVerticalAlignment = UIControlContentVerticalAlignmentCenter;
-    _countryCodeField.frame = CGRectMake(14.0f, _inputBackgroundView.frame.origin.y + 1.0f + TGRetinaPixel, 68.0f, 56.0f);
+    _countryCodeField.frame = CGRectMake(14.0f, _inputBackgroundView.frame.origin.y + 1.0f + TGScreenPixel, 68.0f, 56.0f);
     [self.view addSubview:_countryCodeField];
     
     _phoneField = [[TGBackspaceTextField alloc] init];
@@ -257,13 +202,8 @@
     _phoneField.placeholderColor = UIColorRGB(0xc7c7cd);
     _phoneField.placeholderFont = _phoneField.font;
     _phoneField.contentVerticalAlignment = UIControlContentVerticalAlignmentCenter;
-    _phoneField.frame = CGRectMake(96.0f, _inputBackgroundView.frame.origin.y + 1.0f + TGRetinaPixel, screenSize.width - 96.0f - 10.0f, 56.0f);
+    _phoneField.frame = CGRectMake(96.0f, _inputBackgroundView.frame.origin.y + 1.0f + TGScreenPixel, screenSize.width - 96.0f - 10.0f, 56.0f);
     [self.view addSubview:_phoneField];
-    
-    CGFloat separatorHeight = TGIsRetina() ? 0.5f : 1.0f;
-    _separatorView = [[UIView alloc] initWithFrame:CGRectMake(0.0f, _grayBackground.frame.size.height, _grayBackground.frame.size.width, separatorHeight)];
-    _separatorView.backgroundColor = UIColorRGB(0xc8c7cc);
-    [self.view addSubview:_separatorView];
     
     //if (![self _updateControllerInset:false])
         [self updateInterface:self.interfaceOrientation];
@@ -432,52 +372,61 @@
 {
     CGSize screenSize = [self referenceViewSizeForOrientation:orientation];
 
-    CGFloat topOffset = 0.0f;
-    CGFloat titleLabelOffset = 0.0f;
-    CGFloat noticeLabelOffset = 0.0f;
     CGFloat countryButtonOffset = 0.0f;
     CGFloat sideInset = 0.0f;
+    CGFloat titleAdditionalOffset = 0.0f;
+    CGFloat fieldsAdditionalOffset = 0.0f;
     
     if (TGIsPad())
     {
-        if (UIInterfaceOrientationIsPortrait(orientation))
-        {
-            topOffset = 305.0f;
-            titleLabelOffset = topOffset - 108.0f;
-            noticeLabelOffset = topOffset + 143.0f;
-        }
-        else
-        {
-            topOffset = 135.0f;
-            titleLabelOffset = topOffset - 78.0f;
-            noticeLabelOffset = topOffset + 123.0f;
-        }
-        
-        countryButtonOffset = topOffset;
         sideInset = 130.0f;
+        if (screenSize.width < screenSize.height) {
+            titleAdditionalOffset = 20.0f;
+            fieldsAdditionalOffset = 50.0f;
+        } else {
+            titleAdditionalOffset = -40.0f;
+            fieldsAdditionalOffset = -10.0f;
+        }
     }
     else
     {
-        topOffset = [TGViewController hasLargeScreen] ? 131.0f : 90.0f;
-        titleLabelOffset = [TGViewController hasLargeScreen] ? 71.0f : 48.0f;
-        noticeLabelOffset = [TGViewController hasLargeScreen] ? 274.0f : 214.0f;
-        countryButtonOffset = [TGViewController hasLargeScreen] ? 131.0f : 90.0f;
-        
-        if (![TGViewController hasLargeScreen] && [TGViewController isWidescreen]) {
-            topOffset += 20.0f;
-            titleLabelOffset += 20.0f;
-            noticeLabelOffset += 20.0f;
-            countryButtonOffset += 20.0f;
+        if (screenSize.height < 481.0) {
+            titleAdditionalOffset = -28.0f;
+            fieldsAdditionalOffset = 18.0f;
+        } else if (screenSize.height < 569.0) {
+            titleAdditionalOffset = -15.0f;
+            fieldsAdditionalOffset = 22.0f;
         }
     }
     
-    _grayBackground.frame = CGRectMake(0.0f, 0.0f, screenSize.width, topOffset);
-    _separatorView.frame = CGRectMake(0.0f, topOffset, screenSize.width, _separatorView.frame.size.height);
-    
-    _titleLabel.frame = CGRectMake(CGFloor((screenSize.width - _titleLabel.frame.size.width) / 2), titleLabelOffset, _titleLabel.frame.size.width, _titleLabel.frame.size.height);
-    
+    CGSize titleSize = _titleLabel.bounds.size;
     CGSize noticeSize = [_noticeLabel sizeThatFits:CGSizeMake(278.0f, CGFLOAT_MAX)];
-    _noticeLabel.frame = CGRectMake(CGFloor((screenSize.width - noticeSize.width) / 2.0f), noticeLabelOffset, noticeSize.width, noticeSize.height);
+    
+    CGFloat keyboardHeight = 216.0f;
+    CGFloat longSize = MAX(screenSize.width, screenSize.height);
+    if (TGIsPad()) {
+        if (fabs(longSize - 1024.0f) < FLT_EPSILON)
+            keyboardHeight = (screenSize.width > screenSize.height) ? 370.0f : 300.0f;
+        else
+            keyboardHeight = (screenSize.width > screenSize.height) ? 435.0f : 350.0f;
+    }
+    else if (fabs(longSize - 812.0f) < FLT_EPSILON)
+        keyboardHeight = 291.0f;
+    
+    CGFloat topOrigin = 20.0f + 44.0f + 10.0f + titleAdditionalOffset;
+    CGFloat bottomOffset = screenSize.height - keyboardHeight - 10.0f;
+    
+    CGFloat titlePlusNoticeHeight = titleSize.height + noticeSize.height;
+    
+    CGFloat maxHeight = 396.0f;
+    
+    CGFloat contentHeight = MIN(maxHeight, bottomOffset - topOrigin);
+    CGFloat adjustedTopOrigin = topOrigin;
+    
+    _titleLabel.frame = CGRectMake(CGFloor((screenSize.width - _titleLabel.frame.size.width) / 2), adjustedTopOrigin, _titleLabel.frame.size.width, _titleLabel.frame.size.height);
+    _noticeLabel.frame = CGRectMake(CGFloor((screenSize.width - noticeSize.width) / 2.0f), CGRectGetMaxY(_titleLabel.frame) + 10.0f, noticeSize.width, noticeSize.height);
+    
+    countryButtonOffset = topOrigin + MAX(titlePlusNoticeHeight, CGFloor((contentHeight - 112.0f) / 2.0f)) + fieldsAdditionalOffset;
 
     if (!_termsOfServiceLabel.hidden) {
         CGSize termsOfServiceSize = [_termsOfServiceLabel sizeThatFits:CGSizeMake(278.0f, CGFLOAT_MAX)];
@@ -487,16 +436,6 @@
             termsOfServiceOffset = 20.0f;
         }
         
-        CGFloat keyboardHeight = 216.0f;
-        if (TGIsPad()) {
-            CGFloat longSize = MAX(screenSize.width, screenSize.height);
-            
-            if (fabs(longSize - 1024.0f) < FLT_EPSILON)
-                keyboardHeight = (screenSize.width > screenSize.height) ? 370.0f : 300.0f;
-            else
-                keyboardHeight = (screenSize.width > screenSize.height) ? 435.0f : 350.0f;
-        }
-        
         _termsOfServiceLabel.frame = CGRectMake(CGFloor((screenSize.width - termsOfServiceSize.width) / 2.0f), screenSize.height - termsOfServiceSize.height - termsOfServiceOffset - keyboardHeight, termsOfServiceSize.width, termsOfServiceSize.height);
     }
     
@@ -504,9 +443,9 @@
     
     _inputBackgroundView.frame = CGRectMake(sideInset - (TGIsPad() ? 15.0f : 0.0f), _countryButton.frame.origin.y + 57.0f, screenSize.width - sideInset * 2.0f + (TGIsPad() ? 15.0f : 0.0f), _inputBackgroundView.frame.size.height);
     
-    _countryCodeField.frame = CGRectMake(14.0f + sideInset - (TGIsPad() ? 15.0f : 0.0f), _inputBackgroundView.frame.origin.y + 1.0f + TGRetinaPixel, 68.0f, 56.0f);
+    _countryCodeField.frame = CGRectMake(14.0f + sideInset - (TGIsPad() ? 15.0f : 0.0f), _inputBackgroundView.frame.origin.y + 1.0f + TGScreenPixel, 68.0f, 56.0f);
     
-    _phoneField.frame = CGRectMake(96.0f + sideInset - (TGIsPad() ? 15.0f : 0.0f), _inputBackgroundView.frame.origin.y + 1.0f + TGRetinaPixel, screenSize.width - 96.0f - 10.0f - sideInset * 2.0f, 56.0f);
+    _phoneField.frame = CGRectMake(96.0f + sideInset - (TGIsPad() ? 15.0f : 0.0f), _inputBackgroundView.frame.origin.y + 1.0f + TGScreenPixel, screenSize.width - 96.0f - 10.0f - sideInset * 2.0f, 56.0f);
 }
 
 - (void)setInProgress:(bool)inProgress
@@ -820,6 +759,23 @@
         _phoneField.text = [self filterPhoneText:[TGPhoneUtils formatPhone:[[NSString alloc] initWithFormat:@"%@", _phoneField.text] forceInternational:false]];
 }
 
+- (NSString *)emojiFlagForISOCountryCode:(NSString *)countryCode {
+    if (countryCode.length != 2) {
+        return nil;
+    }
+    
+    int base = 127462 -65;
+    
+    wchar_t bytes[2] = {
+        base +[countryCode characterAtIndex:0],
+        base +[countryCode characterAtIndex:1]
+    };
+    
+    return [[NSString alloc] initWithBytes:bytes
+                                    length:countryCode.length *sizeof(wchar_t)
+                                  encoding:NSUTF32LittleEndianStringEncoding];
+}
+
 - (void)updateCountry
 {
     int countryCode = [[_countryCodeField.text substringFromIndex:1] intValue];
@@ -827,27 +783,37 @@
     
     if (countryName != nil)
     {
-        //[_countryButton setTitleColor:UIColorRGB(0xf0f0f0) forState:UIControlStateNormal];
-        [_countryButton setTitle:countryName forState:UIControlStateNormal];
+        NSString *countryId = [TGLoginCountriesController countryIdByCode:countryCode];
+        NSString *localizedCountryName = [TGLoginCountriesController localizedCountryNameByCountryId:countryId];
+        _countryId = countryId;
+        if (countryId != nil) {
+            NSString *flag = [self emojiFlagForISOCountryCode:[countryId uppercaseString]];
+            if (flag.length != 0) {
+                localizedCountryName = [flag stringByAppendingFormat:@" %@", localizedCountryName];
+            }
+        }
+        [_countryButton setTitle:localizedCountryName forState:UIControlStateNormal];
     }
     else
     {
-        //[_countryButton setTitleColor:UIColorRGBA(0xf0f0f0, 0.7f) forState:UIControlStateNormal];
+        _countryId = nil;
         [_countryButton setTitle:_countryCodeField.text.length <= 1 ? TGLocalized(@"Login.CountryCode") : TGLocalized(@"Login.InvalidCountryCode") forState:UIControlStateNormal];
     }
+    [self updateTermsVisibility];
+}
+
+- (void)updateTermsVisibility
+{
+    if (!(TGIsPad() || [TGViewController isWidescreen] || [TGViewController hasLargeScreen]))
+        return;
+    
+    _termsOfServiceLabel.hidden = _countryId.length == 0;
 }
 
 #pragma mark -
 
-- (void)backgroundTapped:(UITapGestureRecognizer *)recognizer
+- (void)backgroundTapped:(UITapGestureRecognizer *)__unused recognizer
 {
-    return;
-    
-    if (recognizer.state == UIGestureRecognizerStateRecognized)
-    {
-        [_countryCodeField resignFirstResponder];
-        [_phoneField resignFirstResponder];
-    }
 }
 
 - (void)inputBackgroundTapped:(UITapGestureRecognizer *)recognizer
@@ -987,53 +953,93 @@
                 NSTimeInterval phoneTimeout = (((SGraphObjectNode *)result).object)[@"callTimeout"] == nil ? 60 : [(((SGraphObjectNode *)result).object)[@"callTimeout"] intValue];
                 
                 bool messageSentToTelegram = [(((SGraphObjectNode *)result).object)[@"messageSentToTelegram"] intValue];
+                bool messageSentViaPhone = [(((SGraphObjectNode *)result).object)[@"messageSentViaPhone"] intValue];
                 
-                [TGAppDelegateInstance saveLoginStateWithDate:(int)CFAbsoluteTimeGetCurrent() phoneNumber:[[NSString alloc] initWithFormat:@"%@|%@", _countryCodeField.text, _phoneField.text] phoneCode:nil phoneCodeHash:phoneCodeHash codeSentToTelegram:messageSentToTelegram firstName:nil lastName:nil photo:nil];
+                TGTermsOfService *terms = (((SGraphObjectNode *)result).object)[@"termsOfService"];
                 
-                TGLoginCodeController *loginCodeController = [[TGLoginCodeController alloc] initWithShowKeyboard:(_countryCodeField.isFirstResponder || _phoneField.isFirstResponder) phoneNumber:_phoneNumber phoneCodeHash:phoneCodeHash phoneTimeout:phoneTimeout messageSentToTelegram:messageSentToTelegram];
+                [TGAppDelegateInstance saveLoginStateWithDate:(int)CFAbsoluteTimeGetCurrent() phoneNumber:[[NSString alloc] initWithFormat:@"%@|%@", _countryCodeField.text, _phoneField.text] phoneCode:nil phoneCodeHash:phoneCodeHash codeSentToTelegram:messageSentToTelegram codeSentViaPhone:messageSentViaPhone firstName:nil lastName:nil photo:nil resetAccountState:nil];
+                
+                TGLoginCodeController *loginCodeController = [[TGLoginCodeController alloc] initWithShowKeyboard:(_countryCodeField.isFirstResponder || _phoneField.isFirstResponder) phoneNumber:_phoneNumber phoneCodeHash:phoneCodeHash phoneTimeout:phoneTimeout messageSentToTelegram:messageSentToTelegram messageSentViaPhone:messageSentViaPhone termsOfService:terms];
                 [self.navigationController pushViewController:loginCodeController animated:true];
             }
             else
             {
                 NSString *errorText = TGLocalized(@"Login.UnknownError");
                 
-                bool okButton = false;
+                NSString *okButton = nil;
                 if (resultCode == TGSendCodeErrorInvalidPhone)
                 {
-                    okButton = true;
                     errorText = TGLocalized(@"Login.InvalidPhoneError");
+                    okButton = TGLocalized(@"Login.PhoneNumberHelp");
                 }
                 else if (resultCode == TGSendCodeErrorFloodWait)
                     errorText = TGLocalized(@"Login.CodeFloodError");
-                else if (resultCode == TGSendCodeErrorNetwork)
+                else if (resultCode == TGSendCodeErrorNetwork) {
                     errorText = TGLocalized(@"Login.NetworkError");
+                    okButton = TGLocalized(@"Settings.Proxy");
+                }
+                else if (resultCode == TGSendCodeErrorPhoneFlood)
+                    errorText = TGLocalized(@"Login.PhoneFloodError");
+                else if (resultCode == TGSendCodeErrorPhoneBanned) {
+                    errorText = TGLocalized(@"Login.PhoneBannedError");
+                    okButton = TGLocalized(@"Login.PhoneNumberHelp");
+                }
                 
                 __weak TGLoginPhoneController *weakSelf = self;
-                [[[TGAlertView alloc] initWithTitle:nil message:errorText cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:okButton ? TGLocalized(@"Login.PhoneNumberHelp") : nil completionBlock:^(bool okButtonPressed)
+                [TGCustomAlertView presentAlertWithTitle:nil message:errorText cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:okButton completionBlock:^(bool okButtonPressed)
                 {
-                    if (okButton && okButtonPressed)
+                    if (okButton != nil && okButtonPressed)
                     {
-                        if ([MFMailComposeViewController canSendMail])
+                        if (resultCode == TGSendCodeErrorNetwork)
                         {
-                            __strong TGLoginPhoneController *strongSelf = weakSelf;
-                            if (strongSelf != nil)
+                            TGProxySetupController *controller = [[TGProxySetupController alloc] initModal:true];
+                            TGNavigationController *navigationController = [TGNavigationController navigationControllerWithRootController:controller];
+                            if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad)
                             {
-                                NSString *phoneFormatted = [TGPhoneUtils formatPhone:_phoneNumber forceInternational:true];
-                                
-                                MFMailComposeViewController *composeController = [[MFMailComposeViewController alloc] init];
-                                composeController.mailComposeDelegate = strongSelf;
-                                [composeController setToRecipients:@[@"login@stel.com"]];
-                                [composeController setSubject:[[NSString alloc] initWithFormat:TGLocalized(@"Login.EmailPhoneSubject"), phoneFormatted]];
-                                [composeController setMessageBody:[[NSString alloc] initWithFormat:TGLocalized(@"Login.EmailPhoneBody"), phoneFormatted] isHTML:false];
-                                [self presentViewController:composeController animated:true completion:nil];
+                                navigationController.presentationStyle = TGNavigationControllerPresentationStyleInFormSheet;
+                                navigationController.modalPresentationStyle = UIModalPresentationFormSheet;
                             }
+                            [self presentViewController:navigationController animated:true completion:nil];
                         }
                         else
                         {
-                            [[[TGAlertView alloc] initWithTitle:nil message:TGLocalized(@"Login.EmailNotConfiguredError") delegate:nil cancelButtonTitle:TGLocalized(@"Common.OK") otherButtonTitles:nil] show];
+                            if ([MFMailComposeViewController canSendMail])
+                            {
+                                __strong TGLoginPhoneController *strongSelf = weakSelf;
+                                if (strongSelf != nil)
+                                {
+                                    NSString *phoneFormatted = [TGPhoneUtils formatPhone:_phoneNumber forceInternational:true];
+                                    
+                                    if (resultCode == TGSendCodeErrorPhoneBanned) {
+                                        MFMailComposeViewController *composeController = [[MFMailComposeViewController alloc] init];
+                                        composeController.mailComposeDelegate = strongSelf;
+                                        [composeController setToRecipients:@[@"login@stel.com"]];
+                                        [composeController setSubject:[[NSString alloc] initWithFormat:TGLocalized(@"Login.BannedPhoneSubject"), phoneFormatted]];
+                                        
+                                        [composeController setMessageBody:[[NSString alloc] initWithFormat:TGLocalized(@"Login.BannedPhoneBody"), phoneFormatted] isHTML:false];
+                                        [self presentViewController:composeController animated:true completion:nil];
+                                    } else {
+                                        MFMailComposeViewController *composeController = [[MFMailComposeViewController alloc] init];
+                                        composeController.mailComposeDelegate = strongSelf;
+                                        [composeController setToRecipients:@[@"login@stel.com"]];
+                                        [composeController setSubject:[[NSString alloc] initWithFormat:TGLocalized(@"Login.EmailPhoneSubject"), phoneFormatted]];
+                                        
+                                        CTCarrier *carrier = [[CTTelephonyNetworkInfo new] subscriberCellularProvider];
+                                        NSString *contryCode = carrier.mobileCountryCode;
+                                        NSString *networkCode = carrier.mobileNetworkCode;
+                                        
+                                        [composeController setMessageBody:[[NSString alloc] initWithFormat:TGLocalized(@"Login.EmailPhoneBody"), phoneFormatted, contryCode ?: @"<>", networkCode ?: @"<>"] isHTML:false];
+                                        [self presentViewController:composeController animated:true completion:nil];
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                [[[TGAlertView alloc] initWithTitle:nil message:TGLocalized(@"Login.EmailNotConfiguredError") delegate:nil cancelButtonTitle:TGLocalized(@"Common.OK") otherButtonTitles:nil] show];
+                            }
                         }
                     }
-                }] show];
+                } disableKeyboardWorkaround:false];
             }
         });
     }
@@ -1055,52 +1061,18 @@
         
         if ([options objectForKey:@"code"] != nil)
         {
-            //[_countryButton setTitleColor:UIColorRGB(0xf0f0f0) forState:UIControlStateNormal];
-            [_countryButton setTitle:[options objectForKey:@"name"] forState:UIControlStateNormal];
             _countryCodeField.text = [NSString stringWithFormat:@"+%d", [[options objectForKey:@"code"] intValue]];
+            
+            [self updateCountry];
             
             [self updatePhoneTextForCountryFieldText:_countryCodeField.text];
         }
     }
 }
 
-- (void)termsOfServiceTapGesture:(UITapGestureRecognizer *)recognizer {
-    if (recognizer.state == UIGestureRecognizerStateEnded) {
-        TGProgressWindow *progressWindow = [[TGProgressWindow alloc] init];
-        [progressWindow showWithDelay:0.1];
-        
-        [[[[TGAccountSignals termsOfService] deliverOn:[SQueue mainQueue]] onDispose:^{
-            TGDispatchOnMainThread(^{
-                [progressWindow dismiss:true];
-            });
-        }] startWithNext:^(NSString *termsText) {
-            if (NSClassFromString(@"UIAlertController") != nil) {
-                UIAlertController *alertVC = [UIAlertController alertControllerWithTitle:@"" message:@"" preferredStyle:UIAlertControllerStyleAlert];
-                
-                NSString *headerText = TGLocalized(@"Login.TermsOfServiceHeader");
-                
-                NSMutableParagraphStyle *style = [[NSMutableParagraphStyle alloc] init];
-                style.lineSpacing = 5.0;
-                style.lineBreakMode = NSLineBreakByWordWrapping;
-                style.alignment = NSTextAlignmentLeft;
-                
-                NSMutableAttributedString *text = [[NSMutableAttributedString alloc] initWithString:[[NSString alloc] initWithFormat:@"%@\n\n%@", headerText, termsText] attributes:@{NSFontAttributeName: TGSystemFontOfSize(13.0f)}];
-                [text addAttribute:NSFontAttributeName value:TGMediumSystemFontOfSize(17.0f) range:NSMakeRange(0, headerText.length)];
-                
-                [text addAttribute:NSParagraphStyleAttributeName value:style range:NSMakeRange(headerText.length + 2, text.length - headerText.length - 2)];
-                
-                [alertVC setValue:text forKey:@"attributedTitle"];
-                
-                UIAlertAction *button = [UIAlertAction actionWithTitle:TGLocalized(@"Common.OK") style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
-                }];
-                
-                [alertVC addAction:button];
-                [self presentViewController:alertVC animated:true completion:nil];
-            } else {
-                [[[TGAlertView alloc] initWithTitle:TGLocalized(@"Login.TermsOfServiceHeader") message:termsText cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:nil] show];
-            }
-        }];
-    }
+- (UIStatusBarStyle)preferredStatusBarStyle
+{
+    return UIStatusBarStyleDefault;
 }
 
 @end

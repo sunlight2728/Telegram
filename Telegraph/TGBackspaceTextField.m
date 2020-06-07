@@ -1,6 +1,6 @@
 #import "TGBackspaceTextField.h"
 
-#import "TGFont.h"
+#import <LegacyComponents/LegacyComponents.h>
 
 @interface TGBackspaceTextField ()
 
@@ -28,9 +28,15 @@
     _customPlaceholderLabel.font = [UIFont systemFontOfSize:15];
     [_customPlaceholderLabel sizeToFit];
     _customPlaceholderLabel.userInteractionEnabled = false;
-    _customPlaceholderLabel.textColor = UIColorRGB(0x8e8e93);
+    _customPlaceholderLabel.textColor = self.placeholderColor;
     
     [self setTextAlignment:NSTextAlignmentLeft];
+}
+
+- (void)setPlaceholderColor:(UIColor *)placeholderColor
+{
+    [super setPlaceholderColor:placeholderColor];
+    _customPlaceholderLabel.textColor = placeholderColor;
 }
 
 - (void)setShowPlaceholder:(bool)showPlaceholder animated:(bool)animated
@@ -68,18 +74,24 @@
 
 - (void)deleteLastBackward
 {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wundeclared-selector"
     id delegate = self.delegate;
     if ([delegate respondsToSelector:@selector(textFieldDidHitLastBackspace)])
         [delegate performSelector:@selector(textFieldDidHitLastBackspace)];
+#pragma clang diagnostic pop
 }
 
 - (BOOL)becomeFirstResponder
 {
     if ([super becomeFirstResponder])
     {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wundeclared-selector"
         id delegate = self.delegate;
         if ([delegate respondsToSelector:@selector(textFieldDidBecomeFirstResponder)])
             [delegate performSelector:@selector(textFieldDidBecomeFirstResponder)];
+#pragma clang diagnostic pop
         return true;
     }
     return false;
@@ -89,9 +101,12 @@
 {
     if ([super resignFirstResponder])
     {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wundeclared-selector"
         id delegate = self.delegate;
         if ([delegate respondsToSelector:@selector(textFieldDidResignFirstResponder)])
             [delegate performSelector:@selector(textFieldDidResignFirstResponder)];
+#pragma clang diagnostic pop
         return true;
     }
     return false;

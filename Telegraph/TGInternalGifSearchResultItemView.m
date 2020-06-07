@@ -1,14 +1,12 @@
 #import "TGInternalGifSearchResultItemView.h"
 
-#import "TGStringUtils.h"
+#import <LegacyComponents/LegacyComponents.h>
 
-#import "TGCheckButtonView.h"
+#import <LegacyComponents/TGCheckButtonView.h>
 
-#import "TGImageView.h"
+#import <LegacyComponents/TGImageView.h>
 
 #import "TGInternalGifSearchResultItem.h"
-
-#import "TGImageInfo.h"
 
 #import "TGSharedFileSignals.h"
 #import "TGSharedPhotoSignals.h"
@@ -70,7 +68,7 @@
     }
     
     if (item.webSearchResult.photo != nil) {
-        [self setImageSignal:[TGSharedPhotoSignals cachedRemoteThumbnail:item.webSearchResult.photo.imageInfo size:CGSizeMake(132.0f, 132.0f) pixelProcessingBlock:nil cacheVariantKey:@"gridView" threadPool:[TGSharedMediaUtils sharedMediaImageProcessingThreadPool] memoryCache:[TGSharedMediaUtils sharedMediaMemoryImageCache] diskCache:[TGSharedMediaUtils sharedMediaTemporaryPersistentCache]]];
+        [self setImageSignal:[TGSharedPhotoSignals cachedRemoteThumbnail:item.webSearchResult.photo.imageInfo size:CGSizeMake(132.0f, 132.0f) pixelProcessingBlock:nil cacheVariantKey:@"gridView" threadPool:[TGSharedMediaUtils sharedMediaImageProcessingThreadPool] memoryCache:[TGSharedMediaUtils sharedMediaMemoryImageCache] diskCache:[TGSharedMediaUtils sharedMediaTemporaryPersistentCache] originInfo:item.webSearchResult.photo.originInfo identifier:item.webSearchResult.photo.imageId]];
     } else {
         CGSize dimensions = CGSizeZero;
         NSString *legacyThumbnailCacheUri = [item.webSearchResult.document.thumbnailInfo closestImageUrlWithSize:CGSizeMake(100.0f, 100.0f) resultingSize:&dimensions pickLargest:true];

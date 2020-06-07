@@ -1,4 +1,4 @@
-#import "TGModernConversationAssociatedInputPanel.h"
+#import <LegacyComponents/TGModernConversationAssociatedInputPanel.h>
 
 @class TGViewController;
 @class TGDocumentMediaAttachment;
@@ -9,7 +9,7 @@
 @property (nonatomic, copy) void (^documentSelected)(TGDocumentMediaAttachment *);
 
 - (NSArray *)documentList;
-- (void)setDocumentList:(NSArray *)documentList;
+- (void)setDocumentList:(NSDictionary *)dictionary;
 - (void)setTargetOffset:(CGFloat)targetOffset;
 
 @end

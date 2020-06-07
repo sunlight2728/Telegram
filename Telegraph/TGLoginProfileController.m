@@ -1,43 +1,43 @@
 #import "TGLoginProfileController.h"
 
-#import "TGToolbarButton.h"
+#import <LegacyComponents/LegacyComponents.h>
 
-#import "TGImageUtils.h"
-
-#import "TGHacks.h"
-#import "TGFont.h"
-
-#import "UIDevice+PlatformInfo.h"
-
-#import "TGImageUtils.h"
+#import <LegacyComponents/UIDevice+PlatformInfo.h>
 
 #import "TGAppDelegate.h"
 
 #import "TGSignUpRequestBuilder.h"
 
 #import "TGTelegraph.h"
-#import "SGraphObjectNode.h"
+#import <LegacyComponents/SGraphObjectNode.h>
 #import "TGDatabase.h"
-
-#import "TGLoginInactiveUserController.h"
 
 #import "TGHighlightableButton.h"
 
-#import "TGRemoteImageView.h"
-
-#import "TGActivityIndicatorView.h"
+#import <LegacyComponents/TGRemoteImageView.h>
 
 #import "TGApplication.h"
 
-#import "TGProgressWindow.h"
+#import <LegacyComponents/TGProgressWindow.h>
 
-#import "TGTextField.h"
+#import <LegacyComponents/TGTextField.h>
 
-#import "TGActionSheet.h"
+#import "TGCustomActionSheet.h"
 
 #import "TGAlertView.h"
 
-#import "TGMediaAvatarMenuMixin.h"
+#import <LegacyComponents/TGMediaAvatarMenuMixin.h>
+#import "TGWebSearchController.h"
+
+#import "TGLegacyComponentsContext.h"
+
+#import "TGPresentation.h"
+
+#import "TGCustomAlertView.h"
+#import "TGTermsOfService.h"
+#import "TGCollectionStaticMultilineTextItemView.h"
+#import "TGModernTextViewModel.h"
+#import "TGReusableLabel.h"
 
 #define TGAvatarActionSheetTag ((int)0xF3AEE8CC)
 #define TGImageSourceActionSheetTag ((int)0x34281CB0)
@@ -53,9 +53,13 @@
     UIView *_firstNameSeparator;
     UIView *_lastNameSeparator;
     
+    UILabel *_termsOfServiceLabel;
+    
     bool _didDisappear;
     
     TGMediaAvatarMenuMixin *_avatarMixin;
+    
+    TGTermsOfService *_termsOfService;
 }
 
 @property (nonatomic) bool showKeyboard;
@@ -90,7 +94,7 @@
 
 @implementation TGLoginProfileController
 
-- (id)initWithShowKeyboard:(bool)showKeyboard phoneNumber:(NSString *)phoneNumber phoneCodeHash:(NSString *)phoneCodeHash phoneCode:(NSString *)phoneCode
+- (id)initWithShowKeyboard:(bool)showKeyboard phoneNumber:(NSString *)phoneNumber phoneCodeHash:(NSString *)phoneCodeHash phoneCode:(NSString *)phoneCode termsOfService:(TGTermsOfService *)termsOfService
 {
     self = [super initWithNibName:nil bundle:nil];
     if (self)
@@ -101,6 +105,8 @@
         _phoneNumber = phoneNumber;
         _phoneCodeHash = phoneCodeHash;
         _phoneCode = phoneCode;
+        
+        _termsOfService = termsOfService;
         
         [self setRightBarButtonItem:[[UIBarButtonItem alloc] initWithTitle:TGLocalized(@"Common.Next") style:UIBarButtonItemStyleDone target:self action:@selector(nextButtonPressed)]];
         
@@ -138,7 +144,7 @@
     _grayBackground.backgroundColor = UIColorRGB(0xf2f2f2);
     [self.view addSubview:_grayBackground];
     
-    _separatorView = [[UIView alloc] initWithFrame:CGRectMake(0.0f, _grayBackground.frame.origin.y + _grayBackground.frame.size.height, screenSize.width, TGIsRetina() ? 0.5f : 1.0f)];
+    _separatorView = [[UIView alloc] initWithFrame:CGRectMake(0.0f, _grayBackground.frame.origin.y + _grayBackground.frame.size.height, screenSize.width, TGScreenPixel)];
     _separatorView.backgroundColor = TGSeparatorColor();
     [self.view addSubview:_separatorView];
     
@@ -202,11 +208,11 @@
     [_addPhotoButton addSubview:addPhotoLabelFirst];
     [_addPhotoButton addSubview:addPhotoLabelSecond];
     
-    _firstNameSeparator = [[UIView alloc] initWithFrame:CGRectMake(134.0f, _separatorView.frame.origin.y + 64.0f, screenSize.width - 134.0f, TGIsRetina() ? 0.5f : 1.0f)];
+    _firstNameSeparator = [[UIView alloc] initWithFrame:CGRectMake(134.0f, _separatorView.frame.origin.y + 64.0f, screenSize.width - 134.0f, TGScreenPixel)];
     _firstNameSeparator.backgroundColor = TGSeparatorColor();
     [self.view addSubview:_firstNameSeparator];
     
-    _lastNameSeparator = [[UIView alloc] initWithFrame:CGRectMake(134.0f, _separatorView.frame.origin.y + 121.0f, screenSize.width - 134.0f, TGIsRetina() ? 0.5f : 1.0f)];
+    _lastNameSeparator = [[UIView alloc] initWithFrame:CGRectMake(134.0f, _separatorView.frame.origin.y + 121.0f, screenSize.width - 134.0f, TGScreenPixel)];
     _lastNameSeparator.backgroundColor = TGSeparatorColor();
     [self.view addSubview:_lastNameSeparator];
     
@@ -248,10 +254,94 @@
     _noticeLabel.numberOfLines = 0;
     CGSize noticeSize = [_noticeLabel sizeThatFits:CGSizeMake(200.0f, CGFLOAT_MAX)];
     _noticeLabel.frame = CGRectMake(CGFloor((screenSize.width - noticeSize.width) / 2.0f), [TGViewController isWidescreen] ? 274.0f : 218.0f, noticeSize.width, noticeSize.height);
-    _noticeLabel.alpha = [TGViewController isWidescreen] ? 1.0f : 0.0f;
+    _noticeLabel.alpha = (_termsOfService == nil && [TGViewController isWidescreen]) || (_termsOfService != nil && [TGViewController hasLargeScreen]) ? 1.0f : 0.0f;
     [self.view addSubview:_noticeLabel];
     
+    if (_termsOfService != nil && (int)TGScreenSize().height != 480)
+    {
+        _termsOfServiceLabel = [[UILabel alloc] init];
+        _termsOfServiceLabel.font = TGSystemFontOfSize(TGIsPad() || [TGViewController hasLargeScreen] ? 16.0f : 14.0f);
+        _termsOfServiceLabel.textColor = [UIColor blackColor];
+        [_termsOfServiceLabel addGestureRecognizer:[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(termsOfServiceTapGesture:)]];
+        _termsOfServiceLabel.userInteractionEnabled = true;
+        
+        NSMutableString *rawTermsOfServiceString = [[NSMutableString alloc] initWithString:TGLocalized(@"Login.TermsOfServiceLabel")];
+        NSMutableAttributedString *termsOfServiceString = nil;
+        {
+            NSRange extractedRange = NSMakeRange(NSNotFound, 0);
+            
+            NSRange linkRange = [rawTermsOfServiceString rangeOfString:@"["];
+            if (linkRange.location != NSNotFound) {
+                [rawTermsOfServiceString replaceCharactersInRange:linkRange withString:@""];
+                
+                NSRange linkEndRange = [rawTermsOfServiceString rangeOfString:@"]"];
+                if (linkEndRange.location != NSNotFound) {
+                    [rawTermsOfServiceString replaceCharactersInRange:linkEndRange withString:@""];
+                    
+                    extractedRange = NSMakeRange(linkRange.location, linkEndRange.location - linkRange.location);
+                }
+            }
+            
+            termsOfServiceString = [[NSMutableAttributedString alloc] initWithString:rawTermsOfServiceString attributes:@{NSFontAttributeName: _termsOfServiceLabel.font}];
+            if (extractedRange.location != NSNotFound) {
+                [termsOfServiceString addAttribute:NSForegroundColorAttributeName value:TGAccentColor() range:extractedRange];
+            }
+        }
+        
+        _termsOfServiceLabel.attributedText = termsOfServiceString;
+        _termsOfServiceLabel.backgroundColor = [UIColor clearColor];
+        _termsOfServiceLabel.lineBreakMode = NSLineBreakByWordWrapping;
+        _termsOfServiceLabel.textAlignment = NSTextAlignmentCenter;
+        _termsOfServiceLabel.contentMode = UIViewContentModeCenter;
+        _termsOfServiceLabel.numberOfLines = 0;
+        CGSize termsOfServiceSize = [_termsOfServiceLabel sizeThatFits:CGSizeMake(278.0f, CGFLOAT_MAX)];
+        _termsOfServiceLabel.frame = CGRectMake(CGFloor((screenSize.width - termsOfServiceSize.width) / 2.0f), [TGViewController isWidescreen] ? 274.0f : 214.0f, termsOfServiceSize.width, termsOfServiceSize.height);
+        [self.view addSubview:_termsOfServiceLabel];
+    }
+    
     [self updateInterface:self.interfaceOrientation];
+}
+
+- (void)termsOfServiceTapGesture:(UITapGestureRecognizer *)recognizer
+{
+    if (recognizer.state == UIGestureRecognizerStateEnded) {
+        [self showTermsOfServiceWithCompletion:nil];
+    }
+}
+
+- (void)showTermsOfServiceWithCompletion:(void (^)(bool accepted))completion {
+    TGCollectionStaticMultilineTextItemViewTextView *textView = [[TGCollectionStaticMultilineTextItemViewTextView alloc] init];
+    textView.userInteractionEnabled = true;
+    
+    textView.followLink = ^(NSString *url)
+    {
+//        __strong TGLoginCodeController *strongSelf = weakSelf;
+//        if (strongSelf != nil) {
+//            [strongSelf->_alertView dismiss:true fromDim:true animated:true];
+//            strongSelf->_restoreTermsAlert = true;
+//        }
+        [TGAppDelegateInstance handleOpenInstantView:url disableActions:true];
+    };
+    
+    TGModernTextViewModel *textModel = [[TGModernTextViewModel alloc] initWithText:_termsOfService.text font:TGCoreTextSystemFontOfSize(13.0f)];
+    textModel.textColor = [UIColor blackColor];
+    textModel.linkColor = TGAccentColor();
+    textModel.textCheckingResults = [TGMessage textCheckingResultsForText:_termsOfService.text highlightMentionsAndTags:true highlightCommands:false entities:_termsOfService.entities];
+    textModel.layoutFlags = TGReusableLabelLayoutMultiline | TGReusableLabelLayoutHighlightLinks;
+    
+    [textModel layoutForContainerSize:CGSizeMake(270.0f - 36.0f, CGFLOAT_MAX)];
+    [textView setTextModel:textModel];
+    textView.frame = CGRectMake(10.0f, -10.0f, textModel.frame.size.width, textModel.frame.size.height);
+    
+    UIView *wrapperView = [[UIView alloc] initWithFrame:CGRectMake(0.0f, 0.0f, textView.frame.size.width + 20.0f, textView.frame.size.height - 10.0f)];
+    [wrapperView addSubview:textView];
+    
+    TGCustomAlertView *alertView = [TGCustomAlertView presentAlertWithTitle:TGLocalized(@"Login.TermsOfServiceHeader") customView:wrapperView cancelButtonTitle:TGLocalized(@"Common.OK") okButtonTitle:nil completionBlock:^(__unused bool okButtonPressed)
+    {
+        if (completion != nil)
+            completion(okButtonPressed);
+    } disableKeyboardWorkaround:false];
+    alertView.noActionOnDimTap = true;
 }
 
 - (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)interfaceOrientation
@@ -372,16 +462,35 @@
     
     _avatarView.frame = CGRectMake(10 + TGRetinaPixel + sideInset, _separatorView.frame.origin.y + 11, 110, 110);
     
-    _firstNameSeparator.frame = CGRectMake(134.0f + sideInset, _separatorView.frame.origin.y + 64.0f, screenSize.width - 134.0f - sideInset * 2.0f, TGIsRetina() ? 0.5f : 1.0f);
+    _firstNameSeparator.frame = CGRectMake(134.0f + sideInset, _separatorView.frame.origin.y + 64.0f, screenSize.width - 134.0f - sideInset * 2.0f, TGScreenPixel);
     
-    _lastNameSeparator.frame = CGRectMake(134.0f + sideInset, _separatorView.frame.origin.y + 121.0f, screenSize.width - 134.0f - sideInset * 2.0f, TGIsRetina() ? 0.5f : 1.0f);
+    _lastNameSeparator.frame = CGRectMake(134.0f + sideInset, _separatorView.frame.origin.y + 121.0f, screenSize.width - 134.0f - sideInset * 2.0f, TGScreenPixel);
     
     _firstNameField.frame = CGRectMake(135.0f + sideInset, _firstNameSeparator.frame.origin.y - 56.0f, screenSize.width - 134.0f - 8.0f - sideInset * 2.0f, 56.0f);
     
     _lastNameField.frame = CGRectMake(135.0f + sideInset, _lastNameSeparator.frame.origin.y - 56.0f, screenSize.width - 134.0f - 8.0f - sideInset * 2.0f, 56.0f);
     
-    CGSize noticeSize = [_noticeLabel sizeThatFits:CGSizeMake(200.0f, CGFLOAT_MAX)];
+    CGSize noticeSize = [_noticeLabel sizeThatFits:CGSizeMake(screenSize.width - 48.0f, CGFLOAT_MAX)];
     _noticeLabel.frame = CGRectMake(CGFloor((screenSize.width - noticeSize.width) / 2.0f), noticeLabelOffset, noticeSize.width, noticeSize.height);
+    
+    CGFloat keyboardHeight = [TGHacks keyboardHeightForOrientation:self.interfaceOrientation];
+//    CGFloat longSize = MAX(screenSize.width, screenSize.height);
+//    if (TGIsPad()) {
+//        if (fabs(longSize - 1024.0f) < FLT_EPSILON)
+//            keyboardHeight = (screenSize.width > screenSize.height) ? 370.0f : 300.0f;
+//        else
+//            keyboardHeight = (screenSize.width > screenSize.height) ? 435.0f : 350.0f;
+//    }
+//    else if (fabs(longSize - 812.0f) < FLT_EPSILON)
+//        keyboardHeight = 291.0f;
+    
+    if (!_termsOfServiceLabel.hidden) {
+        CGSize termsOfServiceSize = [_termsOfServiceLabel sizeThatFits:CGSizeMake(278.0f, CGFLOAT_MAX)];
+        
+        CGFloat termsOfServiceOffset = 50.0f;
+        
+        _termsOfServiceLabel.frame = CGRectMake(CGFloor((screenSize.width - termsOfServiceSize.width) / 2.0f), screenSize.height - termsOfServiceSize.height - termsOfServiceOffset - keyboardHeight, termsOfServiceSize.width, termsOfServiceSize.height);
+    }
 }
 
 #pragma mark -
@@ -542,7 +651,7 @@
 - (void)addPhotoButtonPressed
 {
     __weak TGLoginProfileController *weakSelf = self;
-    _avatarMixin = [[TGMediaAvatarMenuMixin alloc] initWithParentController:self hasDeleteButton:false personalPhoto:true];
+    _avatarMixin = [[TGMediaAvatarMenuMixin alloc] initWithContext:[TGLegacyComponentsContext shared] parentController:self hasDeleteButton:false personalPhoto:true saveEditedPhotos:false saveCapturedMedia:false];
     _avatarMixin.didFinishWithImage = ^(UIImage *image)
     {
         __strong TGLoginProfileController *strongSelf = weakSelf;
@@ -560,6 +669,32 @@
         
         strongSelf->_avatarMixin = nil;
     };
+    _avatarMixin.requestSearchController = ^TGViewController *(TGMediaAssetsController *assetsController) {
+        TGWebSearchController *searchController = [[TGWebSearchController alloc] initWithContext:[TGLegacyComponentsContext shared] forAvatarSelection:true embedded:true allowGrouping:false];
+        searchController.presentation = [TGPresentation defaultPresentation];
+        
+        __weak TGMediaAssetsController *weakAssetsController = assetsController;
+        __weak TGWebSearchController *weakController = searchController;
+        searchController.avatarCompletionBlock = ^(UIImage *image) {
+            __strong TGMediaAssetsController *strongAssetsController = weakAssetsController;
+            if (strongAssetsController.avatarCompletionBlock == nil)
+                return;
+            
+            strongAssetsController.avatarCompletionBlock(image);
+        };
+        searchController.dismiss = ^
+        {
+            __strong TGWebSearchController *strongController = weakController;
+            if (strongController == nil)
+                return;
+            
+            [strongController dismissEmbeddedAnimated:true];
+        };
+        searchController.parentNavigationController = assetsController;
+        [searchController presentEmbeddedInController:assetsController animated:true];
+        
+        return searchController;
+    };
     [_avatarMixin present];
 }
 
@@ -570,7 +705,7 @@
     [actions addObject:[[TGActionSheetAction alloc] initWithTitle:TGLocalized(@"Login.InfoDeletePhoto") action:@"delete" type:TGActionSheetActionTypeDestructive]];
     [actions addObject:[[TGActionSheetAction alloc] initWithTitle:TGLocalized(@"Common.Cancel") action:@"cancel" type:TGActionSheetActionTypeCancel]];
     
-    TGActionSheet *actionSheet = [[TGActionSheet alloc] initWithTitle:nil actions:actions actionBlock:^(TGLoginProfileController *controller, NSString *action)
+    TGCustomActionSheet *actionSheet = [[TGCustomActionSheet alloc] initWithTitle:nil actions:actions actionBlock:^(TGLoginProfileController *controller, NSString *action)
     {
         if ([action isEqualToString:@"delete"])
             [controller _deletePhoto];
@@ -648,7 +783,7 @@
             NSError *error = nil;
             [fileManager createDirectoryAtPath:tmpImagesPath withIntermediateDirectories:true attributes:nil error:&error];
             NSString *absoluteFilePath = [tmpImagesPath stringByAppendingPathComponent:[NSString stringWithFormat:@"%@.bin", filePath]];
-            [_dataForPhotoUpload writeToFile:absoluteFilePath atomically:false];
+            [_dataForPhotoUpload writeToFile:absoluteFilePath atomically:true];
             
             [options setObject:filePath forKey:@"originalFileUrl"];
             [options setObject:_imageForPhotoUpload forKey:@"currentPhoto"];
@@ -699,38 +834,16 @@
     {
         dispatch_async(dispatch_get_main_queue(), ^
         {
-            if ([((SGraphObjectNode *)resource).object boolValue])
-                [TGAppDelegateInstance presentMainController];
-            else
-            {
-                if (![[self.navigationController.viewControllers lastObject] isKindOfClass:[TGLoginInactiveUserController class]])
-                {
-                    TGLoginInactiveUserController *inactiveUserController = [[TGLoginInactiveUserController alloc] init];
-                    [self.navigationController pushViewController:inactiveUserController animated:true];
-                }
-            }
+            [TGAppDelegateInstance presentMainController];
         });
     }
     else if ([path isEqualToString:@"/tg/contactListSynchronizationState"])
     {
         if (![((SGraphObjectNode *)resource).object boolValue])
         {
-            bool activated = [TGDatabaseInstance() haveRemoteContactUids];
-            
             dispatch_async(dispatch_get_main_queue(), ^
             {
-                if (activated)
-                    [TGAppDelegateInstance presentMainController];
-                else
-                {
-                    if (![[self.navigationController.viewControllers lastObject] isKindOfClass:[TGLoginInactiveUserController class]])
-                    {
-                        TGLoginInactiveUserController *inactiveUserController = [[TGLoginInactiveUserController alloc] init];
-                        [self.navigationController pushViewController:inactiveUserController animated:true];
-                    }
-                    else
-                        self.inProgress = false;
-                }
+                [TGAppDelegateInstance presentMainController];
             });
         }
     }
@@ -786,6 +899,11 @@
         }
 #endif
     }
+}
+
+- (UIStatusBarStyle)preferredStatusBarStyle
+{
+    return UIStatusBarStyleDefault;
 }
 
 @end

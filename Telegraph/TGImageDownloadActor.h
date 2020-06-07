@@ -6,11 +6,11 @@
  * Copyright Peter Iakovlev, 2013.
  */
 
-#import "ASActor.h"
+#import <LegacyComponents/ASActor.h>
 
-#import "ActionStage.h"
+#import <LegacyComponents/LegacyComponents.h>
 
-#import "TGMediaAttachment.h"
+#import <LegacyComponents/ActionStage.h>
 
 @interface TGImageDownloadActor : ASActor <ASWatcher>
 @property (nonatomic, strong) ASHandle *actionHandle;
@@ -22,6 +22,7 @@
 + (void)addUrlRewrite:(NSString *)currentUrl newUrl:(NSString *)newUrl;
 
 + (NSDictionary *)serverMediaDataForAssetUrl:(NSString *)assetUrl;
-+ (void)addServerMediaSataForAssetUrl:(NSString *)assetUrl attachment:(TGMediaAttachment *)attachment;
++ (void)addServerMediaDataForAssetUrl:(NSString *)assetUrl attachment:(TGMediaAttachment *)attachment;
++ (void)clearServerMediaSataForAssetUrl:(NSString *)assetUrl;
 
 @end

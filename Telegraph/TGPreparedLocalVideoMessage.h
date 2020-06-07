@@ -22,17 +22,13 @@
 @property (nonatomic) CGSize thumbnailSize;
 @property (nonatomic, strong) NSString *assetUrl;
 
-@property (nonatomic, strong) NSString *caption;
-
 @property (nonatomic, strong) TGLiveUploadActorData *liveData;
-
-@property (nonatomic, strong) TGMessage *replyMessage;
 
 - (NSString *)localVideoPath;
 
-+ (instancetype)messageWithTempVideoPath:(NSString *)tempVideoPath videoSize:(CGSize)videoSize size:(int32_t)size duration:(NSTimeInterval)duration previewImage:(UIImage *)previewImage thumbnailSize:(CGSize)thumbnailSize assetUrl:(NSString *)assetUrl caption:(NSString *)caption replyMessage:(TGMessage *)replyMessage;
-+ (instancetype)messageWithLocalVideoId:(int64_t)localVideoId videoSize:(CGSize)videoSize size:(int32_t)size duration:(NSTimeInterval)duration localThumbnailDataPath:(NSString *)localThumbnailDataPath thumbnailSize:(CGSize)thumbnailSize assetUrl:(NSString *)assetUrl caption:(NSString *)caption replyMessage:(TGMessage *)replyMessage;
-+ (instancetype)messageByCopyingDataFromMedia:(TGVideoMediaAttachment *)videoAttachment replyMessage:(TGMessage *)replyMessage;
++ (instancetype)messageWithTempVideoPath:(NSString *)tempVideoPath videoSize:(CGSize)videoSize size:(int32_t)size duration:(NSTimeInterval)duration previewImage:(UIImage *)previewImage thumbnailSize:(CGSize)thumbnailSize assetUrl:(NSString *)assetUrl text:(NSString *)text entities:(NSArray *)entities replyMessage:(TGMessage *)replyMessage replyMarkup:(TGReplyMarkupAttachment *)replyMarkup;;
++ (instancetype)messageWithLocalVideoId:(int64_t)localVideoId videoSize:(CGSize)videoSize size:(int32_t)size duration:(NSTimeInterval)duration localThumbnailDataPath:(NSString *)localThumbnailDataPath thumbnailSize:(CGSize)thumbnailSize assetUrl:(NSString *)assetUrl text:(NSString *)text entities:(NSArray *)entities replyMessage:(TGMessage *)replyMessage replyMarkup:(TGReplyMarkupAttachment *)replyMarkup;;
++ (instancetype)messageByCopyingDataFromMedia:(TGVideoMediaAttachment *)videoAttachment replyMessage:(TGMessage *)replyMessage replyMarkup:(TGReplyMarkupAttachment *)replyMarkup;;
 + (instancetype)messageByCopyingDataFromMessage:(TGPreparedLocalVideoMessage *)source;
 
 @end

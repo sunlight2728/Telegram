@@ -2,17 +2,35 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>com.apple.developer.associated-domains</key>
+	<key>com.apple.developer.icloud-services</key>
 	<array>
-		<string>applinks:telegram.me</string>
+		<string>CloudDocuments</string>
+		<string>CloudKit</string>
 	</array>
 	<key>com.apple.developer.icloud-container-identifiers</key>
 	<array>
 		<string>iCloud.$(CFBundleIdentifier)</string>
 	</array>
-	<key>com.apple.developer.icloud-services</key>
+	<key>aps-environment</key>
+	<string>production</string>
+	<key>com.apple.developer.associated-domains</key>
 	<array>
-		<string>CloudDocuments</string>
+		<string>applinks:telegram.me</string>
+		<string>applinks:t.me</string>
+	</array>
+	<key>com.apple.developer.siri</key>
+	<true/>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.ph.telegra.Telegraph</string>
+	</array>
+	<key>com.apple.developer.in-app-payments</key>
+	<array>
+		<string>merchant.ph.telegra.Telegraph</string>
+		<string>merchant.yandex.ph.telegra.Telegraph</string>
+		<string>merchant.sberbank.ph.telegra.Telegraph</string>
+		<string>merchant.sberbank.test.ph.telegra.Telegraph</string>
+		<string>merchant.privatbank.test.telergramios</string>
 	</array>
 	<key>com.apple.developer.ubiquity-container-identifiers</key>
 	<array>
@@ -20,9 +38,5 @@
 	</array>
 	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
 	<string>$(TeamIdentifierPrefix)$(CFBundleIdentifier)</string>
-	<key>com.apple.security.application-groups</key>
-	<array>
-		<string>group.org.telegram.TelegramEnterprise</string>
-	</array>
 </dict>
 </plist>

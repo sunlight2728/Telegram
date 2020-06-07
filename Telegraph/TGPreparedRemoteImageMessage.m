@@ -1,20 +1,12 @@
-/*
- * This is the source code of Telegram for iOS v. 1.1
- * It is licensed under GNU GPL v. 2 or later.
- * You should have received a copy of the license in this archive (see LICENSE).
- *
- * Copyright Peter Iakovlev, 2013.
- */
-
 #import "TGPreparedRemoteImageMessage.h"
 
-#import "TGMessage.h"
+#import <LegacyComponents/LegacyComponents.h>
 
 #import "TGAppDelegate.h"
 
 @implementation TGPreparedRemoteImageMessage
 
-- (instancetype)initWithImageId:(int64_t)imageId accessHash:(int64_t)accessHash imageInfo:(TGImageInfo *)imageInfo caption:(NSString *)caption replyMessage:(TGMessage *)replyMessage botContextResult:(TGBotContextResultAttachment *)botContextResult
+- (instancetype)initWithImageId:(int64_t)imageId accessHash:(int64_t)accessHash imageInfo:(TGImageInfo *)imageInfo text:(NSString *)text entities:(NSArray *)entities replyMessage:(TGMessage *)replyMessage botContextResult:(TGBotContextResultAttachment *)botContextResult replyMarkup:(TGReplyMarkupAttachment *)replyMarkup
 {
     self = [super init];
     if (self != nil)
@@ -28,9 +20,11 @@
         _imageId = imageId;
         _accessHash = accessHash;
         _imageInfo = imageInfo;
-        _caption = caption;
+        self.text = text;
+        self.entities = entities;
         self.replyMessage = replyMessage;
         self.botContextResult = botContextResult;
+        self.replyMarkup = replyMarkup;
     }
     return self;
 }
@@ -42,6 +36,7 @@
     message.date = self.date;
     message.isBroadcast = self.isBroadcast;
     message.messageLifetime = self.messageLifetime;
+    message.text = self.text;
     
     NSMutableArray *attachments = [[NSMutableArray alloc] init];
     
@@ -49,7 +44,6 @@
     imageAttachment.imageId = _imageId;
     imageAttachment.accessHash = _accessHash;
     imageAttachment.imageInfo = _imageInfo;
-    imageAttachment.caption = _caption;
     [attachments addObject:imageAttachment];
     
     if (self.replyMessage != nil)
@@ -66,7 +60,12 @@
         [attachments addObject:[[TGViaUserAttachment alloc] initWithUserId:self.botContextResult.userId username:nil]];
     }
     
+    if (self.replyMarkup != nil) {
+        [attachments addObject:self.replyMarkup];
+    }
+    
     message.mediaAttachments = attachments;
+    message.entities = self.entities;
     
     return message;
 }

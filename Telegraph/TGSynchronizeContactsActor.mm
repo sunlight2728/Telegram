@@ -1,17 +1,15 @@
 #import "TGSynchronizeContactsActor.h"
 
-#import "ActionStage.h"
-#import "SGraphObjectNode.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/ActionStage.h>
+#import <LegacyComponents/SGraphObjectNode.h>
 
 #import "TGTelegraph.h"
-#import "TGPhoneUtils.h"
 
 #import <AddressBook/AddressBook.h>
 
-#import "NSObject+TGLock.h"
-
 #import "TGDatabase.h"
-#import "TGStringUtils.h"
 
 #import "TGContactListRequestBuilder.h"
 #import "TGUserDataRequestBuilder.h"
@@ -170,6 +168,19 @@ typedef void (^TGAddressBookCreated)(ABAddressBookRef addressBook, bool denied);
 @property (nonatomic) bool firstTimeSync;
 
 @end
+
+static int32_t hashForContactIds(int32_t nonRegisteredCount, std::vector<int32_t> const &contactIds) {
+    uint32_t acc = 0;
+    
+    uint32_t num = (uint32_t)nonRegisteredCount;
+    acc = (acc * 20261) + num;
+    
+    for (auto it : contactIds) {
+        uint32_t uid = (uint32_t)it;
+        acc = (acc * 20261) + uid;
+    }
+    return acc % 0x7FFFFFFF;
+}
 
 @implementation TGSynchronizeContactsManager
 
@@ -648,9 +659,10 @@ static void CreateAddressBookAsync(TGAddressBookCreated createdBlock)
         NSArray *phones = [options objectForKey:@"phones"];
         int addingUid = [[options objectForKey:@"addingUid"] intValue];
         bool removedMainPhone = [[options objectForKey:@"removedMainPhone"] boolValue];
+        NSString *vcard = [options objectForKey:@"vcard"];
         
         if (nativeId != 0 && phones != nil)
-            [self processChangeContactPhones:uid nativeId:nativeId changePhones:phones addingUid:addingUid removedMainPhone:removedMainPhone];
+            [self processChangeContactPhones:uid nativeId:nativeId changePhones:phones addingUid:addingUid removedMainPhone:removedMainPhone vcard:vcard];
         else
             [self completeAction:false];
         
@@ -659,9 +671,10 @@ static void CreateAddressBookAsync(TGAddressBookCreated createdBlock)
     else if ([self.path hasSuffix:@"addContactLocal)"])
     {
         TGPhonebookContact *contact = [options objectForKey:@"contact"];
+        NSString *vcard = [options objectForKey:@"vcard"];
         if (contact != nil)
         {
-            [self processCreateContact:contact uid:[[options objectForKey:@"uid"] intValue]];
+            [self processCreateContact:contact uid:[[options objectForKey:@"uid"] intValue] vcard:vcard];
         }
         else
             [self completeAction:false];
@@ -669,49 +682,41 @@ static void CreateAddressBookAsync(TGAddressBookCreated createdBlock)
     else if ([self.path hasSuffix:@"loadRemote)"])
     {
         std::vector<int> contactIds;
+        NSData *countData = [TGDatabaseInstance() customProperty:@"contactRemoteNonRegisteredCount"];
+        int32_t count = 0;
+        if (countData.length == 4) {
+            [countData getBytes:&count length:4];
+        }
+        
         [TGDatabaseInstance() loadRemoteContactUids:contactIds];
         
-        NSString *hashString = @"";
-        if (!contactIds.empty())
-        {
-            std::sort(contactIds.begin(), contactIds.end());
-            
-            NSMutableString *stringToHash = [[NSMutableString alloc] init];
-            for (std::vector<int>::iterator it = contactIds.begin(); it != contactIds.end(); it++)
-            {
-                if (stringToHash.length != 0)
-                    [stringToHash appendString:@","];
-                [stringToHash appendFormat:@"%d", *it];
-            }
-        
-            NSData *dataToHash = [stringToHash dataUsingEncoding:NSUTF8StringEncoding];
-        
-            unsigned char md5Buffer[CC_MD5_DIGEST_LENGTH];
-            CC_MD5(dataToHash.bytes, (CC_LONG)dataToHash.length, md5Buffer);
-        
-            //TGLog(@"%@", stringToHash);
-        
-            hashString = [[NSString alloc] initWithFormat:@"%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x", md5Buffer[0], md5Buffer[1], md5Buffer[2], md5Buffer[3], md5Buffer[4], md5Buffer[5], md5Buffer[6], md5Buffer[7], md5Buffer[8], md5Buffer[9], md5Buffer[10], md5Buffer[11], md5Buffer[12], md5Buffer[13], md5Buffer[14], md5Buffer[15]];
-            //TGLog(@"%@", hashString);
-        }
+        std::sort(contactIds.begin(), contactIds.end());
     
         _hadRemoteContacts = !contactIds.empty();
-        self.cancelToken = [TGTelegraphInstance doRequestContactList:hashString actor:self];
+        self.cancelToken = [TGTelegraphInstance doRequestContactList:hashForContactIds(count, contactIds) actor:self];
         
         return;
     }
     
     bool firstTimeSync = [[TGSynchronizeContactsManager instance] firstTimeSync];
+    if ([options[@"forceFirstTime"] boolValue]) {
+        [TGDatabaseInstance() replaceContactBindings:nil];
+        [TGDatabaseInstance() setCustomProperty:@"exportState" value:nil];
+        [TGDatabaseInstance() replaceRemoteContactUids:@[]];
+        firstTimeSync = true;
+    }
+
     [[TGSynchronizeContactsManager instance] setFirstTimeSync:false];
     
     [[TGSynchronizeContactsManager instance] setContactsSynchronizationStatus:true];
     
     CreateAddressBookAsync(^(ABAddressBookRef addressBook, bool denied)
     {
-        if (addressBook == NULL || denied)
+        bool inhibit = TGAppDelegateInstance.contactsInhibitSync;
+        bool failed = addressBook == NULL || denied;
+        if (failed)
         {
             [[TGSynchronizeContactsManager instance] addressBookChangeCommitted];
-            
             [TGDatabaseInstance() replaceContactBindings:nil];
             
             [ActionStageInstance() dispatchOnStageQueue:^
@@ -831,6 +836,16 @@ static void CreateAddressBookAsync(TGAddressBookCreated createdBlock)
         
         std::map<int, int> newExportIdToPhoneId;
         
+        NSArray *users = [TGDatabaseInstance() loadContactUsers];
+        std::map<int, TGUser *> usersMap;
+        for (TGUser *user in users)
+        {
+            if (user.contactId != 0)
+                usersMap.insert(std::pair<int, TGUser *>(user.contactId, user));
+        }
+        
+        std::set<int> explicitExport;
+        
         for (CFIndex i = 0; i < count; i++)
         {
             ABRecordRef person = CFArrayGetValueAtIndex(people, i);
@@ -910,6 +925,9 @@ static void CreateAddressBookAsync(TGAddressBookCreated createdBlock)
                 [newExportState appendBytes:&exportId length:4];
                 
                 newExportIdToPhoneId.insert(std::pair<int, int>(exportId, phoneId));
+                
+                if (usersMap.find(phoneId) == usersMap.end())
+                    explicitExport.insert(phoneId);
                 
                 TGContactBinding *binding = [[TGContactBinding alloc] init];
                 binding.phoneId = phoneId;
@@ -1058,23 +1076,44 @@ static void CreateAddressBookAsync(TGAddressBookCreated createdBlock)
                     lastExportState.insert(exportId);
             }
         }
-        
+    
         NSMutableArray *currentExportActions = nil;
         
         for (std::map<int, int>::iterator it = newExportIdToPhoneId.begin(); it != newExportIdToPhoneId.end(); it++)
         {
             if (lastExportState.find(it->first) == lastExportState.end())
             {
+                TGLog(@"add contact export action id (%d)", it->second);
                 if (currentExportActions == nil)
                     currentExportActions = [[NSMutableArray alloc] init];
                 [currentExportActions addObject:[[TGExportContactFutureAction alloc] initWithContactId:it->second]];
+                
+                explicitExport.erase(it->second);
             }
         }
         
-        if (currentExportActions != nil && currentExportActions.count != 0)
-            [TGDatabaseInstance() storeFutureActions:currentExportActions];
+        NSData *completedExplicitExport = [TGDatabaseInstance() customProperty:@"explicitExport"];
+        if (!inhibit && completedExplicitExport == nil)
+        {
+            if (currentExportActions == nil)
+                currentExportActions = [[NSMutableArray alloc] init];
+            
+            for (std::set<int>::iterator it = explicitExport.begin(); it != explicitExport.end(); it++)
+            {
+                [currentExportActions addObject:[[TGExportContactFutureAction alloc] initWithContactId:*it]];
+            }
+            
+            bool flag = true;
+            [TGDatabaseInstance() setCustomProperty:@"explicitExport" value:[NSData dataWithBytes:&flag length:sizeof(bool)]];
+        }
         
-        [TGDatabaseInstance() setCustomProperty:@"exportState" value:newExportState];
+        if (!inhibit)
+        {
+            if (currentExportActions != nil && currentExportActions.count != 0)
+                [TGDatabaseInstance() storeFutureActions:currentExportActions];
+        
+            [TGDatabaseInstance() setCustomProperty:@"exportState" value:newExportState];
+        }
         
         [TGDatabaseInstance() replaceContactBindings:newBindings];
         [TGDatabaseInstance() replacePhonebookContacts:newPhonebookContacts];
@@ -1183,8 +1222,7 @@ static void CreateAddressBookAsync(TGAddressBookCreated createdBlock)
             
             return;
         }
-        else
-        {
+        else {
             self.cancelToken = [TGTelegraphInstance doExportContacts:contactsToExport requestBuilder:self];
         }
     }
@@ -1203,7 +1241,7 @@ static void CreateAddressBookAsync(TGAddressBookCreated createdBlock)
     [self deleteContactsSuccess:uids];
 }
 
-- (void)exportContactsSuccess:(NSArray *)importedPhonesArray users:(NSArray *)users
+- (void)exportContactsSuccess:(NSArray *)importedPhonesArray popularContacts:(NSArray *)popularContacts users:(NSArray *)users
 {
     [TGDatabaseInstance() removeFutureActionsWithType:TGExportContactFutureActionType uniqueIds:_currentActionIds];
     _currentActionIds = nil;
@@ -1225,6 +1263,8 @@ static void CreateAddressBookAsync(TGAddressBookCreated createdBlock)
         }
     }
     
+    [TGDatabaseInstance() replacePopularInvitees:popularContacts];
+    
     if (addedRemoteUids.count != 0)
     {
         [TGDatabaseInstance() addRemoteContactUids:addedRemoteUids];
@@ -1244,7 +1284,7 @@ static void CreateAddressBookAsync(TGAddressBookCreated createdBlock)
 
 #pragma mark -
 
-- (void)processCreateContact:(TGPhonebookContact *)phonebookContact uid:(int)uid
+- (void)processCreateContact:(TGPhonebookContact *)phonebookContact uid:(int)uid vcard:(NSString *)vcard
 {
     CreateAddressBookAsync(^(ABAddressBookRef addressBook, bool denied)
     {
@@ -1270,15 +1310,90 @@ static void CreateAddressBookAsync(TGAddressBookCreated createdBlock)
         
         ABMutableMultiValueRef multiPhone = ABMultiValueCreateMutable(kABMultiStringPropertyType);
         
+        NSMutableArray *actions = TGAppDelegateInstance.contactsInhibitSync ? [[NSMutableArray alloc] init] : nil;
         for (TGPhoneNumber *phoneNumber in phonebookContact.phoneNumbers)
         {
             NSString *phoneLabel = nativePhoneLabelForString(phoneNumber.label);
             
             ABMultiValueAddValueAndLabel(multiPhone, (__bridge CFTypeRef)phoneNumber.number, (__bridge CFStringRef)phoneLabel, NULL);
+            
+            if (actions != nil)
+                [actions addObject:[[TGExportContactFutureAction alloc] initWithContactId:phoneMatchHash(phoneNumber.number)]];
         }
         
         ABRecordSetValue(newPerson, kABPersonPhoneProperty, multiPhone, nil);
         CFRelease(multiPhone);
+        
+        if (vcard.length > 0)
+        {
+            CFDataRef vCardData = (__bridge CFDataRef)([vcard dataUsingEncoding:NSUTF8StringEncoding]);
+            
+            ABRecordRef defaultSource = ABAddressBookCopyDefaultSource(addressBook);
+            CFArrayRef vCardPeople = ABPersonCreatePeopleInSourceWithVCardRepresentation(defaultSource, vCardData);
+            CFIndex index = 0;
+            if (vCardPeople != NULL && CFArrayGetCount(vCardPeople) > 0)
+            {
+                ABRecordRef person = CFArrayGetValueAtIndex(vCardPeople, index);
+                void (^copySingleValueProperty)(ABPropertyID) = ^(ABPropertyID property) {
+                    CFTypeRef value = ABRecordCopyValue(person, property);
+                    if (value != NULL) {
+                        ABRecordSetValue(newPerson, property, value, NULL);
+                        CFRelease(value);
+                    }
+                };
+
+                void (^copyMultiValueProperty)(ABPropertyID) = ^(ABPropertyID property) {
+                    ABMultiValueRef values = ABRecordCopyValue(person, property);
+                    NSInteger valueCount = (values == NULL) ? 0 : ABMultiValueGetCount(values);
+                    
+                    if (valueCount == 0) {
+                        if (values != NULL)
+                            CFRelease(values);
+                        return;
+                    }
+                    
+                    ABMutableMultiValueRef multiValue = ABMultiValueCreateMutable(kABMultiStringPropertyType);
+                    
+                    for (CFIndex i = 0; i < valueCount; i++) {
+                        CFTypeRef value = ABMultiValueCopyValueAtIndex(values, i);
+                        CFStringRef label = ABMultiValueCopyLabelAtIndex(values, i);
+                        
+                        ABMultiValueAddValueAndLabel(multiValue, value, label, NULL);
+                        
+                        if (value != NULL)
+                            CFRelease(value);
+                        if (label != NULL)
+                            CFRelease(label);
+                    }
+                    
+                    ABRecordSetValue(newPerson, property, multiValue, nil);
+                    CFRelease(multiValue);
+                    
+                    if (values != NULL)
+                        CFRelease(values);
+                };
+                
+                copySingleValueProperty(kABPersonPrefixProperty);
+                copySingleValueProperty(kABPersonSuffixProperty);
+                copySingleValueProperty(kABPersonOrganizationProperty);
+                copySingleValueProperty(kABPersonJobTitleProperty);
+                copySingleValueProperty(kABPersonDepartmentProperty);
+                copySingleValueProperty(kABPersonBirthdayProperty);
+                
+                copyMultiValueProperty(kABPersonPhoneProperty);
+                copyMultiValueProperty(kABPersonEmailProperty);
+                copyMultiValueProperty(kABPersonURLProperty);
+                copyMultiValueProperty(kABPersonAddressProperty);
+                copyMultiValueProperty(kABPersonSocialProfileProperty);
+                copyMultiValueProperty(kABPersonInstantMessageProperty);
+            }
+            
+            if (vCardPeople != NULL)
+                CFRelease(vCardPeople);
+            
+            if (defaultSource != NULL)
+                CFRelease(defaultSource);
+        }
         
         ABAddressBookAddRecord(addressBook, newPerson, &error);
         ABAddressBookSave(addressBook, &error);
@@ -1316,6 +1431,9 @@ static void CreateAddressBookAsync(TGAddressBookCreated createdBlock)
             
             [TGContactListRequestBuilder dispatchNewContactList];
             [TGContactListRequestBuilder dispatchNewPhonebook];
+            
+            if (actions.count > 0)
+                [TGDatabaseInstance() storeFutureActions:actions];
             
             [self completeAction:true];
             
@@ -1558,7 +1676,7 @@ static void CreateAddressBookAsync(TGAddressBookCreated createdBlock)
 }
 
 
-- (void)processChangeContactPhones:(int)uid nativeId:(int)nativeId changePhones:(NSArray *)changePhones addingUid:(int)addingUid removedMainPhone:(bool)removedMainPhone
+- (void)processChangeContactPhones:(int)uid nativeId:(int)nativeId changePhones:(NSArray *)changePhones addingUid:(int)addingUid removedMainPhone:(bool)removedMainPhone vcard:(NSString *)vcard
 {
     CreateAddressBookAsync(^(ABAddressBookRef addressBook, bool denied)
     {
@@ -1584,10 +1702,71 @@ static void CreateAddressBookAsync(TGAddressBookCreated createdBlock)
                 
                 ABMultiValueAddValueAndLabel(mutablePhones, (__bridge CFStringRef)phoneNumber.number, (__bridge CFStringRef)label, NULL);
             }
-            
             ABRecordSetValue(person, kABPersonPhoneProperty, mutablePhones, NULL);
-            
             CFRelease(mutablePhones);
+            
+            if (vcard.length > 0)
+            {
+                CFDataRef vCardData = (__bridge CFDataRef)([vcard dataUsingEncoding:NSUTF8StringEncoding]);
+                
+                ABRecordRef defaultSource = ABAddressBookCopyDefaultSource(addressBook);
+                CFArrayRef vCardPeople = ABPersonCreatePeopleInSourceWithVCardRepresentation(defaultSource, vCardData);
+                CFIndex index = 0;
+                ABRecordRef vcardPerson = CFArrayGetValueAtIndex(vCardPeople, index);
+                
+                CFRelease(vCardPeople);
+                CFRelease(defaultSource);
+                
+                void (^copySingleValueProperty)(ABPropertyID) = ^(ABPropertyID property) {
+                    CFTypeRef value = ABRecordCopyValue(vcardPerson, property);
+                    if (value != NULL) {
+                        ABRecordSetValue(person, property, value, NULL);
+                        CFRelease(value);
+                    }
+                };
+                
+                void (^copyMultiValueProperty)(ABPropertyID) = ^(ABPropertyID property) {
+                    ABMultiValueRef values = ABRecordCopyValue(vcardPerson, property);
+                    NSInteger valueCount = (values == NULL) ? 0 : ABMultiValueGetCount(values);
+                    
+                    if (valueCount == 0) {
+                        if (values != NULL)
+                            CFRelease(values);
+                        return;
+                    }
+                    
+                    ABMutableMultiValueRef multiValue = ABMultiValueCreateMutable(kABMultiStringPropertyType);
+                    
+                    for (CFIndex i = 0; i < valueCount; i++) {
+                        CFTypeRef value = ABMultiValueCopyValueAtIndex(values, i);
+                        CFStringRef label = ABMultiValueCopyLabelAtIndex(values, i);
+                        
+                        ABMultiValueAddValueAndLabel(multiValue, value, label, NULL);
+                        
+                        if (value != NULL)
+                            CFRelease(value);
+                        if (label != NULL)
+                            CFRelease(label);
+                    }
+                    
+                    ABRecordSetValue(person, property, multiValue, nil);
+                    CFRelease(multiValue);
+                    
+                    if (values != NULL)
+                        CFRelease(values);
+                };
+                
+                copySingleValueProperty(kABPersonOrganizationProperty);
+                copySingleValueProperty(kABPersonJobTitleProperty);
+                copySingleValueProperty(kABPersonDepartmentProperty);
+                copySingleValueProperty(kABPersonBirthdayProperty);
+                
+                copyMultiValueProperty(kABPersonEmailProperty);
+                copyMultiValueProperty(kABPersonURLProperty);
+                copyMultiValueProperty(kABPersonAddressProperty);
+                copyMultiValueProperty(kABPersonSocialProfileProperty);
+                copyMultiValueProperty(kABPersonInstantMessageProperty);
+            }
             
             ABAddressBookSave(addressBook, NULL);
         }
@@ -2037,7 +2216,10 @@ static void CreateAddressBookAsync(TGAddressBookCreated createdBlock)
     if (remoteUids != currentUids)
     {
         _hadRemoteContacts = false;
-        self.cancelToken = [TGTelegraphInstance doRequestContactList:nil actor:self];
+        self.cancelToken = [TGTelegraphInstance doRequestContactList:0
+                            
+                            
+                                                               actor:self];
     }
     else
     {
@@ -2087,6 +2269,8 @@ static void CreateAddressBookAsync(TGAddressBookCreated createdBlock)
         
         [[TGSynchronizeContactsManager instance] dispatchOnAddressBookQueue:^
         {
+            int32_t count = ((TLcontacts_Contacts$contacts_contacts *)result).saved_count;
+            [TGDatabaseInstance() setCustomProperty:@"contactRemoteNonRegisteredCount" value:[NSData dataWithBytes:&count length:4]];
             [TGDatabaseInstance() replaceRemoteContactUids:contactUids];
             
             [self importContacts:^(__unused bool imported)

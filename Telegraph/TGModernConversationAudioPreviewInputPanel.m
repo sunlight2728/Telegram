@@ -1,8 +1,8 @@
 #import "TGModernConversationAudioPreviewInputPanel.h"
 
-#import "TGImageUtils.h"
-#import "TGModernButton.h"
-#import "TGFont.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/TGModernButton.h>
 
 #import "TGAudioWaveformSignal.h"
 #import "TGAudioWaveformView.h"
@@ -11,11 +11,15 @@
 
 #import "TGModernConversationAudioPlayer.h"
 
-#import "TGTimerTarget.h"
+#import <LegacyComponents/TGTimerTarget.h>
 
-#import "TGModernConversationAssociatedInputPanel.h"
+#import <LegacyComponents/TGModernConversationAssociatedInputPanel.h>
+
+#import "TGPresentation.h"
 
 @interface TGModernConversationAudioPreviewInputPanel () <TGModernConversationAudioPlayerDelegate> {
+    UIEdgeInsets _safeAreaInset;
+    
     TGDataItem *_dataItem;
     NSTimeInterval _duration;
     TGLiveUploadActorData *_liveUploadActorData;
@@ -87,22 +91,12 @@
     return offset;
 }
 
-- (UIImage *)playImage {
-    static UIImage *image = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        image = [UIImage imageNamed:@"TempAudioPreviewPlay.png"];
-    });
-    return image;
+- (UIImage *)playImage:(TGPresentation *)presentation {
+    return TGTintedImage(TGImageNamed(@"TempAudioPreviewPlay.png"), presentation.pallete.accentContrastColor);
 }
 
-- (UIImage *)pauseImage {
-    static UIImage *image = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        image = [UIImage imageNamed:@"TempAudioPreviewPause.png"];
-    });
-    return image;
+- (UIImage *)pauseImage:(TGPresentation *)presentation {
+    return TGTintedImage(TGImageNamed(@"TempAudioPreviewPause.png"), presentation.pallete.accentContrastColor);
 }
 
 - (instancetype)initWithDataItem:(TGDataItem *)dataItem duration:(NSTimeInterval)duration liveUploadActorData:(TGLiveUploadActorData *)liveUploadActorData waveform:(TGAudioWaveform *)waveform cancel:(void (^)())cancel send:(void (^)(TGDataItem *, NSTimeInterval, TGLiveUploadActorData *, TGAudioWaveform *))send
@@ -117,13 +111,13 @@
         _send = [send copy];
         _waveform = waveform;
         
-        self.backgroundColor = UIColorRGBA(0xfafafa, 0.98f);
+        self.backgroundColor = UIColorRGB(0xf7f7f7);
         
         _stripeLayer = [[CALayer alloc] init];
-        _stripeLayer.backgroundColor = UIColorRGBA(0xb3aab2, 0.4f).CGColor;
+        _stripeLayer.backgroundColor = UIColorRGB(0xb2b2b2).CGColor;
         [self.layer addSublayer:_stripeLayer];
         
-        UIImage *deleteImage = [UIImage imageNamed:@"ModernConversationActionDelete.png"];
+        UIImage *deleteImage = TGImageNamed(@"ModernConversationActionDelete.png");
         
         _deleteButton = [[TGModernButton alloc] init];
         [_deleteButton setImage:deleteImage forState:UIControlStateNormal];
@@ -136,28 +130,26 @@
         sendButton.modernHighlight = true;
         _sendButton = sendButton;
         _sendButton.exclusiveTouch = true;
-        [_sendButton setTitle:TGLocalized(@"Conversation.Send") forState:UIControlStateNormal];
-        [_sendButton setTitleColor:TGAccentColor() forState:UIControlStateNormal];
-        [_sendButton setTitleColor:UIColorRGB(0x8e8e93) forState:UIControlStateDisabled];
-        _sendButton.titleLabel.font = [self sendButtonFont];
+        [_sendButton setImage:TGImageNamed(@"ModernConversationSend") forState:UIControlStateNormal];
+        _sendButton.adjustsImageWhenHighlighted = false;
         [_sendButton addTarget:self action:@selector(sendButtonPressed) forControlEvents:UIControlEventTouchUpInside];
         [self addSubview:_sendButton];
         
-        _sendButtonWidth = MIN(100.0f, [TGLocalized(@"Conversation.Send") sizeWithFont:TGMediumSystemFontOfSize(17)].width + 8.0f);
+        _sendButtonWidth = 45.0f;
         
         _waveformBackgroundView = [[UIImageView alloc] init];
         {
-            UIGraphicsBeginImageContextWithOptions(CGSizeMake(10.0f, 10.0f), false, 0.0f);
+            UIGraphicsBeginImageContextWithOptions(CGSizeMake(33.0f, 33.0f), false, 0.0f);
             CGContextRef context = UIGraphicsGetCurrentContext();
-            CGContextSetFillColorWithColor(context, UIColorRGB(0x1195f2).CGColor);
-            CGContextFillEllipseInRect(context, CGRectMake(0.0f, 0.0f, 10.0f, 10.0f));
-            _waveformBackgroundView.image = [UIGraphicsGetImageFromCurrentImageContext() stretchableImageWithLeftCapWidth:5 topCapHeight:5];
+            CGContextSetFillColorWithColor(context, TGAccentColor().CGColor);
+            CGContextFillEllipseInRect(context, CGRectMake(0.0f, 0.0f, 33.0f, 33.0f));
+            _waveformBackgroundView.image = [UIGraphicsGetImageFromCurrentImageContext() stretchableImageWithLeftCapWidth:16 topCapHeight:16];
             UIGraphicsEndImageContext();
         }
         [self addSubview:_waveformBackgroundView];
         
         _durationLabel = [[UILabel alloc] init];
-        _durationLabel.backgroundColor = UIColorRGB(0x1195f2);
+        _durationLabel.backgroundColor = TGAccentColor();
         _durationLabel.textColor = [UIColor whiteColor];
         _durationLabel.font = TGSystemFontOfSize(11.5f);
         _durationLabel.text = @"0:42";
@@ -175,7 +167,7 @@
         [self addSubview:_waveformView];
         
         _playPauseIcon = [[UIImageView alloc] init];
-        _playPauseIcon.image = [self playImage];
+        _playPauseIcon.image = [self playImage:nil];
         [self addSubview:_playPauseIcon];
         
         if (waveform != nil) {
@@ -205,18 +197,45 @@
     [_player stop];
 }
 
-- (void)adjustForSize:(CGSize)size keyboardHeight:(CGFloat)keyboardHeight duration:(NSTimeInterval)duration animationCurve:(int)animationCurve
+- (void)setPresentation:(TGPresentation *)presentation
 {
-    [self _adjustForSize:size keyboardHeight:keyboardHeight duration:duration animationCurve:animationCurve];
+    [super setPresentation:presentation];
+    
+    self.backgroundColor = presentation.pallete.barBackgroundColor;
+    _stripeLayer.backgroundColor = presentation.pallete.barSeparatorColor.CGColor;
+    [_sendButton setImage:presentation.images.chatInputSendIcon forState:UIControlStateNormal];
+    
+    {
+        UIGraphicsBeginImageContextWithOptions(CGSizeMake(33.0f, 33.0f), false, 0.0f);
+        CGContextRef context = UIGraphicsGetCurrentContext();
+        CGContextSetFillColorWithColor(context, presentation.pallete.accentColor.CGColor);
+        CGContextFillEllipseInRect(context, CGRectMake(0.0f, 0.0f, 33.0f, 33.0f));
+        _waveformBackgroundView.image = [UIGraphicsGetImageFromCurrentImageContext() stretchableImageWithLeftCapWidth:16 topCapHeight:16];
+        UIGraphicsEndImageContext();
+    }
+    
+    [_deleteButton setImage:TGTintedImage(TGImageNamed(@"ModernConversationActionDelete.png"), presentation.pallete.accentColor) forState:UIControlStateNormal];
+    _durationLabel.backgroundColor = presentation.pallete.accentColor;
+    _durationLabel.textColor = presentation.pallete.accentContrastColor;
+    
+    [_waveformView setForegroundColor:presentation.pallete.chatInputWaveformForegroundColor backgroundColor:presentation.pallete.chatInputWaveformBackgroundColor];
+    _playPauseIcon.image = [self playImage:presentation];
 }
 
-- (void)_adjustForSize:(CGSize)size keyboardHeight:(CGFloat)keyboardHeight duration:(NSTimeInterval)duration animationCurve:(int)animationCurve
+- (void)adjustForSize:(CGSize)size keyboardHeight:(CGFloat)keyboardHeight duration:(NSTimeInterval)duration animationCurve:(int)animationCurve contentAreaHeight:(CGFloat)contentAreaHeight safeAreaInset:(UIEdgeInsets)safeAreaInset
 {
+    [self _adjustForSize:size keyboardHeight:keyboardHeight duration:duration animationCurve:animationCurve contentAreaHeight:contentAreaHeight safeAreaInset:safeAreaInset];
+}
+
+- (void)_adjustForSize:(CGSize)size keyboardHeight:(CGFloat)keyboardHeight duration:(NSTimeInterval)duration animationCurve:(int)animationCurve contentAreaHeight:(CGFloat)__unused contentAreaHeight safeAreaInset:(UIEdgeInsets)safeAreaInset
+{
+    _safeAreaInset = safeAreaInset;
+    
     dispatch_block_t block = ^
     {
         CGSize messageAreaSize = size;
         
-        self.frame = CGRectMake(0, messageAreaSize.height - keyboardHeight - [self baseHeight] - [self extendedPanelHeight], messageAreaSize.width, [self baseHeight] + [self extendedPanelHeight]);
+        self.frame = CGRectMake(0, messageAreaSize.height - keyboardHeight - [self baseHeight] - [self extendedPanelHeight] - safeAreaInset.bottom, messageAreaSize.width, [self baseHeight] + [self extendedPanelHeight] + safeAreaInset.bottom);
         [self layoutSubviews];
     };
     
@@ -226,9 +245,9 @@
         block();
 }
 
-- (void)changeToSize:(CGSize)size keyboardHeight:(CGFloat)keyboardHeight duration:(NSTimeInterval)duration
+- (void)changeToSize:(CGSize)size keyboardHeight:(CGFloat)keyboardHeight duration:(NSTimeInterval)duration contentAreaHeight:(CGFloat)contentAreaHeight safeAreaInset:(UIEdgeInsets)safeAreaInset
 {
-    [self _adjustForSize:size keyboardHeight:keyboardHeight duration:duration animationCurve:0];
+    [self _adjustForSize:size keyboardHeight:keyboardHeight duration:duration animationCurve:0 contentAreaHeight:contentAreaHeight safeAreaInset:safeAreaInset];
 }
 
 - (void)layoutSubviews
@@ -248,27 +267,26 @@
         verticalOffset = _currentExtendedPanel.frame.size.height;
     }
     
-    CGPoint sendButtonOffset = [self sendButtonOffset];
-    _sendButton.frame = CGRectMake(self.frame.size.width - _sendButtonWidth + sendButtonOffset.x * 2.0f, self.frame.size.height - [self baseHeight], _sendButtonWidth - sendButtonOffset.x * 2.0f, [self baseHeight] - 1.0f);
+    _sendButton.frame = CGRectMake(self.frame.size.width - [self baseHeight] - _safeAreaInset.right, verticalOffset, [self baseHeight], [self baseHeight]);
     
     _deleteButton.transform = CGAffineTransformIdentity;
-    _deleteButton.frame = CGRectMake(-5.0f, 0.0f + verticalOffset, 52.0f, [self baseHeight]);
+    _deleteButton.frame = CGRectMake(-3.0f + _safeAreaInset.left, 0.0f + verticalOffset, 52.0f, [self baseHeight]);
     _deleteButton.transform = CGAffineTransformMakeScale(0.88f, 0.88f);
     
-    _playPauseIcon.frame = CGRectMake(48.5f, 13.5f + verticalOffset, 19.0f, 19.0f);
+    _waveformBackgroundView.frame = CGRectMake(45.0f + _safeAreaInset.left, verticalOffset + TGScreenPixelFloor(([self baseHeight] - 34.0f) / 2.0f), self.frame.size.width - 45.0f - [self baseHeight] - 2.0f - _safeAreaInset.left - _safeAreaInset.right, 34.0f);
     
-    _waveformBackgroundView.frame = CGRectMake(41.0f, 9.0f + verticalOffset, self.frame.size.width - 41.0f - _sendButtonWidth - 2.0f, [self baseHeight] - 9.0f - 8.0f);
+    _playPauseIcon.frame = CGRectMake(52.5f + _safeAreaInset.left, _waveformBackgroundView.frame.origin.y + 7.0f, 19.0f, 19.0f);
     
-    _waveformButton.frame = CGRectMake(41.0f, 0.0f + verticalOffset, self.frame.size.width - 41.0f - _sendButtonWidth - 2.0f, [self baseHeight]);
+    _waveformButton.frame = CGRectMake(45.0f + _safeAreaInset.left, verticalOffset, self.frame.size.width - 45.0f - [self baseHeight] - 2.0f - _safeAreaInset.left - _safeAreaInset.right, [self baseHeight]);
     
-    _waveformView.frame = CGRectMake(41.0f + 35.0f, 9.0f + verticalOffset, self.frame.size.width - 41.0f - 35.0f - _sendButtonWidth - 2.0f - 0.0f - _durationLabel.frame.size.width, [self baseHeight] - 9.0f - 8.0f - 7.5f);
+    _waveformView.frame = CGRectMake(45.0f + 35.0f + _safeAreaInset.left, _waveformBackgroundView.frame.origin.y + 0.0f, self.frame.size.width - 45.0f - 35.0f - [self baseHeight] - 2.0f - 0.0f - _durationLabel.frame.size.width - _safeAreaInset.left - _safeAreaInset.right, _waveformBackgroundView.frame.size.height - 9.0f);
     CGRect waveformBounds = _waveformView.bounds;
     _waveformView.backgroundView.frame = waveformBounds;
     _waveformView.foregroundView.frame = waveformBounds;
     waveformBounds.size.width *= _audioPosition;
     _waveformView.foregroundClippingView.frame = waveformBounds;
     
-    _durationLabel.frame = CGRectMake(CGRectGetMaxX(_waveformBackgroundView.frame) - 10.0f - _durationLabel.frame.size.width, 16.0f + verticalOffset, _durationLabel.frame.size.width, _durationLabel.frame.size.height);
+    _durationLabel.frame = CGRectMake(CGRectGetMaxX(_waveformBackgroundView.frame) - 10.0f - _durationLabel.frame.size.width, _waveformBackgroundView.frame.origin.y + 10.0f, _durationLabel.frame.size.width, _durationLabel.frame.size.height);
 }
 
 #pragma mark -
@@ -299,7 +317,7 @@
         
         if (!_playPauseIconState) {
             _playPauseIconState = true;
-            _playPauseIcon.image = [self pauseImage];
+            _playPauseIcon.image = [self pauseImage:self.presentation];
         }
     } else if (_playing) {
         _playing = false;
@@ -309,7 +327,7 @@
         
         if (_playPauseIconState) {
             _playPauseIconState = false;
-            _playPauseIcon.image = [self playImage];
+            _playPauseIcon.image = [self playImage:self.presentation];
         }
     } else {
         if (_playbackDidBegin) {
@@ -322,7 +340,7 @@
         
         if (!_playPauseIconState) {
             _playPauseIconState = true;
-            _playPauseIcon.image = [self pauseImage];
+            _playPauseIcon.image = [self pauseImage:self.presentation];
         }
     }
 }
@@ -344,7 +362,7 @@
     _waveformView.foregroundClippingView.frame = waveformBounds;
     
     _playPauseIconState = false;
-    _playPauseIcon.image = [self playImage];
+    _playPauseIcon.image = [self playImage:self.presentation];
 }
 
 - (void)updateAudioPosition {
@@ -383,7 +401,7 @@
     _waveformView.foregroundClippingView.frame = waveformBounds;
     
     _playPauseIconState = false;
-    _playPauseIcon.image = [self playImage];
+    _playPauseIcon.image = [self playImage:self.presentation];
 }
 
 - (bool)shouldDisplayPanels

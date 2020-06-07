@@ -1,28 +1,20 @@
-/*
- * This is the source code of Telegram for iOS v. 1.1
- * It is licensed under GNU GPL v. 2 or later.
- * You should have received a copy of the license in this archive (see LICENSE).
- *
- * Copyright Peter Iakovlev, 2013.
- */
-
 #import "TGWallpaperManager.h"
 
-#import "ActionStage.h"
+#import <LegacyComponents/LegacyComponents.h>
 
-#import "TGWallpaperInfo.h"
-#import "TGColorWallpaperInfo.h"
-#import "TGBuiltinWallpaperInfo.h"
+#import <LegacyComponents/ActionStage.h>
 
-#import "TGImageUtils.h"
-#import "TGViewController.h"
+#import <LegacyComponents/TGWallpaperInfo.h>
+#import <LegacyComponents/TGColorWallpaperInfo.h>
+#import <LegacyComponents/TGBuiltinWallpaperInfo.h>
 
 #import "TGAppDelegate.h"
 
 @interface TGWallpaperManager ()
 {
     bool _infoLoaded;
-    dispatch_once_t _infoLoadToken;
+    
+    TGWallpaperInfo *_storedWallpaperInfo;
     
     TGWallpaperInfo *_wallpaperInfo;
     NSData *_wallpaperImageData;
@@ -73,7 +65,10 @@
 {
     if (!_infoLoaded)
     {
-        dispatch_once(&_infoLoadToken, ^
+        _infoLoaded = true;
+        
+        static dispatch_once_t infoLoadToken;
+        dispatch_once(&infoLoadToken, ^
         {
             NSString *fileName = [self _currentWallpaperPath];
             
@@ -82,7 +77,7 @@
             
             if ([wallpaperInfo hasData])
             {
-                _wallpaperImageData = [[NSData alloc] initWithContentsOfFile:fileName];
+                _wallpaperImageData = [[NSData alloc] initWithContentsOfFile:fileName options:NSDataReadingMappedIfSafe error:nil];
                 
                 if (_wallpaperImageData != nil)
                 {
@@ -90,7 +85,9 @@
                     _wallpaperInfo = [TGWallpaperInfo infoWithDictionary:infoDict];
                 }
                 
-                if (_wallpaperInfo == nil)
+                if ([_wallpaperInfo isKindOfClass:[TGBuiltinWallpaperInfo class]] && ((TGBuiltinWallpaperInfo *)_wallpaperInfo).isDefault && ((TGBuiltinWallpaperInfo *)_wallpaperInfo).version < TGBuilitinWallpaperCurrentVersion)
+                    [self setCurrentWallpaperWithInfo:[self builtinWallpaperList][0] force:true];
+                else if (_wallpaperInfo == nil)
                     [self setCurrentWallpaperWithInfo:[self builtinWallpaperList][0]];
             }
             else
@@ -104,7 +101,7 @@
                 _wallpaperImage = [wallpaperInfo image];
             }
             
-            _infoLoaded = true;
+            _storedWallpaperInfo = wallpaperInfo;
             
             if (preloadImage && _wallpaperImage == nil && _wallpaperImageData != nil)
             {
@@ -123,7 +120,6 @@
     if (_wallpaperInfo != nil && (![_wallpaperInfo hasData] || _wallpaperImageData != nil))
     {
         NSDictionary *infoDict = [_wallpaperInfo infoDictionary];
-        
         NSString *fileName = [self _currentWallpaperPath];
         
         if (![_wallpaperInfo hasData] || [_wallpaperImageData writeToFile:fileName atomically:true])
@@ -160,43 +156,73 @@
 
 - (void)setCurrentWallpaperWithInfo:(TGWallpaperInfo *)wallpaperInfo
 {
-    if (![_wallpaperInfo isEqual:wallpaperInfo])
+    [self setCurrentWallpaperWithInfo:wallpaperInfo force:false];
+}
+
+- (void)setCurrentWallpaperWithInfo:(TGWallpaperInfo *)wallpaperInfo temporary:(bool)temporary
+{
+    [self setCurrentWallpaperWithInfo:wallpaperInfo force:false temporary:temporary];
+}
+
+- (void)setCurrentWallpaperWithInfo:(TGWallpaperInfo *)wallpaperInfo force:(bool)force
+{
+    [self setCurrentWallpaperWithInfo:wallpaperInfo force:force temporary:false];
+}
+
+- (void)setCurrentWallpaperWithInfo:(TGWallpaperInfo *)wallpaperInfo force:(bool)force temporary:(bool)temporary
+{
+    [self _loadInfoIfNecessary:true];
+    
+    if (force || ![_wallpaperInfo isEqual:wallpaperInfo] || temporary)
     {
-        if ([wallpaperInfo hasData])
+        if (!temporary)
         {
-            NSData *imageData = [wallpaperInfo imageData];
-            
-            UIImage *image = [wallpaperInfo image];
-            if (image != nil)
+            if ([wallpaperInfo hasData])
             {
-                CGSize wallpaperPixelSize = [self preferredWallpaperPixelSize];
-                
-                CGFloat screenSide = MAX(wallpaperPixelSize.width, wallpaperPixelSize.height);
-                CGSize scaledImageSize = CGSizeMake(image.size.width * image.scale, image.size.height * image.scale);
-                CGSize desiredImageSize = TGCropSize(TGFillSize(scaledImageSize, wallpaperPixelSize), CGSizeMake(screenSide, screenSide));
-                
-                if (scaledImageSize.width > desiredImageSize.width + FLT_EPSILON || scaledImageSize.height > desiredImageSize.height + FLT_EPSILON)
+                NSData *imageData = [wallpaperInfo imageData];
+                UIImage *image = [wallpaperInfo image];
+                if (image != nil)
                 {
-                    UIImage *croppedImage = TGFixOrientationAndCrop(image, CGRectMake(CGFloor((scaledImageSize.width - desiredImageSize.width) / 2.0f), CGFloor((scaledImageSize.height - desiredImageSize.height) / 2.0f), desiredImageSize.width, desiredImageSize.height), desiredImageSize);
-                    if (croppedImage != nil)
-                        imageData = UIImageJPEGRepresentation(croppedImage, 0.98f);
+                    CGSize wallpaperPixelSize = [self preferredWallpaperPixelSize];
+                    
+                    CGFloat screenSide = MAX(wallpaperPixelSize.width, wallpaperPixelSize.height);
+                    CGSize scaledImageSize = CGSizeMake(image.size.width * image.scale, image.size.height * image.scale);
+                    CGSize desiredImageSize = TGCropSize(TGFillSize(scaledImageSize, wallpaperPixelSize), CGSizeMake(screenSide, screenSide));
+                    
+                    if (scaledImageSize.width > desiredImageSize.width + FLT_EPSILON || scaledImageSize.height > desiredImageSize.height + FLT_EPSILON)
+                    {
+                        UIImage *croppedImage = TGFixOrientationAndCrop(image, CGRectMake(CGFloor((scaledImageSize.width - desiredImageSize.width) / 2.0f), CGFloor((scaledImageSize.height - desiredImageSize.height) / 2.0f), desiredImageSize.width, desiredImageSize.height), desiredImageSize);
+                        if (croppedImage != nil)
+                            imageData = UIImageJPEGRepresentation(croppedImage, 0.98f);
+                    }
                 }
+                
+                _wallpaperImageData = imageData;
             }
-            
-            _wallpaperImageData = imageData;
-        }
-        else
-        {
-            _wallpaperImageData = nil;
+            else
+            {
+                _wallpaperImageData = nil;
+            }
         }
         
         _wallpaperInfo = wallpaperInfo;
         _wallpaperImage = nil;
-        
-        [self _storeInfo];
+        if (!temporary)
+        {
+            _storedWallpaperInfo = wallpaperInfo;
+            [self _storeInfo];
+        }
         
         [ActionStageInstance() dispatchResource:@"/tg/assets/currentWallpaperInfo" resource:wallpaperInfo];
     }
+}
+
+- (void)restoreCurrentWallpaper
+{
+    if (_wallpaperInfo == _storedWallpaperInfo || _storedWallpaperInfo == nil)
+        return;
+    
+    [self setCurrentWallpaperWithInfo:_storedWallpaperInfo force:true temporary:true];
 }
 
 - (UIImage *)currentWallpaperImage
@@ -218,6 +244,13 @@
     }
     
     return _wallpaperImage;
+}
+
+- (TGWallpaperInfo *)savedWallpaperInfo
+{
+    [self _loadInfoIfNecessary:false];
+    
+    return _storedWallpaperInfo;
 }
 
 - (TGWallpaperInfo *)currentWallpaperInfo
@@ -248,14 +281,7 @@
             progressAlpha = 0.6f;
         }
      
-        if (false && i == 0 && TGIsPad())
-        {
-            [array addObject:[[TGColorWallpaperInfo alloc] initWithColor:0xffdde3e9 tintColor:tintColor systemAlpha:systemAlpha buttonsAlpha:buttonsAlpha highlightedButtonAlpha:highlightedButtonAlpha progressAlpha:progressAlpha]];
-        }
-        else
-        {
-            [array addObject:[[TGBuiltinWallpaperInfo alloc] initWithBuiltinId:i tintColor:tintColor systemAlpha:systemAlpha buttonsAlpha:buttonsAlpha highlightedButtonAlpha:highlightedButtonAlpha progressAlpha:progressAlpha]];
-        }
+        [array addObject:[[TGBuiltinWallpaperInfo alloc] initWithBuiltinId:i tintColor:tintColor systemAlpha:systemAlpha buttonsAlpha:buttonsAlpha highlightedButtonAlpha:highlightedButtonAlpha progressAlpha:progressAlpha version:TGBuilitinWallpaperCurrentVersion]];
     }
     
     return array;

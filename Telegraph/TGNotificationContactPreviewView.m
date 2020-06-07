@@ -1,13 +1,10 @@
 #import "TGNotificationContactPreviewView.h"
+
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGNotificationView.h"
 
-#import "TGContactMediaAttachment.h"
-#import "TGUser.h"
-
-#import "TGFont.h"
-#import "TGPhoneUtils.h"
-
-#import "TGLetteredAvatarView.h"
+#import <LegacyComponents/TGLetteredAvatarView.h>
 
 @interface TGNotificationContactPreviewView ()
 {
@@ -87,7 +84,7 @@
         
         if (user.photoUrlSmall != nil)
         {
-            [_avatarView loadImage:user.photoUrlSmall filter:@"circle:44x44" placeholder:placeholder];
+            [_avatarView loadImage:user.photoFullUrlSmall filter:@"circle:44x44" placeholder:placeholder];
         }
         else
         {

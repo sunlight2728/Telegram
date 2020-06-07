@@ -2,7 +2,7 @@
 
 #import "TL/TLMetaScheme.h"
 
-#import "ActionStage.h"
+#import <LegacyComponents/ActionStage.h>
 #import "TGTimer.h"
 
 #import "TGPreparedMessage.h"
@@ -159,6 +159,11 @@
 
 - (void)_fail
 {
+    [self _fail:false];
+}
+
+- (void)_fail:(bool)__unused manual
+{
     [self clearFailTimeout];
     [self _cancelUploads];
     
@@ -184,7 +189,7 @@
 
 - (void)cancel
 {
-    [self _fail];
+    [self _fail:true];
     
     [_disposables dispose];
     
@@ -224,7 +229,7 @@
     return nil;
 }
 
-- (void)uploadFilesWithExtensions:(NSArray *)filePathsAndExtensions
+- (void)uploadFilesWithExtensions:(NSArray *)filePathsAndExtensions mediaTypeTag:(TGNetworkMediaTypeTag)mediaTypeTag
 {
     if (filePathsAndExtensions.count == 0)
         return;
@@ -241,6 +246,8 @@
     static int actionId = 0;
     
     int dataIndex = 0;
+    
+    NSMutableArray *requests = [[NSMutableArray alloc] init];
     
     for (NSArray *itemDesc in filePathsAndExtensions)
     {
@@ -278,9 +285,14 @@
         if (itemDesc.count >= 4)
             options[@"liveData"] = itemDesc[3];
         
-        [ActionStageInstance() requestActor:actorPath options:options watcher:self];
+        options[@"mediaTypeTag"] = @(mediaTypeTag);
+        
+        [requests addObject:@{@"actorPath":actorPath, @"options":options }];
     }
-
+    
+    for (NSDictionary *request in requests)
+        [ActionStageInstance() requestActor:request[@"actorPath"] options:request[@"options"] watcher:self];
+    
     [self beginUploadProgress];
 }
 
@@ -324,8 +336,15 @@
     {
         _uploadProgress = preDownloadsProgress / 2.0f;
         
+        [self uploadProgressChanged];
         [ActionStageInstance() dispatchMessageToWatchers:self.path messageType:@"messageProgress" message:@{@"mid": @(_preparedMessage.mid), @"progress": @(_uploadProgress)}];
     }
+}
+
+- (void)setUploadProgress:(float)uploadProgress
+{
+    _uploadProgress = uploadProgress;
+    [ActionStageInstance() dispatchMessageToWatchers:self.path messageType:@"messageProgress" message:@{@"mid": @(_preparedMessage.mid), @"progress": @(_uploadProgress)}];
 }
 
 - (void)actorReportedProgress:(NSString *)path progress:(float)progress

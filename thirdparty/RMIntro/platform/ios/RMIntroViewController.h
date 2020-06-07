@@ -10,6 +10,8 @@
 #import <GLKit/GLKit.h>
 //#import "RMRootViewController.h"
 
+#import <LegacyComponents/TGModernButton.h>
+
 typedef enum {
     Inch35 = 0,
     Inch4 = 1,
@@ -21,8 +23,6 @@ typedef enum {
 
 @interface RMIntroViewController : UIViewController<UIScrollViewDelegate, GLKViewDelegate>
 {
-    DeviceScreen _deviceScreen;
-    
     EAGLContext *context;
     
     GLKView *_glkView;

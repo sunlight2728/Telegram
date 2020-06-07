@@ -1,19 +1,10 @@
-/*
- * This is the source code of Telegram for iOS v. 1.1
- * It is licensed under GNU GPL v. 2 or later.
- * You should have received a copy of the license in this archive (see LICENSE).
- *
- * Copyright Peter Iakovlev, 2013.
- */
-
 #import "TGPreparedMapMessage.h"
 
-#import "TGMessage.h"
-#import "TGLocationMediaAttachment.h"
+#import <LegacyComponents/LegacyComponents.h>
 
 @implementation TGPreparedMapMessage
 
-- (instancetype)initWithLatitude:(double)latitude longitude:(double)longitude venue:(TGVenueAttachment *)venue replyMessage:(TGMessage *)replyMessage
+- (instancetype)initWithLatitude:(double)latitude longitude:(double)longitude venue:(TGVenueAttachment *)venue period:(int32_t)period replyMessage:(TGMessage *)replyMessage replyMarkup:(TGReplyMarkupAttachment *)replyMarkup
 {
     self = [super init];
     if (self != nil)
@@ -21,7 +12,9 @@
         _latitude = latitude;
         _longitude = longitude;
         _venue = venue;
+        _period = period;
         self.replyMessage = replyMessage;
+        self.replyMarkup = replyMarkup;
     }
     return self;
 }
@@ -40,6 +33,7 @@
     locationAttachment.latitude = _latitude;
     locationAttachment.longitude = _longitude;
     locationAttachment.venue = _venue;
+    locationAttachment.period = _period;
     [attachments addObject:locationAttachment];
     
     if (self.replyMessage != nil)
@@ -48,6 +42,16 @@
         replyMedia.replyMessageId = self.replyMessage.mid;
         replyMedia.replyMessage = self.replyMessage;
         [attachments addObject:replyMedia];
+    }
+    
+    if (self.replyMarkup != nil) {
+        [attachments addObject:self.replyMarkup];
+    }
+    
+    if (self.botContextResult != nil) {
+        [attachments addObject:self.botContextResult];
+        
+        [attachments addObject:[[TGViaUserAttachment alloc] initWithUserId:self.botContextResult.userId username:nil]];
     }
     
     message.mediaAttachments = attachments;

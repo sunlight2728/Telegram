@@ -8,6 +8,10 @@
 
 #import "TGModernConversationCompanion.h"
 
+@class TGConversation;
+@class TGConversationScrollState;
+@class TGPIPSourceLocation;
+
 @interface TGGenericModernConversationCompanion : TGModernConversationCompanion
 {
     @public
@@ -15,17 +19,27 @@
     int64_t _attachedConversationId;
     int64_t _accessHash;
     
+    bool _initialMayHaveUnreadMessages;
+    bool _canResetInitialMessagePositioning;
+    
     bool _everyMessageNeedsAuthor;
     bool _manualMessageManagement;
-    
+
+    int64_t _preferredInitialPositionedPeerId;
     int32_t _preferredInitialPositionedMessageId;
+    bool _preferredInitialGroupedSingle;
+    TGConversationScrollState *_initialScrollState;
+    TGPIPSourceLocation *_openPIPLocation;
 }
 
-- (instancetype)initWithConversationId:(int64_t)conversationId mayHaveUnreadMessages:(bool)mayHaveUnreadMessages;
+@property (nonatomic, strong) NSNumber *botContextPeerId;
+@property (nonatomic, strong) NSString *replaceInitialText;
+
+- (instancetype)initWithConversation:(TGConversation *)conversation mayHaveUnreadMessages:(bool)mayHaveUnreadMessages;
 
 - (void)setOthersUnreadCount:(int)unreadCount;
-- (void)setPreferredInitialMessagePositioning:(int32_t)messageId;
-- (void)setInitialMessagePayloadWithForwardMessages:(NSArray *)initialForwardMessagePayload sendMessages:(NSArray *)initialSendMessagePayload sendFiles:(NSArray *)initialSendFilePayload;
+- (void)setPreferredInitialMessagePositioning:(int32_t)messageId peerId:(int64_t)peerId groupedSingle:(bool)groupedSingle pipLocation:(TGPIPSourceLocation *)pipLocation;
+- (void)setInitialMessagePayloadWithForwardMessages:(NSArray *)initialForwardMessagePayload initialCompleteGroups:(NSSet *)initialCompleteGroups sendMessages:(NSArray *)initialSendMessagePayload sendFiles:(NSArray *)initialSendFilePayload;
 
 - (int64_t)conversationId;
 - (int64_t)messageAuthorPeerId;
@@ -44,8 +58,13 @@
 - (NSDictionary *)_optionsForMessageActions;
 - (void)_setupOutgoingMessage:(TGMessage *)message;
 - (bool)_messagesNeedRandomId;
+- (bool)canSendStickers;
+- (bool)canSendMedia;
+- (bool)canSendGifs;
+- (bool)canSendGames;
+- (bool)canSendInline;
 
-- (void)standaloneForwardMessages:(NSArray *)messages;
+- (void)standaloneForwardMessages:(NSArray *)messages completeGroups:(NSSet *)completeGroups;
 - (void)standaloneSendMessages:(NSArray *)messages;
 - (void)standaloneSendFiles:(NSArray *)files;
 - (void)shareVCard;
@@ -54,4 +73,16 @@
 
 - (bool)shouldFastScrollDown;
 
+- (void)updateMessagesLive:(NSDictionary *)messageIdToMessage animated:(bool)animated;
+
+- (SSignal *)primaryTitlePanel;
+
+- (bool)canAddNewMessagesToTop;
+
++ (bool)canDeleteMessageForEveryone:(TGMessage *)message peerId:(int64_t)peerId isPeerAdmin:(bool)isPeerAdmin;
+
+- (bool)useOnlyLocalLiveLocations;
+- (SSignal *)liveLocationSignal;
+
 @end
+

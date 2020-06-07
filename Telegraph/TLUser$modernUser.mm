@@ -35,12 +35,18 @@
     {
         int32_t signature = [is readInt32];
         object.photo = TLMetaClassStore::constructObject(is, signature, environment, nil, error);
+        if (error != nil && *error != nil) {
+            return nil;
+        }
     }
     
     if (object.flags & (1 << 6))
     {
         int32_t signature = [is readInt32];
         object.status = TLMetaClassStore::constructObject(is, signature, environment, nil, error);
+        if (error != nil && *error != nil) {
+            return nil;
+        }
     }
     
     if (object.flags & (1 << 14))
@@ -52,6 +58,10 @@
     
     if (object.flags & (1 << 19)) {
         object.inlineBotPlaceholder = [is readString];
+    }
+    
+    if (object.flags & (1 << 22)) {
+        __unused NSString *langCode = [is readString];
     }
     
     return object;

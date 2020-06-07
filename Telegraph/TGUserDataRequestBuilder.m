@@ -1,6 +1,8 @@
 #import "TGUserDataRequestBuilder.h"
 
-#import "ActionStage.h"
+#import <LegacyComponents/LegacyComponents.h>
+
+#import <LegacyComponents/ActionStage.h>
 
 #import "TGTelegraph.h"
 
@@ -13,8 +15,6 @@
 
 #import "TGAccountSettings.h"
 #import "TGAccountSettingsActor.h"
-
-#import "TGStringUtils.h"
 
 @implementation TGUserDataRequestBuilder
 
@@ -54,14 +54,14 @@
                     }
                 }
             }
-            else if ((userLink & TGUserLinkKnown) && !(userLink & TGUserLinkMyContact))
-            {
-                if ([TGDatabaseInstance() uidIsRemoteContact:uid])
-                {
-                    static int actionId = 0;
-                    [ActionStageInstance() requestActor:[NSString stringWithFormat:@"/tg/synchronizeContacts/(%d,breakLink)", actionId++] options:[NSDictionary dictionaryWithObjectsAndKeys:[[NSNumber alloc] initWithInt:uid], @"uid", nil] watcher:TGTelegraphInstance];
-                }
-            }
+//            else if ((userLink & TGUserLinkKnown) && !(userLink & TGUserLinkMyContact))
+//            {
+//                if ([TGDatabaseInstance() uidIsRemoteContact:uid])
+//                {
+//                    static int actionId = 0;
+//                    [ActionStageInstance() requestActor:[NSString stringWithFormat:@"/tg/synchronizeContacts/(%d,breakLink)", actionId++] options:[NSDictionary dictionaryWithObjectsAndKeys:[[NSNumber alloc] initWithInt:uid], @"uid", nil] watcher:TGTelegraphInstance];
+//                }
+//            }
         }
     }
 }
@@ -100,6 +100,11 @@
                     updatedUser.phoneNumberHash = originalUser.phoneNumberHash;
                     updatedUser.userName = originalUser.userName;
                     updatedUser.presence = originalUser.presence;
+                    updatedUser.firstName = originalUser.firstName;
+                    updatedUser.lastName = originalUser.lastName;
+                    updatedUser.phoneNumber = originalUser.phoneNumber;
+                    updatedUser.phonebookFirstName = originalUser.phonebookFirstName;
+                    updatedUser.phonebookLastName = originalUser.phonebookLastName;
                 }
                 
                 [updateUsers addObject:updatedUser];

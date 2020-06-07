@@ -1,23 +1,25 @@
 #import "TGWebSearchResultsGalleryGifItemView.h"
 
+#import <LegacyComponents/LegacyComponents.h>
+
 #import "TGWebSearchResultsGalleryGifItem.h"
 
-#import "TGImageView.h"
-#import "TGModernAnimatedImagePlayer.h"
-#import "TGImageUtils.h"
-#import "TGStringUtils.h"
+#import <LegacyComponents/TGImageView.h>
+#import <LegacyComponents/TGModernAnimatedImagePlayer.h>
 
-#import "ActionStage.h"
+#import <LegacyComponents/ActionStage.h>
 
-#import "TGMessageImageViewOverlayView.h"
+#import <LegacyComponents/TGMessageImageViewOverlayView.h>
 
-#import "TGModernButton.h"
+#import <LegacyComponents/TGModernButton.h>
 
 #import "ATQueue.h"
 
 #import "TGMediaStoreContext.h"
 
-#import "TGModernGalleryTransitionView.h"
+#import <LegacyComponents/TGModernGalleryTransitionView.h>
+
+#import "TGTelegramNetworking.h"
 
 @interface TGImageView (TransitionView) <TGModernGalleryTransitionView>
 
@@ -177,7 +179,7 @@
     
     TGWebSearchResultsGalleryGifItem *item = (TGWebSearchResultsGalleryGifItem *)self.item;
     _downloadPath = [[NSString alloc] initWithFormat:@"/temporaryDownload/(%@)", [TGStringUtils stringByEscapingForActorURL:item.webSearchResult.gifUrl]];
-    [ActionStageInstance() requestActor:_downloadPath options:@{@"url": item.webSearchResult.gifUrl, @"cache": [[TGMediaStoreContext instance] temporaryFilesCache]} flags:0 watcher:self];
+    [ActionStageInstance() requestActor:_downloadPath options:@{@"url": item.webSearchResult.gifUrl, @"cache": [[TGMediaStoreContext instance] temporaryFilesCache], @"mediaTypeTag": @(TGNetworkMediaTypeTagImage)} flags:0 watcher:self];
 }
 
 - (void)_playWithData:(NSData *)data
